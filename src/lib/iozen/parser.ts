@@ -14,6 +14,7 @@ import type {
   UnaryExprNode, AttachExprNode, IdentifierNode, LiteralNode,
   FunctionCallExprNode, MemberAccessNode, ListLiteralNode,
   ForceUnwrapNode, OrDefaultNode, HasValueNode, ValueInsideNode,
+  LambdaNode,
 } from './ast';
 
 export class ParseError extends Error {
@@ -45,6 +46,11 @@ export class Parser {
     }
 
     return { kind: 'Program', statements } as ProgramNode;
+  }
+
+  /** Parse a single expression (used by string interpolation) */
+  public parseSingle(): ASTNode {
+    return this.parseExpression();
   }
 
   // ---- Statement Parsing ----
@@ -510,12 +516,19 @@ export class Parser {
     this.consume(TokenType.For, 'Expected "for"');
     this.consume(TokenType.Each, 'Expected "each"');
     const variable = this.consume(TokenType.Identifier, 'Expected variable name').value;
+
+    // Check for indexed for-each: for each item, index in items
+    let indexVariable: string | null = null;
+    if (this.match(TokenType.Comma)) {
+      indexVariable = this.consume(TokenType.Identifier, 'Expected index variable name').value;
+    }
+
     this.consume(TokenType.In, 'Expected "in"');
     const iterable = this.parseExpression();
     this.consume(TokenType.Do, 'Expected "do"');
     const body = this.parseBlockBody();
     this.consume(TokenType.End, 'Expected "end"');
-    return { kind: 'ForEach', variable, iterable, body } as ForEachNode;
+    return { kind: 'ForEach', variable, indexVariable, iterable, body } as ForEachNode;
   }
 
   private parseLabel(): ASTNode {
@@ -957,6 +970,14 @@ export class Parser {
       return { kind: 'ValueInside', expression: expr } as ValueInsideNode;
     }
 
+    // Lambda: function with x as type returns type ... end
+    if (token.type === TokenType.Function) {
+      const next = this.peekAt(1);
+      if (next.type === TokenType.With || next.type === TokenType.LeftParen) {
+        return this.parseLambda();
+      }
+    }
+
     // Identifier (could be variable or function name)
     // Also allow type keywords to be used as identifiers (e.g., variable named "result")
     if (token.type === TokenType.Identifier || this.isTypeKeyword() || this.isLogicalKeyword()) {
@@ -979,6 +1000,69 @@ export class Parser {
     }
 
     throw new ParseError(`Unexpected token: ${token.value} (${token.type})`, token);
+  }
+
+  private parseLambda(): ASTNode {
+    this.consume(TokenType.Function, 'Expected "function"');
+
+    const parameters: FunctionParamNode[] = [];
+    if (this.match(TokenType.With)) {
+      // "with" style: with param1 as type and param2 as type
+      while (true) {
+        const qualifiers: string[] = [];
+        while (this.isTypeQualifier() && this.peek().type !== TokenType.As) {
+          qualifiers.push(this.advance().value.toLowerCase());
+        }
+        if (this.peek().type !== TokenType.Identifier && !this.isTypeKeyword()) break;
+
+        const paramName = this.consumeName('Expected parameter name').value;
+        this.consume(TokenType.As, 'Expected "as" after parameter name');
+        const paramType = this.parseTypeName();
+        parameters.push({ name: paramName, typeName: paramType, qualifiers });
+
+        if (this.match(TokenType.Comma)) continue;
+        if (this.check(TokenType.And)) {
+          this.advance();
+          continue;
+        }
+        break;
+      }
+    } else if (this.match(TokenType.LeftParen)) {
+      while (!this.check(TokenType.RightParen) && !this.isAtEnd()) {
+        const qualifiers: string[] = [];
+        if (this.peek().type !== TokenType.Identifier && !this.isTypeKeyword()) break;
+        const paramName = this.consumeName('Expected parameter name').value;
+        parameters.push({ name: paramName, typeName: 'auto', qualifiers });
+        if (!this.match(TokenType.Comma)) break;
+      }
+      this.consume(TokenType.RightParen, 'Expected ")"');
+    }
+
+    // Returns <type>
+    let returnType = 'nothing';
+    const returnQualifiers: string[] = [];
+    if (this.match(TokenType.Returns)) {
+      while (this.isTypeQualifier() && !this.isTypeKeyword()) {
+        returnQualifiers.push(this.advance().value.toLowerCase());
+      }
+      returnType = this.parseTypeName();
+    }
+
+    // Body
+    const body: ASTNode[] = [];
+    while (!this.check(TokenType.End) && !this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+    this.consume(TokenType.End, 'Expected "end" to close lambda');
+
+    return {
+      kind: 'Lambda',
+      parameters,
+      returnType,
+      returnQualifiers,
+      body,
+    } as LambdaNode;
   }
 
   private parseNaturalCall(name: string): ASTNode {

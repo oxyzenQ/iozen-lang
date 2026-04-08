@@ -15,6 +15,7 @@ import type {
   BinaryExprNode, UnaryExprNode, AttachExprNode, IdentifierNode,
   LiteralNode, FunctionCallExprNode, MemberAccessNode,
   IndexAccessNode, ListLiteralNode, HasValueNode, ValueInsideNode,
+  LambdaNode, ExitNode,
 } from './ast';
 
 // Special signal to unwind the call stack for return/exit
@@ -125,6 +126,9 @@ export class Interpreter {
         break;
       case 'ForEach':
         this.execForEach(node as ForEachNode, env);
+        break;
+      case 'Exit':
+        this.execExit(node as ExitNode);
         break;
       case 'Increase':
         this.execIncrease(node as IncreaseNode, env);
@@ -382,9 +386,35 @@ export class Interpreter {
     const parts: string[] = [];
     for (const expr of node.expressions) {
       const val = this.evaluate(expr, env);
-      parts.push(this.iozenValueToString(val));
+      let str = this.iozenValueToString(val);
+      // String interpolation: replace {expr} patterns
+      if (typeof val === 'string' && str.includes('{')) {
+        str = this.interpolateString(str, env);
+      }
+      parts.push(str);
     }
     this.output.push(parts.join(''));
+  }
+
+  private interpolateString(str: string, env: Environment): string {
+    // Replace {expr} patterns with their evaluated values
+    return str.replace(/\{([^{}]+)\}/g, (match, expr) => {
+      try {
+        const lexer = new Lexer(expr);
+        const tokens = lexer.tokenize();
+        const parser = new Parser(tokens);
+        // Use parseExpression() directly instead of parse() (which expects statements)
+        const parsed = parser.parseSingle();
+        const val = this.evaluate(parsed, env);
+        return this.iozenValueToString(val);
+      } catch {
+        return match; // If interpolation fails, leave as-is
+      }
+    });
+  }
+
+  private execExit(node: ExitNode): void {
+    throw new ExitSignal(node.target);
   }
 
   private execReturn(node: ReturnStmtNode, env: Environment): void {
@@ -450,7 +480,10 @@ export class Interpreter {
       try {
         this.executeBlock(node.body, env);
       } catch (e) {
-        if (e instanceof ExitSignal) throw e;
+        if (e instanceof ExitSignal) {
+          if (!e.target) break; // untargeted exit breaks the while loop
+          throw e; // targeted exit re-thrown for outer loops
+        }
         throw e;
       }
     }
@@ -461,15 +494,39 @@ export class Interpreter {
 
     if (Array.isArray(iterable)) {
       const childEnv = env.child();
-      for (const item of iterable) {
+      for (let idx = 0; idx < iterable.length; idx++) {
+        const item = iterable[idx];
         childEnv.define(node.variable, item);
-        this.executeBlock(node.body, childEnv);
+        if (node.indexVariable) {
+          childEnv.define(node.indexVariable, idx);
+        }
+        try {
+          this.executeBlock(node.body, childEnv);
+        } catch (e) {
+          if (e instanceof ExitSignal) {
+            if (!e.target) break;
+            throw e;
+          }
+          throw e;
+        }
       }
     } else if (typeof iterable === 'string') {
       const childEnv = env.child();
-      for (const ch of iterable) {
+      for (let idx = 0; idx < iterable.length; idx++) {
+        const ch = iterable[idx];
         childEnv.define(node.variable, ch);
-        this.executeBlock(node.body, childEnv);
+        if (node.indexVariable) {
+          childEnv.define(node.indexVariable, idx);
+        }
+        try {
+          this.executeBlock(node.body, childEnv);
+        } catch (e) {
+          if (e instanceof ExitSignal) {
+            if (!e.target) break;
+            throw e;
+          }
+          throw e;
+        }
       }
     } else {
       throw new RuntimeError(`Cannot iterate over ${typeof iterable}`, ...this.findNodeLine('for each'));
@@ -590,6 +647,19 @@ export class Interpreter {
           return (val as IOZENResult).ok ? (val as IOZENResult).value! : null;
         }
         return val;
+      }
+
+      case 'Lambda': {
+        const l = node as LambdaNode;
+        const func: IOZENFunction = {
+          __iozen_type: 'function',
+          name: '<lambda>',
+          parameters: l.parameters,
+          returnType: l.returnType,
+          body: l.body,
+          closure: env,
+        };
+        return func;
       }
 
       default:
@@ -1130,7 +1200,7 @@ export class Interpreter {
       }
       return true;
     }
-    if (n === 'slice' && args.length >= 3) {
+    if (n === 'slice' && args.length >= 2) {
       const arr = args[0];
       const start = Math.floor(this.toNumber(args[1]));
       const end = args.length >= 3 ? Math.floor(this.toNumber(args[2])) : undefined;

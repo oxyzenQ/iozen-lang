@@ -1,0 +1,30 @@
+# IOZEN String Interpolation — Embed expressions in strings
+# Demonstrates the {expr} syntax inside string literals
+
+create variable name as text with value "IOZEN"
+create variable version as text with value "0.2.0"
+
+# Basic variable interpolation
+print "Hello, {name}!"
+print "Running IOZEN v{version}"
+
+# Expression interpolation
+create variable x as integer with value 10
+create variable y as integer with value 20
+print "{x} + {y} = {x + y}"
+print "3 * 7 = {3 * 7}"
+
+# Works with function calls too
+print "2^10 = {power(2, 10)}"
+print "random: {random_int(1, 100)}"
+
+# Combining with attach
+print "--- Score Board ---"
+create variable player as text with value "Alice"
+create variable score as integer with value 42
+print "{player} scored {score} points!"
+print "Status: {when score is greater than 50 do "WINNER" otherwise "playing" end}"
+
+# Lists with interpolation
+create variable items as list with value ["apple", "banana", "cherry"]
+print "Items: {join(items, ", ")}"

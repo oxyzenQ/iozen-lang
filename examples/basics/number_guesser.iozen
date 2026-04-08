@@ -1,0 +1,57 @@
+# IOZEN Number Guesser — Classic number guessing game
+# Demonstrates while loops, conditionals, and randomness
+
+# Generate a random number between 1 and 100
+create variable secret as integer with value random_int(1, 100)
+create variable attempts as integer with value 0
+create variable max_attempts as integer with value 7
+create variable won as boolean with value false
+
+print "=== IOZEN Number Guesser ==="
+print "I'm thinking of a number between 1 and 100."
+print "You have 7 attempts to guess it."
+print ""
+
+# Simulated game (we'll just run through a few guesses)
+create variable guess as integer with value 50
+
+# First guess
+set attempts to attempts + 1
+print "Guess " attach attempts attach ": " attach guess
+when guess is less than secret do
+    print "  Too low!"
+otherwise when guess is greater than secret do
+    print "  Too high!"
+otherwise do
+    set won to true
+    print "  Correct! You got it in " attach attempts attach " attempts!"
+end
+
+# Second guess
+when won equals false do
+    when guess is less than secret do
+        set guess to guess + 25
+    otherwise do
+        set guess to guess - 25
+    end
+    set attempts to attempts + 1
+    print "Guess " attach attempts attach ": " attach guess
+    when guess is less than secret do
+        print "  Too low!"
+    otherwise when guess is greater than secret do
+        print "   Too high!"
+    otherwise do
+        set won to true
+        print "  Correct! You got it in " attach attempts attach " attempts!"
+    end
+end
+
+when won equals false do
+    print ""
+    print "Game over! The number was " attach secret
+    print "Better luck next time!"
+end
+
+# Let's also show the answer
+print ""
+print "(For demo: secret = " attach secret attach ")"

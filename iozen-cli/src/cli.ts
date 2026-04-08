@@ -74,6 +74,9 @@ async function main() {
     case "shell":
       await cmdRepl();
       break;
+    case "eval":
+      await cmdEval(args.slice(1));
+      break;
     case "help":
     case "-h":
     case "--help":
@@ -418,7 +421,42 @@ import { Interpreter } from "../../src/lib/iozen/interpreter";
 `;
 }
 
-async function cmdRepl(): Promise<void> {
+function cmdEval(args: string[]): Promise<void> {
+  if (args.length === 0) {
+    error('Usage: iozen eval <code>');
+    process.exit(1);
+  }
+
+  const source = args.join(' ');
+
+  try {
+    const interpreter = new Interpreter();
+    const result = interpreter.run(source);
+
+    for (const line of result.output) {
+      console.log(line);
+    }
+
+    for (const err of result.errors) {
+      console.error(`${C.red}  ✗ ${err}${C.reset}`);
+    }
+
+    if (result.errors.length > 0) {
+      process.exit(1);
+    }
+  } catch (e) {
+    if (e instanceof ParseError) {
+      error(`Parse error: ${e.message}`);
+    } else if (e instanceof Error) {
+      error(`${e.name}: ${e.message}`);
+    } else {
+      error(String(e));
+    }
+    process.exit(1);
+  }
+}
+
+function cmdRepl(): Promise<void> {
   const { createInterface } = await import('node:readline');
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
@@ -552,6 +590,7 @@ function printBanner(): void {
 function printUsage(): void {
   log(`${C.bold}Usage:${C.reset}`);
   log(`  iozen run <file.iozen>        Execute a IOZEN program`);
+  log(`  iozen eval <code>            Execute inline IOZEN code`);
   log(`  iozen build <file.iozen>      Compile to standalone binary`);
   log(`  iozen repl                    Interactive shell (REPL)`);
   log(`  iozen init <project>         Create new IOZEN project`);

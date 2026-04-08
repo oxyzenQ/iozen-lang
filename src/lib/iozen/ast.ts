@@ -36,7 +36,8 @@ export type ASTNode =
   | ForceUnwrapNode
   | OrDefaultNode
   | HasValueNode
-  | ValueInsideNode;
+  | ValueInsideNode
+  | LambdaNode;
 
 // ---- Program ----
 export interface ProgramNode {
@@ -150,6 +151,7 @@ export interface WhileNode {
 export interface ForEachNode {
   kind: 'ForEach';
   variable: string;
+  indexVariable: string | null;
   iterable: ASTNode;
   body: ASTNode[];
 }
@@ -266,4 +268,13 @@ export interface HasValueNode {
 export interface ValueInsideNode {
   kind: 'ValueInside';
   expression: ASTNode;
+}
+
+// ---- Lambda (Anonymous Function) ----
+export interface LambdaNode {
+  kind: 'Lambda';
+  parameters: FunctionParamNode[];
+  returnType: string;
+  returnQualifiers: string[];
+  body: ASTNode[];
 }

@@ -1202,6 +1202,130 @@ test('builtin: map_size', () => {
 });
 
 // ============================================================
+// LAMBDA / ANONYMOUS FUNCTION TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mLambda / Anonymous Function Tests\x1b[0m');
+
+test('lambda: basic anonymous function', () => {
+  const r = run(`create variable double with value function with x as integer returns integer
+    return x * 2
+end
+print double with 21`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '42');
+});
+
+test('lambda: lambda passed to builtin', () => {
+  const r = run(`function double with x as integer returns integer
+    return x * 2
+end
+create variable nums as list with value [1, 2, 3, 4, 5]
+create variable doubled as list with value map_list(nums, "double")
+print doubled`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2, 4, 6, 8, 10');
+});
+
+test('lambda: lambda has closure', () => {
+  const r = run(`create variable x as integer with value 10
+create variable adder with value function with n as integer returns integer
+    return n + x
+end
+print adder with 5`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '15');
+});
+
+// ============================================================
+// STRING INTERPOLATION TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mString Interpolation Tests\x1b[0m');
+
+test('string interpolation: simple variable', () => {
+  const r = run('create variable name as text with value "World"\nprint "Hello, {name}!"');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'Hello, World!');
+});
+
+test('string interpolation: expression', () => {
+  const r = run('create variable x as integer with value 10\ncreate variable y as integer with value 20\nprint "{x} + {y} = {x + y}"');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '10 + 20 = 30');
+});
+
+test('string interpolation: in attach expression', () => {
+  const r = run('create variable name as text with value "IOZEN"\nprint "Hello, " attach "{name} is cool!"');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'Hello, IOZEN is cool!');
+});
+
+// ============================================================
+// INDEXED FOR-EACH TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mIndexed For-Each Tests\x1b[0m');
+
+test('for each with index', () => {
+  const r = run(`create variable items as list with value ["a", "b", "c"]
+for each item, i in items do
+    print i attach ": " attach item
+end`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0: a');
+  assertIncludes(r.output, '1: b');
+  assertIncludes(r.output, '2: c');
+});
+
+// ============================================================
+// LOOP BREAK TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mLoop Break Tests\x1b[0m');
+
+test('exit breaks forEach loop', () => {
+  const r = run(`create variable items as list with value [1, 2, 3, 4, 5]
+for each item in items do
+    when item equals 3 do
+        exit
+    end
+    print item
+end`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+  assertIncludes(r.output, '2');
+  assertNotIncludes(r.output, '3');
+});
+
+test('exit breaks while loop', () => {
+  const r = run(`create variable i as integer with value 0
+while i is less than 10 do
+    when i equals 5 do
+        exit
+    end
+    print i
+    increase i by 1
+end`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+  assertIncludes(r.output, '4');
+  assertNotIncludes(r.output, '5');
+});
+
+// ============================================================
+// SLICE 2-ARG TEST
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mSlice 2-Arg Tests\x1b[0m');
+
+test('slice with 2 args (from index to end)', () => {
+  const r = run('create variable nums as list with value [1, 2, 3, 4, 5]\ncreate variable tail as list with value slice(nums, 3)\nprint tail');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '4, 5');
+});
+
+// ============================================================
 // SUMMARY
 // ============================================================
 

@@ -1,0 +1,61 @@
+# IOZEN Calculator — Simple arithmetic calculator
+# Demonstrates variables, functions, when/otherwise, user input
+
+# This is a simulated calculator (no actual input in interpreter mode)
+create variable a as float with value 0
+create variable b as float with value 0
+create variable op as text with value "+"
+
+# Addition
+set a to 15
+set b to 27
+set op to "+"
+create variable result as float with value a + b
+print "15 + 27 = " attach result
+
+# Subtraction  
+set a to 100
+set b to 37
+set op to "-"
+create variable result as float with value a - b
+print "100 - 37 = " attach result
+
+# Multiplication
+set a to 12
+set b to 8
+create variable result as float with value a * b
+print "12 * 8 = " attach result
+
+# Division
+set a to 144
+set b to 12
+set op to "/"
+create variable result as float with value a / b
+print "144 / 12 = " attach result
+
+# Using functions
+function calculate with x as float and y as float and operation as text returns text
+    create variable result as float with value 0
+    when operation equals "+" do
+        set result to x + y
+    otherwise when operation equals "-" do
+        set result to x - y
+    otherwise when operation equals "*" do
+        set result to x * y
+    otherwise when operation equals "/" do
+        when y equals 0 do
+            return "Error: Division by zero"
+        end
+        set result to x / y
+    otherwise do
+        return "Unknown operation"
+    end
+    return to_text(result)
+end
+
+print ""
+print "--- Using Function ---"
+print "calculate(50, 25, '+') = " attach calculate with 50 and 25 and "+"
+print "calculate(100, 40, '-') = " attach calculate with 100 and 40 and "-"
+print "calculate(7, 8, '*') = " attach calculate with 7 and 8 and "*"
+print "calculate(100, 4, '/') = " attach calculate with 100 and 4 and "/"
