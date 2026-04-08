@@ -132,8 +132,19 @@ export class Parser {
     // with value <expr>
     let value: ASTNode | null = null;
     if (this.match(TokenType.With)) {
-      this.consume(TokenType.Value, 'Expected "value"');
-      value = this.parseExpression();
+      if (this.check(TokenType.Value)) {
+        this.consume(TokenType.Value, 'Expected "value"');
+        value = this.parseExpression();
+      } else {
+        // Structure field initialization: with x = 0 and y = 0
+        // Pattern: Identifier "=" expr ("and" Identifier "=" expr)*
+        if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.Assign) {
+          value = this.parseFieldInit();
+        } else {
+          // Otherwise treat as a value expression
+          value = this.parseExpression();
+        }
+      }
     } else if (!isConstant) {
       // Variables can be declared without value (default to nothing/zero)
     }
@@ -542,6 +553,17 @@ export class Parser {
         kind: 'FunctionCallStmt',
         name: fce.name,
         arguments: fce.arguments,
+      } as FunctionCallStmtNode;
+    }
+
+    // If it's a bare identifier at statement position, treat as zero-arg function call
+    // This allows: `my_function` as a shorthand for `my_function with nothing`
+    if (expr.kind === 'Identifier') {
+      const id = expr as IdentifierNode;
+      return {
+        kind: 'FunctionCallStmt',
+        name: id.name,
+        arguments: [],
       } as FunctionCallStmtNode;
     }
 
@@ -960,6 +982,25 @@ export class Parser {
     }
 
     return args;
+  }
+
+  private parseFieldInit(): ASTNode {
+    // Field-style initialization: with x = 0 and y = 0
+    // Produces: FunctionCallExpr name='__struct_init__', args=[fieldName, value, ...]
+    const parts: ASTNode[] = [];
+
+    while (true) {
+      const fieldName = this.consumeName('Expected field name').value;
+      this.consume(TokenType.Assign, 'Expected "=" in field initialization');
+      const fieldValue = this.parseAdditive();
+
+      parts.push({ kind: 'Literal', type: 'text', value: fieldName } as LiteralNode);
+      parts.push(fieldValue);
+
+      if (!this.match(TokenType.And)) break;
+    }
+
+    return { kind: 'FunctionCallExpr', name: '__struct_init__', arguments: parts } as FunctionCallExprNode;
   }
 
   // ---- Helpers ----

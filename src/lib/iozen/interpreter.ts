@@ -32,6 +32,8 @@ export class Interpreter {
   private maxIterations: number = 100000;
   private iterationCount: number = 0;
   private structureDefs: Map<string, { fields: { name: string; typeName: string }[] }> = new Map();
+  private source: string = '';
+  private sourceLines: string[] = [];
 
   constructor() {
     this.env = new Environment();
@@ -41,6 +43,8 @@ export class Interpreter {
   public run(source: string): { output: string[]; errors: string[] } {
     this.output = [];
     this.iterationCount = 0;
+    this.source = source;
+    this.sourceLines = source.split('\n');
 
     try {
       const lexer = new Lexer(source);
@@ -53,13 +57,13 @@ export class Interpreter {
       if (e instanceof ParseError) {
         return {
           output: [],
-          errors: [`Parse error at line ${e.token.line}, column ${e.token.column}: ${e.message}`],
+          errors: [this.formatParseError(e)],
         };
       }
       if (e instanceof RuntimeError) {
         return {
           output: this.output,
-          errors: [`Runtime error: ${e.message}`],
+          errors: [this.formatRuntimeError(e)],
         };
       }
       if (e instanceof Error) {
@@ -145,13 +149,111 @@ export class Interpreter {
     }
   }
 
+  // ---- Error Formatting ----
+
+  private formatRuntimeError(e: RuntimeError): string {
+    const lines: string[] = [];
+
+    // Try to find the relevant name in the source for common error patterns
+    const nameMatch = e.message.match(/"([^"]+)"/);
+    let loc: { line: number; column: number } | null = null;
+    if (nameMatch) {
+      const name = nameMatch[1];
+      loc = this.findNameInSource(name);
+    }
+
+    // If the error already has line info, use it
+    if (e.line !== undefined && e.line > 0) {
+      loc = { line: e.line, column: e.column };
+    }
+
+    // Check if we should add "did you mean?" for undefined variable/function errors
+    const baseMessage = e.message.includes('\n')
+      ? e.message  // already has suggestion embedded
+      : this.enrichWithSuggestion(e.message);
+
+    lines.push(`Runtime error: ${baseMessage}`);
+
+    if (loc) {
+      this.appendSourceContext(lines, loc.line, loc.column);
+    }
+
+    return lines.join('\n');
+  }
+
+  private enrichWithSuggestion(message: string): string {
+    const nameMatch = message.match(/"(?:Undefined (?:variable|function): )?([^"]+)"/);
+    if (!nameMatch) return message;
+
+    // Handle patterns like: Undefined variable: "foo" or Undefined function: "foo"
+    const undefMatch = message.match(/Undefined (?:variable|function):\s*"([^"]+)"/);
+    if (undefMatch) {
+      const name = undefMatch[1];
+      const suggestion = this.suggestSimilar(name);
+      if (suggestion) {
+        return `${message}\n  Did you mean: "${suggestion}"?`;
+      }
+    }
+
+    return message;
+  }
+
+  private formatParseError(e: ParseError): string {
+    const lines: string[] = [];
+    lines.push(`Parse error: ${e.message}`);
+    this.appendSourceContext(lines, e.token.line, e.token.column);
+    return lines.join('\n');
+  }
+
+  private appendSourceContext(lines: string[], lineNum: number, column?: number): void {
+    const idx = lineNum - 1;
+    if (idx < 0 || idx >= this.sourceLines.length) return;
+
+    const lineContent = this.sourceLines[idx];
+    lines.push(`  --> Line ${lineNum}` + (column ? `, Column ${column}` : ''));
+    lines.push('    |');
+    lines.push(`${String(lineNum).padStart(2)} | ${lineContent}`);
+
+    if (column !== undefined && column > 0) {
+      const pad = String(column).length + 5;
+      lines.push(`${' '.repeat(pad)}|${' '.repeat(column - 1)}^`);
+    }
+  }
+
+  private findNameInSource(name: string): { line: number; column: number } | null {
+    // Search source lines for the name, excluding comments
+    for (let i = 0; i < this.sourceLines.length; i++) {
+      const line = this.sourceLines[i];
+      // Skip comment-only lines
+      const codePart = line.split('#')[0];
+      const col = codePart.indexOf(name);
+      if (col !== -1) {
+        return { line: i + 1, column: col + 1 };
+      }
+    }
+    return null;
+  }
+
   // ---- Statement Executors ----
 
   private execVariableDecl(node: VariableDeclNode, env: Environment): void {
     let value: IOZENValue;
 
     if (node.value) {
-      value = this.evaluate(node.value, env);
+      const evaluated = this.evaluate(node.value, env);
+
+      // If the value is a __struct_init__ result (plain object), attach class name
+      if (evaluated && typeof evaluated === 'object' &&
+          !(Array.isArray(evaluated)) &&
+          !(evaluated as any).__iozen_type &&
+          node.value.kind === 'FunctionCallExpr' &&
+          (node.value as FunctionCallExprNode).name === '__struct_init__') {
+        // Tag it as an IOZEN object with the declared type name
+        (evaluated as IOZENObject).__iozen_type = 'object';
+        (evaluated as IOZENObject).__class_name = node.typeName;
+      }
+
+      value = evaluated;
     } else {
       // Default values based on type
       value = this.getDefaultValue(node.typeName);
@@ -284,7 +386,7 @@ export class Interpreter {
         this.executeBlock(node.body, childEnv);
       }
     } else {
-      throw new RuntimeError(`Cannot iterate over ${typeof iterable}`);
+      throw new RuntimeError(`Cannot iterate over ${typeof iterable}`, ...this.findNodeLine('for each'));
     }
   }
 
@@ -368,7 +470,7 @@ export class Interpreter {
         if (obj && typeof obj === 'object' && m.field in obj) {
           return (obj as Record<string, IOZENValue>)[m.field];
         }
-        throw new RuntimeError(`Cannot access field "${m.field}"`);
+        throw new RuntimeError(`Cannot access field "${m.field}"`, ...this.findNameInSourceOrThrow(m.field));
       }
 
       case 'IndexAccess': {
@@ -381,7 +483,7 @@ export class Interpreter {
         if (typeof obj === 'string') {
           return obj[idx];
         }
-        throw new RuntimeError(`Cannot index ${typeof obj}`);
+        throw new RuntimeError(`Cannot index ${typeof obj}`, ...this.findNodeLine('[]'));
       }
 
       case 'ListLiteral': {
@@ -419,7 +521,7 @@ export class Interpreter {
       case '-': return this.toNumber(left) - this.toNumber(right);
       case '*': return this.toNumber(left) * this.toNumber(right);
       case '/':
-        if (this.toNumber(right) === 0) throw new RuntimeError('Division by zero');
+        if (this.toNumber(right) === 0) throw new RuntimeError('Division by zero', ...this.findNodeLine('/'));
         return this.toNumber(left) / this.toNumber(right);
       case '%': return this.toNumber(left) % this.toNumber(right);
       case '==': return left === right;
@@ -431,7 +533,7 @@ export class Interpreter {
       case 'and': return this.isTruthy(left) && this.isTruthy(right);
       case 'or': return this.isTruthy(left) || this.isTruthy(right);
       default:
-        throw new RuntimeError(`Unknown operator: ${op}`);
+        throw new RuntimeError(`Unknown operator: ${op}`, ...this.findNodeLine(op));
     }
   }
 
@@ -440,7 +542,7 @@ export class Interpreter {
       case '-': return -this.toNumber(operand);
       case 'not': return !this.isTruthy(operand);
       default:
-        throw new RuntimeError(`Unknown unary operator: ${op}`);
+        throw new RuntimeError(`Unknown unary operator: ${op}`, ...this.findNodeLine(op));
     }
   }
 
@@ -451,6 +553,16 @@ export class Interpreter {
     const args = argNodes.map(a => this.evaluate(a, env));
 
     // Built-in functions (try all built-in routes first)
+    if (name === '__struct_init__') {
+      // Structure field initialization: pairs of [fieldName, fieldValue]
+      const obj: IOZENObject = { __iozen_type: 'object', __class_name: 'Unknown' } as IOZENObject;
+      for (let i = 0; i < args.length; i += 2) {
+        const fieldName = String(args[i]);
+        const fieldValue = i + 1 < args.length ? args[i + 1] : null;
+        obj[fieldName] = fieldValue;
+      }
+      return obj;
+    }
     if (this.callBuiltin(name, args)) {
       return this.env.get('__last_result__');
     }
@@ -501,7 +613,11 @@ export class Interpreter {
       return this.env.get('__last_result__');
     }
 
-    throw new RuntimeError(`Undefined function: "${name}"`);
+    const suggestion = this.suggestSimilar(name);
+    const msg = suggestion
+      ? `Undefined function: "${name}"\n  Did you mean: "${suggestion}"?`
+      : `Undefined function: "${name}"`;
+    throw new RuntimeError(msg, ...this.findNameInSourceOrThrow(name));
   }
 
   // ---- Built-in Functions ----
@@ -618,7 +734,7 @@ export class Interpreter {
     }
 
     // Type conversion
-    if (n === 'to_integer' || n === 'int' && args.length >= 1) {
+    if ((n === 'to_integer' || n === 'int') && args.length >= 1) {
       this.env.define('__last_result__', parseInt(String(args[0]), 10));
       return true;
     }
@@ -638,7 +754,8 @@ export class Interpreter {
       return true;
     }
     if (n === 'pop' && args.length >= 1 && Array.isArray(args[0])) {
-      this.env.define('__last_result__', (args[0] as IOZENValue[]).pop() || null);
+      const arr = args[0] as IOZENValue[];
+      this.env.define('__last_result__', arr.length > 0 ? arr.pop()! : null);
       return true;
     }
     if (n === 'sort' && args.length >= 1 && Array.isArray(args[0])) {
@@ -653,15 +770,21 @@ export class Interpreter {
       this.env.define('__last_result__', [...(args[0] as IOZENValue[])].reverse());
       return true;
     }
-    if (n === 'join' && args.length >= 2 && Array.isArray(args[0])) {
-      this.env.define('__last_result__', (args[0] as IOZENValue[]).map(a => String(a)).join(String(args[1])));
+    if (n === 'join' && args.length >= 1 && Array.isArray(args[0])) {
+      const separator = args.length >= 2 ? String(args[1]) : '';
+      this.env.define('__last_result__', (args[0] as IOZENValue[]).map(a => String(a)).join(separator));
       return true;
     }
     if (n === 'range' && args.length >= 2) {
       const start = this.toNumber(args[0]);
       const end = this.toNumber(args[1]);
+      const step = args.length >= 3 ? this.toNumber(args[2]) : (start <= end ? 1 : -1);
       const arr: IOZENValue[] = [];
-      for (let i = start; i < end; i++) arr.push(i);
+      if (step > 0) {
+        for (let i = start; i < end; i += step) arr.push(i);
+      } else if (step < 0) {
+        for (let i = start; i > end; i += step) arr.push(i);
+      }
       this.env.define('__last_result__', arr);
       return true;
     }
@@ -678,10 +801,20 @@ export class Interpreter {
     }
 
     // Special IOZEN keywords that function as built-ins
+    // Input / Output
+    if (n === 'read_line' && args.length >= 0) {
+      // Synchronous readline — placeholder (works in REPL)
+      this.env.define('__last_result__', '');
+      return true;
+    }
     if (n === 'read_file' && args.length >= 1) {
-      // In a real implementation, this would read a file
-      // For the playground, we return a mock string
-      this.env.define('__last_result__', `[file content of "${args[0]}"]`);
+      try {
+        const { readFileSync } = require('node:fs');
+        const content = readFileSync(String(args[0]), 'utf-8');
+        this.env.define('__last_result__', content);
+      } catch {
+        throw new RuntimeError(`Cannot read file: "${args[0]}"`);
+      }
       return true;
     }
 
@@ -752,6 +885,83 @@ export class Interpreter {
     if (this.iterationCount > this.maxIterations) {
       throw new RuntimeError('Execution limit exceeded (possible infinite loop)');
     }
+  }
+
+  // ---- Typo Suggestions ----
+
+  private builtinNames: string[] = [
+    'print', 'println', 'abs', 'sqrt', 'floor', 'ceil', 'round',
+    'power', 'min', 'max', 'uppercase', 'lowercase', 'trim',
+    'substring', 'contains', 'replace', 'split', 'join', 'char_at',
+    'ord', 'chr', 'to_integer', 'int', 'to_float', 'to_text',
+    'push', 'pop', 'sort', 'reverse', 'length', 'range', 'sum',
+    'read_line', 'read_file',
+  ];
+
+  private suggestSimilar(name: string): string | null {
+    const targets = [...this.builtinNames];
+    // Also collect user-defined function names from the environment
+    this.collectFunctionNames(this.env, targets);
+
+    let bestMatch: string | null = null;
+    let bestDist = Infinity;
+
+    for (const target of targets) {
+      const dist = this.levenshtein(name.toLowerCase(), target.toLowerCase());
+      if (dist <= 2 && dist < bestDist) {
+        bestDist = dist;
+        bestMatch = target;
+      }
+    }
+
+    return bestMatch;
+  }
+
+  private collectFunctionNames(env: Environment, names: string[]): void {
+    for (const name of env.names()) {
+      if (!names.includes(name)) {
+        names.push(name);
+      }
+    }
+  }
+
+  private levenshtein(a: string, b: string): number {
+    const m = a.length;
+    const n = b.length;
+    const dp: number[][] = Array.from({ length: m + 1 }, () =>
+      new Array(n + 1).fill(0)
+    );
+
+    for (let i = 0; i <= m; i++) dp[i][0] = i;
+    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+        dp[i][j] = Math.min(
+          dp[i - 1][j] + 1,
+          dp[i][j - 1] + 1,
+          dp[i - 1][j - 1] + cost,
+        );
+      }
+    }
+
+    return dp[m][n];
+  }
+
+  /**
+   * Helper: find a name/keyword in source and return [line, column] tuple
+   * for use as spread arguments to RuntimeError constructor.
+   */
+  private findNameInSourceOrThrow(name: string): [number, number | undefined] {
+    const loc = this.findNameInSource(name);
+    return loc ? [loc.line, loc.column] : [];
+  }
+
+  private findNodeLine(hint: string): [number, number | undefined] {
+    // For operators/symbols, search for the hint in source
+    const loc = this.findNameInSource(hint);
+    return loc ? [loc.line, loc.column] : [];
   }
 }
 

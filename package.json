@@ -5,7 +5,8 @@
   "license": "MIT",
   "scripts": {
     "dev": "bun run iozen-cli/src/cli.ts",
-    "iozen": "bun run iozen-cli/src/cli.ts"
+    "iozen": "bun run iozen-cli/src/cli.ts",
+    "test": "bun run tests/test_all.ts"
   },
   "devDependencies": {
     "@types/node": "^20",

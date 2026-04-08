@@ -36,7 +36,11 @@ export interface IOZENResult {
 }
 
 export class RuntimeError extends Error {
-  constructor(message: string, public line?: number) {
+  constructor(
+    message: string,
+    public line?: number,
+    public column?: number,
+  ) {
     super(message);
     this.name = 'RuntimeError';
   }
@@ -94,5 +98,16 @@ export class Environment {
 
   public child(): Environment {
     return new Environment(this);
+  }
+
+  public names(): string[] {
+    const result: string[] = [];
+    if (this.parent) {
+      result.push(...this.parent.names());
+    }
+    for (const key of this.vars.keys()) {
+      if (!result.includes(key)) result.push(key);
+    }
+    return result;
   }
 }
