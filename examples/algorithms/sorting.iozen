@@ -1,0 +1,74 @@
+# ============================================
+# Sorting Algorithms Example
+# Implements bubble sort using IOZEN features
+# ============================================
+
+# ============================================
+# BUBBLE SORT
+# Repeatedly swaps adjacent elements if they
+# are in the wrong order. O(n^2) time.
+# ============================================
+
+function bubble_sort with arr as list returns list
+    create variable n as integer with value length(arr)
+    create variable result as list with value []
+
+    # Copy input list
+    for each item in arr do
+        push(result, item)
+    end
+
+    repeat (n - 1) times do
+        create variable swapped as boolean with value false
+        create variable i as integer with value 0
+
+        while i < (n - 1) do
+            create variable a as integer with value result[i]
+            create variable b as integer with value result[i + 1]
+            when a > b do
+                # Swap: remove both, insert in swapped order
+                remove(result, i)
+                remove(result, i)
+                insert(result, i, b)
+                insert(result, i + 1, a)
+                set swapped to true
+            end
+            increase i by 1
+        end
+
+        # Early exit if already sorted
+        when not swapped do
+            return result
+        end
+    end
+
+    return result
+end
+
+# ============================================
+# Main: Test Bubble Sort
+# ============================================
+
+print "--- Bubble Sort ---"
+create variable data1 as list with value [64, 34, 25, 12, 22, 11, 90]
+print "Input : " attach data1
+create variable result1 as list with value bubble_sort(data1)
+print "Output: " attach result1
+
+print ""
+
+print "--- Edge Cases ---"
+create variable empty as list with value []
+print "Empty list    : " attach bubble_sort(empty)
+
+create variable single as list with value [1]
+print "Single item   : " attach bubble_sort(single)
+
+create variable sorted as list with value [1, 2, 3, 4, 5]
+print "Already sorted: " attach bubble_sort(sorted)
+
+create variable reverse as list with value [5, 4, 3, 2, 1]
+print "Reverse sorted: " attach bubble_sort(reverse)
+
+create variable dupes as list with value [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]
+print "Duplicates    : " attach bubble_sort(dupes)

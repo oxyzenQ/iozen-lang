@@ -5,7 +5,7 @@
 
 import { Token, TokenType } from './tokens';
 import type {
-  ASTNode, ProgramNode, VariableDeclNode, FunctionDeclNode,
+  ASTNode, ProgramNode, ImportNode, VariableDeclNode, FunctionDeclNode,
   FunctionParamNode, StructureDeclNode, FieldNode, EnumDeclNode,
   EnumCaseNode, PrintStmtNode, ReturnStmtNode, WhenNode,
   WhenBranchNode, CheckNode, CheckCaseNode, RepeatNode,
@@ -57,6 +57,8 @@ export class Parser {
     const token = this.peek();
 
     switch (token.type) {
+      case TokenType.Import:
+        return this.parseImport();
       case TokenType.Create:
         return this.parseVariableDecl();
       case TokenType.Constant:
@@ -97,15 +99,66 @@ export class Parser {
     }
   }
 
+  private parseImport(): ASTNode {
+    this.consume(TokenType.Import, 'Expected "import"');
+
+    // import <module_path>
+    // import <name1>, <name2> from <module_path>
+    const importNames: string[] = [];
+
+    // Collect names before "from"
+    while (!this.isAtEnd() && !this.check(TokenType.From) && this.peek().type !== TokenType.Identifier) {
+      // If it looks like a module path (identifier or dot), stop collecting names
+      if (this.peek().type === TokenType.Identifier) break;
+      this.advance();
+    }
+
+    // Check for "import X, Y from module" pattern
+    if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.Comma) {
+      // Multiple names before "from"
+      while (true) {
+        importNames.push(this.consumeName('Expected import name').value);
+        if (!this.match(TokenType.Comma)) break;
+      }
+      this.consume(TokenType.From, 'Expected "from"');
+    } else if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.From) {
+      // Single name before "from"
+      importNames.push(this.consumeName('Expected import name').value);
+      this.consume(TokenType.From, 'Expected "from"');
+    }
+
+    // Module path: identifier(.identifier)*
+    const parts: string[] = [this.consumeName('Expected module name').value];
+    while (this.match(TokenType.Dot)) {
+      parts.push(this.consumeName('Expected module name').value);
+    }
+
+    return {
+      kind: 'Import',
+      modulePath: parts.join('/'),
+      importNames,
+    } as ImportNode;
+  }
+
   private parseVariableDecl(isConstant: boolean = false): ASTNode {
     if (isConstant) {
       this.consume(TokenType.Constant, 'Expected "constant"');
     } else {
       this.consume(TokenType.Create, 'Expected "create"');
+      // Handle "create constant variable X" or "create constant X" syntax
+      if (this.check(TokenType.Constant)) {
+        this.advance(); // consume "constant"
+        isConstant = true;
+      }
     }
 
     // variable <name>
-    this.consume(TokenType.Variable, 'Expected "variable"');
+    // For "create constant X", "variable" keyword is optional
+    if (isConstant && this.check(TokenType.Identifier)) {
+      // "create constant X" — skip "variable" keyword
+    } else {
+      this.consume(TokenType.Variable, 'Expected "variable"');
+    }
     const name = this.consumeName('Expected variable name').value;
 
     // as <type>
@@ -147,6 +200,9 @@ export class Parser {
       }
     } else if (!isConstant) {
       // Variables can be declared without value (default to nothing/zero)
+    } else {
+      // Constants MUST have an initial value
+      throw new ParseError('Constant must have an initial value (use "with value ...")', this.peek());
     }
 
     return {

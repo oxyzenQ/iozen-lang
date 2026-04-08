@@ -127,6 +127,7 @@ async function cmdRun(args: string[]) {
     // Phase 3: Interpretation
     const t3 = performance.now();
     const interpreter = new Interpreter();
+    interpreter.setSourceFilePath(filePath);
     const result = interpreter.run(source);
     const execTime = (performance.now() - t3).toFixed(2);
     const totalTime = (performance.now() - t0).toFixed(2);
@@ -426,7 +427,7 @@ async function cmdRepl(): Promise<void> {
   log(`${C.dim}Type IOZEN expressions or statements. Type :quit to exit.${C.reset}`);
   log('');
 
-  const interpreter = new Interpreter();
+  let interpreter = new Interpreter();
   let buffer = '';
 
   const prompt = () => {
@@ -455,7 +456,7 @@ async function cmdRepl(): Promise<void> {
       }
       if (trimmed === ':reset') {
         buffer = '';
-        interpreter.constructor;
+        interpreter = new Interpreter();
         log(`${C.dim}Environment reset.${C.reset}`);
         prompt();
         return;

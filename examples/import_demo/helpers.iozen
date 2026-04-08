@@ -1,0 +1,81 @@
+# ============================================
+# Helper Functions Module
+# Provides utility functions for import_demo.
+# This file is imported by main.iozen.
+# ============================================
+
+# --- Greeting Utility ---
+function greet with name as string returns string
+    return "Hello, " attach name attach "! Welcome to IOZEN."
+end
+
+# --- Factorial (recursive-style via loop) ---
+function factorial with n as integer returns integer
+    create variable result as integer with value 1
+    create variable i as integer with value 2
+    while i <= n do
+        set result to result * i
+        increase i by 1
+    end
+    return result
+end
+
+# --- Fibonacci (returns the Nth Fibonacci number) ---
+function fibonacci with n as integer returns integer
+    when n <= 0 do
+        return 0
+    end
+    when n == 1 do
+        return 1
+    end
+
+    create variable prev2 as integer with value 0
+    create variable prev1 as integer with value 1
+    create variable current as integer with value 0
+    create variable i as integer with value 2
+
+    while i <= n do
+        set current to prev1 + prev2
+        set prev2 to prev1
+        set prev1 to current
+        increase i by 1
+    end
+
+    return current
+end
+
+# --- Check if a number is prime ---
+function is_prime with n as integer returns boolean
+    when n < 2 do
+        return false
+    end
+    when n == 2 do
+        return true
+    end
+    when (n % 2) == 0 do
+        return false
+    end
+
+    create variable i as integer with value 3
+    while i * i <= n do
+        when (n % i) == 0 do
+            return false
+        end
+        increase i by 2
+    end
+
+    return true
+end
+
+# --- Generate Fibonacci sequence up to N terms ---
+function fibonacci_sequence with count as integer returns list
+    create variable seq as list with value []
+    create variable i as integer with value 0
+
+    while i < count do
+        push(seq, fibonacci(i))
+        increase i by 1
+    end
+
+    return seq
+end

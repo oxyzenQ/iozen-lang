@@ -1,0 +1,70 @@
+# ============================================
+# String Operations Example
+# Demonstrates string manipulation functions
+# and text processing patterns in IOZEN.
+# ============================================
+
+# --- Creating Strings ---
+create variable greeting as string with value "  Hello, World!  "
+create variable sentence as string with value "The quick brown fox jumps over the lazy dog"
+
+print "--- Trimming and Case ---"
+print "Original : [" attach greeting attach "]"
+print "trimmed  : [" attach trim(greeting) attach "]"
+print "upper    : [" attach uppercase(trim(greeting)) attach "]"
+print "lower    : [" attach lowercase(trim(greeting)) attach "]"
+
+# --- Substring and Character Access ---
+print ""
+print "--- Substring and Characters ---"
+print "sentence : " attach sentence
+print "char_at(0) : " attach char_at(sentence, 0)
+print "substring(4, 9) : " attach substring(sentence, 4, 9)
+print "ord('A') : " attach ord("A")
+print "chr(65)  : " attach chr(65)
+
+# --- Searching Within Strings ---
+print ""
+print "--- Searching ---"
+print "contains 'fox'?    : " attach contains(sentence, "fox")
+print "contains 'cat'?    : " attach contains(sentence, "cat")
+print "starts_with 'The'? : " attach starts_with(sentence, "The")
+print "ends_with 'dog'?   : " attach ends_with(sentence, "dog")
+print "index_of 'brown'?  : " attach index_of(sentence, "brown")
+
+# --- Replace and Split ---
+print ""
+print "--- Replace and Split ---"
+create variable replaced as string with value replace(sentence, "fox", "cat")
+print "Replaced fox->cat : " attach replaced
+
+create variable csv_line as string with value "apple,banana,cherry,date"
+create variable fruits as list with value split(csv_line, ",")
+print "Split CSV:"
+for each fruit in fruits do
+    print "  - " attach fruit
+end
+
+# --- Joining and Repeating ---
+print ""
+print "--- Join and Repeat ---"
+create variable words as list with value ["IOZEN", "is", "awesome"]
+create variable joined as string with value join(words, " ")
+print "Joined  : " attach joined
+
+create variable dashes as string with value repeat_str("- ", 20)
+print "Dashes  : " attach dashes
+
+# --- Padding ---
+print ""
+print "--- Padding ---"
+create variable num_str as string with value "42"
+print "pad_left('42', '*', 6)  : [" attach pad_left(num_str, "*", 6) attach "]"
+print "pad_right('42', ' ', 6) : [" attach pad_right(num_str, " ", 6) attach "]"
+
+# --- Practical: Simple Word Counter ---
+print ""
+print "--- Word Counter ---"
+create variable word_list as list with value split(sentence, " ")
+print "Words : " attach length(word_list)
+print "Chars : " attach length(sentence)

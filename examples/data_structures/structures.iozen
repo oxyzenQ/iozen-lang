@@ -1,0 +1,91 @@
+# ============================================
+# Structures Example
+# Demonstrates defining and using structures
+# (similar to classes/records) in IOZEN.
+# ============================================
+
+# --- Define a Point Structure ---
+define structure Point
+    field x as float
+    field y as float
+end
+
+# --- Define a Rectangle Structure ---
+define structure Rectangle
+    field width as float
+    field height as float
+    field color as string
+    field filled as boolean
+end
+
+# --- Function: distance between two points ---
+function distance with p1 as Point and p2 as Point returns float
+    create variable dx as float with value (p2.x - p1.x)
+    create variable dy as float with value (p2.y - p1.y)
+    return sqrt(power(dx, 2) + power(dy, 2))
+end
+
+# --- Function: rectangle area ---
+function rect_area with r as Rectangle returns float
+    return r.width * r.height
+end
+
+# --- Function: rectangle perimeter ---
+function rect_perimeter with r as Rectangle returns float
+    return 2 * (r.width + r.height)
+end
+
+# --- Function: create a point from values ---
+function make_point with x as float and y as float returns Point
+    create variable p as Point with x = x and y = y
+    return p
+end
+
+# --- Main Program ---
+print "--- Creating Structures ---"
+create variable origin as Point with x = 0.0 and y = 0.0
+create variable target as Point with x = 3.0 and y = 4.0
+create variable midpoint as Point with x = 1.5 and y = 2.0
+
+print "origin  : (" attach origin.x attach ", " attach origin.y attach ")"
+print "target  : (" attach target.x attach ", " attach target.y attach ")"
+print "midpoint: (" attach midpoint.x attach ", " attach midpoint.y attach ")"
+
+# --- Using Structure Functions ---
+print ""
+print "--- Point Operations ---"
+create variable dist as float with value distance(origin, target)
+print "Distance from origin to target : " attach dist
+
+create variable dynamic as Point with value make_point(7.0, 24.0)
+print "Dynamic point : (" attach dynamic.x attach ", " attach dynamic.y attach ")"
+print "Distance       : " attach distance(origin, dynamic)
+
+# --- Rectangle Example ---
+print ""
+print "--- Rectangle ---"
+create variable room as Rectangle with width = 12.5 and height = 8.0 and color = "blue" and filled = false
+print "Room: " attach room.width attach "x" attach room.height attach ", " attach room.color
+print "Area      : " attach rect_area(room)
+print "Perimeter : " attach rect_perimeter(room)
+print "Filled?   : " attach room.filled
+
+# --- List of Structures ---
+print ""
+print "--- List of Points ---"
+create variable points as list with value []
+push(points, origin)
+push(points, target)
+push(points, midpoint)
+push(points, dynamic)
+print "We have " attach length(points) attach " points:"
+for each pt in points do
+    print "  (" attach pt.x attach ", " attach pt.y attach ")"
+end
+
+# --- Type checking ---
+print ""
+print "--- Type Inspection ---"
+print "type_of(origin)    : " attach type_of(origin)
+print "type_of(room)      : " attach type_of(room)
+print "type_of(42)        : " attach type_of(42)

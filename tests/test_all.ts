@@ -926,6 +926,282 @@ end`);
 });
 
 // ============================================================
+// IMPORT TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mImport & Module Tests\x1b[0m');
+
+test('parses import statement', () => {
+  const ast = parse('import math_utils');
+  assertEqual(ast.statements[0].kind, 'Import');
+  const imp = ast.statements[0] as any;
+  assertEqual(imp.modulePath, 'math_utils');
+  assertEqual(imp.importNames.length, 0);
+});
+
+test('parses import with dot path', () => {
+  const ast = parse('import utils.math');
+  assertEqual(ast.statements[0].kind, 'Import');
+  const imp = ast.statements[0] as any;
+  assertEqual(imp.modulePath, 'utils/math');
+});
+
+// ============================================================
+// CONSTANT ENFORCEMENT TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mConstant Enforcement Tests\x1b[0m');
+
+test('constant requires initial value (parse error)', () => {
+  const r = run('create constant X as integer');
+  assert(r.errors.length > 0);
+  assert(r.errors[0].includes('Constant must have'));
+});
+
+test('constant cannot be reassigned (runtime error)', () => {
+  const r = run('create constant X as integer with value 42\nset X to 10');
+  assert(r.errors.length > 0);
+  assert(r.errors[0].includes('Cannot reassign constant'));
+});
+
+// ============================================================
+// DEBUG BUILTIN TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mDebug Builtin Tests\x1b[0m');
+
+test('builtin: assert passes for true', () => {
+  const r = run('assert(true)');
+  assertEqual(r.errors.length, 0);
+});
+
+test('builtin: assert fails for false', () => {
+  const r = run('assert(false)');
+  assert(r.errors.length > 0);
+  assert(r.errors[0].includes('Assertion failed'));
+});
+
+test('builtin: assert with custom message', () => {
+  const r = run('assert(1 == 2, "one is not two")');
+  assert(r.errors.length > 0);
+  assert(r.errors[0].includes('one is not two'));
+});
+
+test('builtin: panic stops execution', () => {
+  const r = run('panic("something went wrong")\nprint "this should not print"');
+  assert(r.errors.length > 0);
+  assert(r.errors[0].includes('Panic'));
+  assertNotIncludes(r.output, 'this should not print');
+});
+
+test('builtin: inspect prints value', () => {
+  const r = run('inspect(42)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '42');
+});
+
+// ============================================================
+// RANDOM BUILTIN TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mRandom Builtin Tests\x1b[0m');
+
+test('builtin: random_int in range', () => {
+  const r = run('create variable r as integer with value random_int(1, 1)\nprint r');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+});
+
+test('builtin: random_float returns 0-1', () => {
+  const r = run('create variable r as float with value random_float()\nwhen r is greater than or equal to 0 and r is less than 1 do\n    print "ok"\nend');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'ok');
+});
+
+test('builtin: shuffle returns same length', () => {
+  const r = run('create variable nums as list with value [1, 2, 3, 4, 5]\ncreate variable shuffled as list with value shuffle(nums)\nprint length(shuffled)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '5');
+});
+
+test('builtin: random_choice from list', () => {
+  const r = run('create variable choices as list with value ["a", "b", "c"]\ncreate variable pick as text with value random_choice(choices)\nprint type_of(pick)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'text');
+});
+
+// ============================================================
+// FILE I/O TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mFile I/O Tests\x1b[0m');
+
+test('builtin: file_exists returns true for existing file', () => {
+  const r = run('print file_exists("tests/test_all.ts")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+});
+
+test('builtin: file_exists returns false for missing file', () => {
+  const r = run('print file_exists("nonexistent_file_xyz.iozen")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'false');
+});
+
+test('integration: write and read file', () => {
+  const r = run('write_file("/tmp/iozen_test.txt", "hello from iozen")\ncreate variable content as text with value read_file("/tmp/iozen_test.txt")\nprint content');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'hello from iozen');
+});
+
+// ============================================================
+// ADDITIONAL LIST BUILTIN TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mAdditional List Builtin Tests\x1b[0m');
+
+test('builtin: index_of finds element', () => {
+  const r = run('create variable nums as list with value [10, 20, 30, 40]\nprint index_of(nums, 30)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2');
+});
+
+test('builtin: index_of returns -1 for missing', () => {
+  const r = run('create variable nums as list with value [10, 20, 30]\nprint index_of(nums, 99)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-1');
+});
+
+test('builtin: slice list', () => {
+  const r = run('create variable nums as list with value [1, 2, 3, 4, 5]\ncreate variable sliced as list with value slice(nums, 1, 3)\nprint sliced');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2, 3');
+});
+
+test('builtin: flatten nested lists', () => {
+  const r = run('create variable nested as list with value [[1, 2], [3, 4], [5]]\ncreate variable flat as list with value flatten(nested)\nprint flat');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1, 2, 3, 4, 5');
+});
+
+test('builtin: unique removes duplicates', () => {
+  const r = run('create variable nums as list with value [1, 2, 2, 3, 3, 3, 4]\ncreate variable uniq as list with value unique(nums)\nprint uniq');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1, 2, 3, 4');
+});
+
+test('builtin: insert into list', () => {
+  const r = run('create variable nums as list with value [1, 3, 4]\ninsert(nums, 1, 2)\nprint nums');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1, 2, 3, 4');
+});
+
+test('builtin: map_list applies function', () => {
+  const r = run('function double with x as integer returns integer\n    return x * 2\nend\ncreate variable nums as list with value [1, 2, 3]\ncreate variable doubled as list with value map_list(nums, "double")\nprint doubled');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2, 4, 6');
+});
+
+test('builtin: filter_list filters by function', () => {
+  const r = run('function is_even with x as integer returns boolean\n    return x % 2 equals 0\nend\ncreate variable nums as list with value [1, 2, 3, 4, 5, 6]\ncreate variable evens as list with value filter_list(nums, "is_even")\nprint evens');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2, 4, 6');
+});
+
+// ============================================================
+// ADDITIONAL STRING BUILTIN TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mAdditional String Builtin Tests\x1b[0m');
+
+test('builtin: starts_with', () => {
+  const r = run('print starts_with("hello world", "hello")\nprint starts_with("hello", "world")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+  assertIncludes(r.output, 'false');
+});
+
+test('builtin: ends_with', () => {
+  const r = run('print ends_with("hello.txt", ".txt")\nprint ends_with("hello", ".txt")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+  assertIncludes(r.output, 'false');
+});
+
+test('builtin: repeat_str', () => {
+  const r = run('print repeat_str("ab", 3)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'ababab');
+});
+
+test('builtin: pad_left', () => {
+  const r = run('print pad_left("42", 5, "0")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '00042');
+});
+
+test('builtin: pad_right', () => {
+  const r = run('print pad_right("hi", 5, "-")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'hi---');
+});
+
+test('builtin: lines splits by newline', () => {
+  const r = run('create variable text_lines as list with value lines("a\nb\nc")\nprint length(text_lines)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('builtin: format_num', () => {
+  const r = run('print format_num(3.14159, 2)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3.14');
+});
+
+// ============================================================
+// ADDITIONAL MATH BUILTIN TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mAdditional Math Builtin Tests\x1b[0m');
+
+test('builtin: log', () => {
+  const r = run('print floor(log(power(2, 10)) * 100)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '693');
+});
+
+test('builtin: sin returns number', () => {
+  const r = run('print floor(sin(0) * 1000)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('builtin: cos returns number', () => {
+  const r = run('print floor(cos(0) * 1000)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1000');
+});
+
+// ============================================================
+// MAP BUILTIN TESTS (NEW)
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mMap Builtin Tests\x1b[0m');
+
+test('builtin: remove_key', () => {
+  const r = run('create variable m as map with value map("x", 10, "y", 20)\nremove_key(m, "x")\nprint has_key(m, "x")\nprint has_key(m, "y")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'false');
+  assertIncludes(r.output, 'true');
+});
+
+test('builtin: map_size', () => {
+  const r = run('create variable m as map with value map("a", 1, "b", 2, "c", 3)\nprint map_size(m)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+// ============================================================
 // SUMMARY
 // ============================================================
 

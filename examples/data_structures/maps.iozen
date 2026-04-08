@@ -1,0 +1,92 @@
+# ============================================
+# Maps (Dictionaries) Example
+# Demonstrates key-value storage, lookup,
+# iteration, and common map patterns in IOZEN.
+# ============================================
+
+# --- Creating Maps ---
+print "--- Map Creation ---"
+create variable ages as map with value map("Alice", 30, "Bob", 25, "Charlie", 35, "Diana", 28)
+print "ages : " attach ages
+
+# --- Accessing Values ---
+print ""
+print "--- Get / Has Key ---"
+print "Alice's age  : " attach get_key(ages, "Alice")
+print "Has 'Bob'?    : " attach has_key(ages, "Bob")
+print "Has 'Eve'?    : " attach has_key(ages, "Eve")
+
+# --- Setting and Updating Values ---
+print ""
+print "--- Set Key ---"
+set_key(ages, "Eve", 22)
+set_key(ages, "Alice", 31)
+print "Added Eve (22), updated Alice to 31"
+print "Alice's age  : " attach get_key(ages, "Alice")
+print "Eve's age    : " attach get_key(ages, "Eve")
+
+# --- Iterating Over Keys ---
+print ""
+print "--- All Keys ---"
+create variable all_keys as list with value keys(ages)
+for each name in all_keys do
+    print "  " attach name attach " => " attach get_key(ages, name)
+end
+
+# --- Practical: Word Frequency Counter ---
+print ""
+print "--- Word Frequency Counter ---"
+create variable text as string with value "the cat sat on the mat the cat ate the rat"
+create variable words as list with value split(text, " ")
+create variable freq as map with value map()
+
+for each word in words do
+    when has_key(freq, word) do
+        set_key(freq, word, get_key(freq, word) + 1)
+    otherwise do
+        set_key(freq, word, 1)
+    end
+end
+
+print "Text: " attach text
+print "Frequencies:"
+create variable freq_keys as list with value keys(freq)
+for each w in freq_keys do
+    print "  " attach pad_right(w, " ", 10) attach " : " attach get_key(freq, w)
+end
+
+# --- Practical: Phone Book ---
+print ""
+print "--- Phone Book ---"
+create variable phonebook as map with value map("Alice", "555-0101", "Bob", "555-0202", "Charlie", "555-0303")
+
+create variable contact as string with value "Alice"
+when has_key(phonebook, contact) do
+    print contact attach "'s number: " attach get_key(phonebook, contact)
+otherwise do
+    print "Contact not found: " attach contact
+end
+
+set contact to "Eve"
+when has_key(phonebook, contact) do
+    print contact attach "'s number: " attach get_key(phonebook, contact)
+otherwise do
+    print "Contact not found: " attach contact
+end
+
+# --- Nested Maps: Student Grades ---
+print ""
+print "--- Student Grades (Nested Map) ---"
+create variable grades as map with value map("Math", 95, "Science", 88, "English", 92, "History", 79)
+
+create variable total_score as integer with value 0
+create variable subject_count as integer with value 0
+create variable subject_keys as list with value keys(grades)
+for each subj in subject_keys do
+    print "  " attach pad_right(subj, " ", 10) attach " : " attach get_key(grades, subj)
+    increase total_score by get_key(grades, subj)
+    increase subject_count by 1
+end
+
+create variable average as float with value total_score / subject_count
+print "Average grade: " attach round(average * 100) / 100

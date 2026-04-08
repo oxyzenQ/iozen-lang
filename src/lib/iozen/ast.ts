@@ -5,6 +5,7 @@
 
 export type ASTNode =
   | ProgramNode
+  | ImportNode
   | VariableDeclNode
   | FunctionDeclNode
   | StructureDeclNode
@@ -41,6 +42,13 @@ export type ASTNode =
 export interface ProgramNode {
   kind: 'Program';
   statements: ASTNode[];
+}
+
+// ---- Import ----
+export interface ImportNode {
+  kind: 'Import';
+  modulePath: string;
+  importNames: string[];  // empty = import all
 }
 
 // ---- Declarations ----

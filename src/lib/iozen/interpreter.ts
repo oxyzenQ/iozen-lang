@@ -8,7 +8,7 @@ import { Parser } from './parser';
 import { ParseError } from './parser';
 import { Environment, RuntimeError, IOZENValue, IOZENResult, IOZENObject, IOZENMap, IOZENFunction } from './environment';
 import type {
-  ASTNode, ProgramNode, VariableDeclNode, FunctionDeclNode,
+  ASTNode, ProgramNode, ImportNode, VariableDeclNode, FunctionDeclNode,
   StructureDeclNode, EnumDeclNode, PrintStmtNode, ReturnStmtNode,
   WhenNode, CheckNode, RepeatNode, WhileNode, ForEachNode,
   IncreaseNode, SetFieldNode, AssignVarNode, FunctionCallStmtNode, BlockNode,
@@ -34,6 +34,8 @@ export class Interpreter {
   private structureDefs: Map<string, { fields: { name: string; typeName: string }[] }> = new Map();
   private source: string = '';
   private sourceLines: string[] = [];
+  private sourceFilePath: string | null = null;
+  private importedModules: Set<string> = new Set();
 
   constructor() {
     this.env = new Environment();
@@ -87,6 +89,9 @@ export class Interpreter {
     switch (node.kind) {
       case 'Program':
         this.executeBlock(node.statements, env);
+        break;
+      case 'Import':
+        this.execImport(node as ImportNode, env);
         break;
       case 'VariableDecl':
         this.execVariableDecl(node as VariableDeclNode, env);
@@ -235,6 +240,88 @@ export class Interpreter {
   }
 
   // ---- Statement Executors ----
+
+  private execImport(node: ImportNode, env: Environment): void {
+    // Resolve module path relative to current file
+    let basePath = this.sourceFilePath || process.cwd();
+    let modulePath = node.modulePath;
+
+    // Add .iozen extension if not present
+    if (!modulePath.endsWith('.iozen')) {
+      modulePath = modulePath + '.iozen';
+    }
+
+    // Resolve relative to the current file's directory
+    const { resolve, dirname } = require('node:path');
+    const fullPath = resolve(dirname(basePath), modulePath);
+
+    // Prevent circular imports
+    const resolvedKey = resolve(fullPath);
+    if (this.importedModules.has(resolvedKey)) return;
+    this.importedModules.add(resolvedKey);
+
+    try {
+      const { readFileSync } = require('node:fs');
+      const moduleSource = readFileSync(resolvedKey, 'utf-8');
+
+      // Parse the imported module
+      const lexer = new Lexer(moduleSource);
+      const tokens = lexer.tokenize();
+      const parser = new Parser(tokens);
+      const ast = parser.parse();
+
+      // Execute in a child environment
+      const moduleEnv = env.child();
+      const savedFilePath = this.sourceFilePath;
+      const savedSource = this.source;
+      const savedLines = this.sourceLines;
+
+      this.sourceFilePath = resolvedKey;
+      this.source = moduleSource;
+      this.sourceLines = moduleSource.split('\n');
+
+      this.executeBlock(ast.statements, moduleEnv);
+
+      // Restore state
+      this.sourceFilePath = savedFilePath;
+      this.source = savedSource;
+      this.sourceLines = savedLines;
+
+      // If specific names are requested, only expose those into current env
+      if (node.importNames.length > 0) {
+        for (const name of node.importNames) {
+          if (moduleEnv.has(name)) {
+            env.define(name, moduleEnv.get(name));
+          }
+        }
+      } else {
+        // Import all — expose non-private names
+        // Functions and structures defined at module level are imported
+        // (Variables starting with _ are considered private)
+        for (const name of moduleEnv.names()) {
+          if (!name.startsWith('__') && !name.startsWith('_')) {
+            // Don't re-define names that already exist in current scope
+            if (!env.has(name)) {
+              env.define(name, moduleEnv.get(name));
+            }
+          }
+        }
+        // Also import structure definitions
+        for (const [sName, sDef] of this.structureDefs) {
+          // Already in structureDefs, no need to duplicate
+        }
+      }
+    } catch (e) {
+      if (e instanceof RuntimeError) {
+        throw new RuntimeError(`Cannot import module "${node.modulePath}": ${e.message}`, ...this.findNameInSourceOrThrow(node.modulePath));
+      }
+      throw new RuntimeError(`Cannot import module "${node.modulePath}": ${String(e)}`, ...this.findNameInSourceOrThrow(node.modulePath));
+    }
+  }
+
+  public setSourceFilePath(filePath: string): void {
+    this.sourceFilePath = filePath;
+  }
 
   private execVariableDecl(node: VariableDeclNode, env: Environment): void {
     let value: IOZENValue;
@@ -565,7 +652,7 @@ export class Interpreter {
     if (this.callBuiltin(name, args)) {
       return this.env.get('__last_result__');
     }
-    if (this.callBuiltinByName(name, args)) {
+    if (this.callBuiltinByName(name, args, env)) {
       return this.env.get('__last_result__');
     }
 
@@ -608,7 +695,7 @@ export class Interpreter {
     }
 
     // Unknown function — try as math/built-in
-    if (this.callBuiltinByName(name, args)) {
+    if (this.callBuiltinByName(name, args, env)) {
       return this.env.get('__last_result__');
     }
 
@@ -650,7 +737,7 @@ export class Interpreter {
     }
   }
 
-  private callBuiltinByName(name: string, args: IOZENValue[]): boolean {
+  private callBuiltinByName(name: string, args: IOZENValue[], env: Environment): boolean {
     const n = name.toLowerCase();
 
     // Math functions
@@ -915,6 +1002,401 @@ export class Interpreter {
       }
       return true;
     }
+    if (n === 'write_file' && args.length >= 2) {
+      try {
+        const { writeFileSync } = require('node:fs');
+        writeFileSync(String(args[0]), String(args[1]), 'utf-8');
+        this.env.define('__last_result__', true);
+      } catch {
+        throw new RuntimeError(`Cannot write file: "${args[0]}"`);
+      }
+      return true;
+    }
+    if (n === 'append_file' && args.length >= 2) {
+      try {
+        const { appendFileSync } = require('node:fs');
+        appendFileSync(String(args[0]), String(args[1]), 'utf-8');
+        this.env.define('__last_result__', true);
+      } catch {
+        throw new RuntimeError(`Cannot append to file: "${args[0]}"`);
+      }
+      return true;
+    }
+    if (n === 'delete_file' && args.length >= 1) {
+      try {
+        const { unlinkSync, existsSync } = require('node:fs');
+        const path = String(args[0]);
+        if (existsSync(path)) {
+          unlinkSync(path);
+          this.env.define('__last_result__', true);
+        } else {
+          this.env.define('__last_result__', false);
+        }
+      } catch {
+        throw new RuntimeError(`Cannot delete file: "${args[0]}"`);
+      }
+      return true;
+    }
+    if (n === 'file_exists' && args.length >= 1) {
+      try {
+        const { existsSync } = require('node:fs');
+        this.env.define('__last_result__', existsSync(String(args[0])));
+      } catch {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+
+    // Debug / Testing
+    if (n === 'assert' && args.length >= 1) {
+      const condition = this.isTruthy(args[0]);
+      if (!condition) {
+        const message = args.length >= 2 ? String(args[1]) : 'Assertion failed';
+        throw new RuntimeError(`Assertion failed: ${message}`);
+      }
+      this.env.define('__last_result__', true);
+      return true;
+    }
+    if (n === 'panic' && args.length >= 1) {
+      throw new RuntimeError(`Panic: ${String(args[0])}`);
+    }
+
+    // Random functions
+    if (n === 'random_int' && args.length >= 2) {
+      const min = Math.floor(this.toNumber(args[0]));
+      const max = Math.floor(this.toNumber(args[1]));
+      this.env.define('__last_result__', Math.floor(Math.random() * (max - min + 1)) + min);
+      return true;
+    }
+    if (n === 'random_float' && args.length >= 0) {
+      this.env.define('__last_result__', Math.random());
+      return true;
+    }
+    if (n === 'random_choice' && args.length >= 1) {
+      const arr = args[0];
+      if (Array.isArray(arr) && arr.length > 0) {
+        const idx = Math.floor(Math.random() * arr.length);
+        this.env.define('__last_result__', arr[idx]);
+      } else if (typeof arr === 'string' && arr.length > 0) {
+        const idx = Math.floor(Math.random() * arr.length);
+        this.env.define('__last_result__', arr[idx]);
+      } else {
+        this.env.define('__last_result__', null);
+      }
+      return true;
+    }
+    if (n === 'shuffle' && args.length >= 1 && Array.isArray(args[0])) {
+      const arr = [...(args[0] as IOZENValue[])];
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      this.env.define('__last_result__', arr);
+      return true;
+    }
+
+    // Additional list functions
+    if (n === 'index_of' && args.length >= 2) {
+      const arr = args[0];
+      const target = args[1];
+      if (Array.isArray(arr)) {
+        const idx = arr.indexOf(target);
+        this.env.define('__last_result__', idx);
+      } else if (typeof arr === 'string') {
+        this.env.define('__last_result__', String(arr).indexOf(String(target)));
+      } else {
+        this.env.define('__last_result__', -1);
+      }
+      return true;
+    }
+    if (n === 'find' && args.length >= 2) {
+      const arr = args[0];
+      const target = args[1];
+      if (Array.isArray(arr)) {
+        const idx = arr.indexOf(target);
+        this.env.define('__last_result__', idx >= 0 ? idx : null);
+      } else {
+        this.env.define('__last_result__', null);
+      }
+      return true;
+    }
+    if (n === 'contains_list' && args.length >= 2) {
+      const arr = args[0];
+      const target = args[1];
+      if (Array.isArray(arr)) {
+        this.env.define('__last_result__', arr.includes(target));
+      } else {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+    if (n === 'slice' && args.length >= 3) {
+      const arr = args[0];
+      const start = Math.floor(this.toNumber(args[1]));
+      const end = args.length >= 3 ? Math.floor(this.toNumber(args[2])) : undefined;
+      if (Array.isArray(arr)) {
+        this.env.define('__last_result__', arr.slice(start, end));
+      } else if (typeof arr === 'string') {
+        this.env.define('__last_result__', String(arr).slice(start, end));
+      } else {
+        this.env.define('__last_result__', null);
+      }
+      return true;
+    }
+    if (n === 'insert' && args.length >= 3 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const idx = Math.floor(this.toNumber(args[1]));
+      arr.splice(idx, 0, args[2]);
+      this.env.define('__last_result__', arr);
+      return true;
+    }
+    if (n === 'flatten' && args.length >= 1 && Array.isArray(args[0])) {
+      const result: IOZENValue[] = [];
+      const flattenHelper = (items: IOZENValue[]) => {
+        for (const item of items) {
+          if (Array.isArray(item)) {
+            flattenHelper(item);
+          } else {
+            result.push(item);
+          }
+        }
+      };
+      flattenHelper(args[0] as IOZENValue[]);
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'map_list' && args.length >= 2 && Array.isArray(args[0])) {
+      // map_list(arr, func_name) — apply function to each element
+      const arr = args[0] as IOZENValue[];
+      const funcName = String(args[1]);
+      const result: IOZENValue[] = [];
+      for (const item of arr) {
+        // Call function with the item as argument
+        const func = env.get(funcName) as IOZENFunction;
+        if (func && func.__iozen_type === 'function') {
+          const funcEnv = func.closure.child();
+          funcEnv.define(func.parameters[0]?.name || 'arg', item);
+          try {
+            this.executeBlock(func.body, funcEnv);
+            result.push(null);
+          } catch (e) {
+            if (e instanceof ReturnSignal) {
+              result.push(e.value);
+            } else {
+              throw e;
+            }
+          }
+        }
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'filter_list' && args.length >= 2 && Array.isArray(args[0])) {
+      // filter_list(arr, func_name) — keep elements where func returns true
+      const arr = args[0] as IOZENValue[];
+      const funcName = String(args[1]);
+      const result: IOZENValue[] = [];
+      for (const item of arr) {
+        const func = env.get(funcName) as IOZENFunction;
+        if (func && func.__iozen_type === 'function') {
+          const funcEnv = func.closure.child();
+          funcEnv.define(func.parameters[0]?.name || 'arg', item);
+          let shouldKeep = false;
+          try {
+            this.executeBlock(func.body, funcEnv);
+          } catch (e) {
+            if (e instanceof ReturnSignal) {
+              shouldKeep = this.isTruthy(e.value);
+            } else {
+              throw e;
+            }
+          }
+          if (shouldKeep) {
+            result.push(item);
+          }
+        }
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'for_each_list' && args.length >= 2 && Array.isArray(args[0])) {
+      // for_each_list(arr, func_name) — call func for each element (returns arr)
+      const arr = args[0] as IOZENValue[];
+      const funcName = String(args[1]);
+      for (const item of arr) {
+        const func = env.get(funcName) as IOZENFunction;
+        if (func && func.__iozen_type === 'function') {
+          const funcEnv = func.closure.child();
+          funcEnv.define(func.parameters[0]?.name || 'arg', item);
+          try {
+            this.executeBlock(func.body, funcEnv);
+          } catch (e) {
+            if (e instanceof ReturnSignal) {
+              // Discard return value
+            } else {
+              throw e;
+            }
+          }
+        }
+      }
+      this.env.define('__last_result__', arr);
+      return true;
+    }
+    if (n === 'unique' && args.length >= 1 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const seen = new Set<string>();
+      const result: IOZENValue[] = [];
+      for (const item of arr) {
+        const key = JSON.stringify(item);
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push(item);
+        }
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+
+    // Additional string functions
+    if (n === 'starts_with' && args.length >= 2) {
+      this.env.define('__last_result__', String(args[0]).startsWith(String(args[1])));
+      return true;
+    }
+    if (n === 'ends_with' && args.length >= 2) {
+      this.env.define('__last_result__', String(args[0]).endsWith(String(args[1])));
+      return true;
+    }
+    if (n === 'repeat_str' && args.length >= 2) {
+      const count = Math.floor(this.toNumber(args[1]));
+      this.env.define('__last_result__', String(args[0]).repeat(count));
+      return true;
+    }
+    if (n === 'pad_left' && args.length >= 3) {
+      const str = String(args[0]);
+      const targetLen = Math.floor(this.toNumber(args[1]));
+      const fillChar = String(args[2] || ' ');
+      this.env.define('__last_result__', str.padStart(targetLen, fillChar));
+      return true;
+    }
+    if (n === 'pad_right' && args.length >= 3) {
+      const str = String(args[0]);
+      const targetLen = Math.floor(this.toNumber(args[1]));
+      const fillChar = String(args[2] || ' ');
+      this.env.define('__last_result__', str.padEnd(targetLen, fillChar));
+      return true;
+    }
+    if (n === 'strip' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).trim());
+      return true;
+    }
+    if (n === 'lines' && args.length >= 1) {
+      const str = String(args[0]);
+      this.env.define('__last_result__', str.split('\n'));
+      return true;
+    }
+    if (n === 'format_num' && args.length >= 1) {
+      const num = this.toNumber(args[0]);
+      const decimals = args.length >= 2 ? Math.floor(this.toNumber(args[1])) : 2;
+      this.env.define('__last_result__', num.toFixed(decimals));
+      return true;
+    }
+
+    // Additional math functions
+    if (n === 'log' && args.length >= 1) {
+      this.env.define('__last_result__', Math.log(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'log10' && args.length >= 1) {
+      this.env.define('__last_result__', Math.log10(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'sin' && args.length >= 1) {
+      this.env.define('__last_result__', Math.sin(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'cos' && args.length >= 1) {
+      this.env.define('__last_result__', Math.cos(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'tan' && args.length >= 1) {
+      this.env.define('__last_result__', Math.tan(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'abs_int' && args.length >= 1) {
+      this.env.define('__last_result__', Math.abs(Math.floor(this.toNumber(args[0]))));
+      return true;
+    }
+
+    // Time functions
+    if (n === 'current_time' && args.length >= 0) {
+      this.env.define('__last_result__', Date.now());
+      return true;
+    }
+    if (n === 'time_format' && args.length >= 1) {
+      const ts = this.toNumber(args[0]);
+      this.env.define('__last_result__', new Date(ts).toISOString());
+      return true;
+    }
+
+    // Environment variables
+    if (n === 'env_get' && args.length >= 1) {
+      this.env.define('__last_result__', process.env[String(args[0])] || null);
+      return true;
+    }
+
+    // Additional map functions
+    if (n === 'values' && args.length >= 1) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        const result = Object.values(m).filter((v) => typeof v !== 'string' || !v.startsWith('__') || !v.startsWith('__'));
+        this.env.define('__last_result__', result);
+      } else {
+        this.env.define('__last_result__', []);
+      }
+      return true;
+    }
+    if (n === 'remove_key' && args.length >= 2) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        const key = String(args[1]);
+        const mapObj = m as Record<string, IOZENValue>;
+        const existed = key in mapObj;
+        delete mapObj[key];
+        this.env.define('__last_result__', existed);
+      } else {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+    if (n === 'map_size' && args.length >= 1) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        this.env.define('__last_result__', Object.keys(m).filter(k => !k.startsWith('__')).length);
+      } else {
+        this.env.define('__last_result__', 0);
+      }
+      return true;
+    }
+    if (n === 'has_value' && args.length >= 2) {
+      const m = args[0];
+      const target = args[1];
+      if (Array.isArray(m)) {
+        this.env.define('__last_result__', m.includes(target));
+      } else if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        this.env.define('__last_result__', Object.values(m).some(v => v === target));
+      } else {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+
+    // Print / Debug helpers
+    if (n === 'inspect' && args.length >= 1) {
+      const val = args[0];
+      this.output.push(this.iozenValueToString(val));
+      this.env.define('__last_result__', val);
+      return true;
+    }
 
     return false;
   }
@@ -1003,9 +1485,19 @@ export class Interpreter {
     'substring', 'contains', 'replace', 'split', 'join', 'char_at',
     'ord', 'chr', 'to_integer', 'int', 'to_float', 'to_text',
     'push', 'pop', 'sort', 'reverse', 'length', 'range', 'sum',
-    'read_line', 'read_file',
+    'read_line', 'read_file', 'write_file', 'append_file',
+    'delete_file', 'file_exists',
     'map', 'remove', 'remove_last', 'type_of',
     'has_key', 'get_key', 'set_key', 'keys',
+    'assert', 'panic', 'inspect',
+    'random_int', 'random_float', 'random_choice', 'shuffle',
+    'index_of', 'find', 'slice', 'insert', 'flatten', 'unique',
+    'map_list', 'filter_list', 'for_each_list',
+    'starts_with', 'ends_with', 'repeat_str', 'pad_left', 'pad_right',
+    'strip', 'lines', 'format_num',
+    'log', 'log10', 'sin', 'cos', 'tan',
+    'current_time', 'time_format', 'env_get',
+    'values', 'remove_key', 'map_size', 'has_value',
   ];
 
   private suggestSimilar(name: string): string | null {
