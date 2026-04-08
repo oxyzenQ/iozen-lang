@@ -1,0 +1,322 @@
+# =============================================
+# Structs in IOZEN
+# =============================================
+# This example demonstrates struct definitions and usage.
+# Structs group related fields into a single type.
+#
+# Features shown:
+#   - Define a struct with typed fields
+#   - Create struct instances
+#   - Access fields with the dot operator
+#   - Modify fields with set
+#   - Struct methods (functions taking structs)
+#   - Structs in lists and maps
+#   - Struct composition
+# =============================================
+
+# --------------------------------------------------
+# 1. Define a simple struct
+# --------------------------------------------------
+
+define structure Point with
+    x as float
+    y as float
+end
+
+# --------------------------------------------------
+# 2. Define a Person struct
+# --------------------------------------------------
+
+define structure Person with
+    name as text
+    age as integer
+    email as text
+    active as boolean
+end
+
+# --------------------------------------------------
+# 3. Define a Rectangle struct (composition)
+# --------------------------------------------------
+
+define structure Rectangle with
+    origin as Point
+    width as float
+    height as float
+end
+
+# --------------------------------------------------
+# 4. Define a Book struct
+# --------------------------------------------------
+
+define structure Book with
+    title as text
+    author as text
+    pages as integer
+    price as float
+    available as boolean
+end
+
+# --------------------------------------------------
+# 5. Create struct instances
+# --------------------------------------------------
+
+print "--- Creating Struct Instances ---"
+
+# Create a Point using field initialization
+create variable p1 as Point with value Point(x: 3.0, y: 4.0)
+create variable p2 as Point with value Point(x: -1.5, y: 2.5)
+create variable origin as Point with value Point(x: 0.0, y: 0.0)
+
+print "Point p1: ({p1.x}, {p1.y})"
+print "Point p2: ({p2.x}, {p2.y})"
+print "Origin:    ({origin.x}, {origin.y})"
+
+# Create a Person
+create variable alice as Person with value Person(
+    name: "Alice Johnson",
+    age: 30,
+    email: "alice@example.com",
+    active: true
+)
+
+create variable bob as Person with value Person(
+    name: "Bob Smith",
+    age: 25,
+    email: "bob@example.com",
+    active: false
+)
+
+print ""
+print "Person 1: {alice.name}, age {alice.age} ({alice.email})"
+print "Person 2: {bob.name}, age {bob.age} ({bob.email})"
+
+print ""
+
+# --------------------------------------------------
+# 6. Access and modify struct fields
+# --------------------------------------------------
+
+print "--- Modifying Struct Fields ---"
+
+# Modify Alice's age
+print "Alice's age before: {alice.age}"
+set alice.age with value 31
+print "Alice's age after:  {alice.age}"
+
+# Modify Bob's status
+print "Bob active before: {bob.active}"
+set bob.active with value true
+print "Bob active after:  {bob.active}"
+
+# Modify point coordinates
+print "p1 before: ({p1.x}, {p1.y})"
+set p1.x with value 10.0
+set p1.y with value 20.0
+print "p1 after:  ({p1.x}, {p1.y})"
+
+print ""
+
+# --------------------------------------------------
+# 7. Struct methods (functions that take structs)
+# --------------------------------------------------
+# In IOZEN, methods are functions where the first
+# parameter is a struct instance.
+
+function distance_to with p as Point and other as Point returns float
+    create variable dx as float with value p.x - other.x
+    create variable dy as float with value p.y - other.y
+    return sqrt((dx * dx) + (dy * dy))
+end
+
+function magnitude with p as Point returns float
+    return distance_to(p, Point(x: 0.0, y: 0.0))
+end
+
+function point_to_string with p as Point returns text
+    return "({p.x}, {p.y})"
+end
+
+print "--- Struct Methods ---"
+
+print "Distance from p1 to p2: {distance_to(p1, p2)}"
+print "Distance from p1 to origin: {distance_to(p1, origin)}"
+print "Magnitude of p2: {magnitude(p2)}"
+
+print ""
+
+# --------------------------------------------------
+# 8. Person methods
+# --------------------------------------------------
+
+function greet with p as Person returns text
+    return "Hello, my name is {p.name} and I am {p.age} years old."
+end
+
+function has_birthday with p as Person
+    set p.age with value p.age + 1
+    print "Happy birthday, {p.name}! You are now {p.age}."
+end
+
+function is_adult with p as Person returns boolean
+    return p.age >= 18
+end
+
+function summary with p as Person returns text
+    create variable status as text with value "inactive"
+    when p.active do
+        set status with value "active"
+    end
+    return "{p.name} (age {p.age}, {status}) - {p.email}"
+end
+
+print "--- Person Methods ---"
+print greet(alice)
+print greet(bob)
+print ""
+has_birthday(alice)
+print ""
+print "Is Alice an adult? {is_adult(alice)}"
+print "Is Bob an adult? {is_adult(bob)}"
+print ""
+print summary(alice)
+print summary(bob)
+
+print ""
+
+# --------------------------------------------------
+# 9. Structs in collections (lists)
+# --------------------------------------------------
+
+print "--- Structs in Lists ---"
+
+create variable people as list with value [alice, bob, Person(
+    name: "Charlie Brown",
+    age: 45,
+    email: "charlie@example.com",
+    active: true
+)]
+
+print "All people ({length(people)} total):"
+for each person in people do
+    print "  - {summary(person)}"
+end
+
+# Filter active users
+create variable active_people as list with value people
+    |> filter(fn(p) -> p.active)
+
+print ""
+print "Active users ({length(active_people)}):"
+for each person in active_people do
+    print "  - {person.name}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 10. Struct composition (Rectangle with Point)
+# --------------------------------------------------
+
+print "--- Struct Composition ---"
+
+create variable rect as Rectangle with value Rectangle(
+    origin: Point(x: 5.0, y: 10.0),
+    width: 20.0,
+    height: 15.0
+)
+
+print "Rectangle origin: ({rect.origin.x}, {rect.origin.y})"
+print "Rectangle size: {rect.width} x {rect.height}"
+
+function rect_area with r as Rectangle returns float
+    return r.width * r.height
+end
+
+function rect_perimeter with r as Rectangle returns float
+    return 2.0 * (r.width + r.height)
+end
+
+function rect_center with r as Rectangle returns Point
+    create variable cx as float with value r.origin.x + (r.width / 2.0)
+    create variable cy as float with value r.origin.y + (r.height / 2.0)
+    return Point(x: cx, y: cy)
+end
+
+function rect_contains with r as Rectangle and p as Point returns boolean
+    create variable in_x as boolean with value p.x >= r.origin.x and p.x <= r.origin.x + r.width
+    create variable in_y as boolean with value p.y >= r.origin.y and p.y <= r.origin.y + r.height
+    return in_x and in_y
+end
+
+print "Area: {rect_area(rect)}"
+print "Perimeter: {rect_perimeter(rect)}"
+
+create variable center as Point with value rect_center(rect)
+print "Center: ({center.x}, {center.y})"
+
+# Test containment
+create variable test_pt1 as Point with value Point(x: 10.0, y: 15.0)
+create variable test_pt2 as Point with value Point(x: 0.0, y: 0.0)
+print "Contains (10, 15)? {rect_contains(rect, test_pt1)}"
+print "Contains (0, 0)?   {rect_contains(rect, test_pt2)}"
+
+print ""
+
+# --------------------------------------------------
+# 11. Book catalog with structs
+# --------------------------------------------------
+
+print "--- Book Catalog ---"
+
+create variable catalog as list with value [
+    Book(title: "The IOZEN Programming Language", author: "Jane Doe", pages: 350, price: 39.99, available: true),
+    Book(title: "Advanced Pattern Matching", author: "John Smith", pages: 280, price: 34.99, available: true),
+    Book(title: "Pipeline Programming", author: "Alice Lee", pages: 200, price: 29.99, available: false),
+    Book(title: "Struct Design Patterns", author: "Bob Chen", pages: 420, price: 44.99, available: true)
+]
+
+# Find books by a given author
+function find_by_author with books as list and author_name as text returns list
+    create variable results as list with value books
+        |> filter(fn(b) -> b.author == author_name)
+    return results
+end
+
+# Calculate average price of available books
+function avg_available_price with books as list returns float
+    create variable available as list with value books
+        |> filter(fn(b) -> b.available)
+    when length(available) == 0 do
+        return 0.0
+    end
+    create variable total as float with value available
+        |> map_list(fn(b) -> b.price)
+        |> sum
+    return total / float(length(available))
+end
+
+function book_info with b as Book returns text
+    create variable status as text with value "OUT OF STOCK"
+    when b.available do
+        set status with value "Available"
+    end
+    return "\"{b.title}\" by {b.author} - {b.pages}pp, ${b.price} [{status}]"
+end
+
+print "Full catalog:"
+for each book in catalog do
+    print "  {book_info(book)}"
+end
+
+print ""
+create variable search_results as list with value find_by_author(catalog, "Jane Doe")
+print "Books by 'Jane Doe': {length(search_results)}"
+for each book in search_results do
+    print "  - {book.title}"
+end
+
+print ""
+print "Average price of available books: ${avg_available_price(catalog)}"
+
+print ""
+print "=== Struct Examples Complete ==="

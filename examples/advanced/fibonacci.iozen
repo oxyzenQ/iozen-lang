@@ -1,0 +1,206 @@
+# =============================================
+# Fibonacci in IOZEN
+# =============================================
+# This example shows multiple approaches to computing
+# Fibonacci numbers, with performance comparison.
+#
+# Features shown:
+#   - Recursive function definition
+#   - Iterative approach with while loop
+#   - Memoization using maps for caching
+#   - Performance timing with clock()
+#   - Comparison of algorithmic complexity
+# =============================================
+
+import "time"
+
+# --------------------------------------------------
+# 1. Naive Recursive Fibonacci
+# --------------------------------------------------
+# The classic definition: F(n) = F(n-1) + F(n-2)
+# Simple but exponential time O(2^n).
+
+function fib_recursive with n as integer returns integer
+    when n <= 0 do return 0 end
+    when n == 1 do return 1 end
+    return fib_recursive(n - 1) + fib_recursive(n - 2)
+end
+
+print "--- Naive Recursive Fibonacci ---"
+print "F(0)  = {fib_recursive(0)}"
+print "F(1)  = {fib_recursive(1)}"
+print "F(5)  = {fib_recursive(5)}"
+print "F(10) = {fib_recursive(10)}"
+print "F(20) = {fib_recursive(20)}"
+# F(30) would take a very long time with naive recursion!
+print ""
+
+# --------------------------------------------------
+# 2. Iterative Fibonacci
+# --------------------------------------------------
+# Bottom-up computation: O(n) time, O(1) space.
+# Much faster than the recursive approach.
+
+function fib_iterative with n as integer returns integer
+    when n <= 0 do return 0 end
+    when n == 1 do return 1 end
+    create variable prev as integer with value 0
+    create variable curr as integer with value 1
+    create variable i as integer with value 2
+    while i <= n do
+        create variable next as integer with value prev + curr
+        set prev with value curr
+        set curr with value next
+        set i with value i + 1
+    end
+    return curr
+end
+
+print "--- Iterative Fibonacci ---"
+print "F(0)  = {fib_iterative(0)}"
+print "F(1)  = {fib_iterative(1)}"
+print "F(10) = {fib_iterative(10)}"
+print "F(20) = {fib_iterative(20)}"
+print "F(30) = {fib_iterative(30)}"
+print "F(40) = {fib_iterative(40)}"
+print ""
+
+# --------------------------------------------------
+# 3. Memoized Recursive Fibonacci
+# --------------------------------------------------
+# Cache previously computed results in a map.
+# Each value is computed at most once: O(n) time.
+
+# Create a module-level cache
+create variable fib_cache as map with value map()
+
+function fib_memoized with n as integer returns integer
+    when n <= 0 do return 0 end
+    when n == 1 do return 1 end
+
+    # Check if we already computed this value
+    when has_key(fib_cache, n) do
+        return get(fib_cache, n)
+    end
+
+    # Compute and cache the result
+    create variable result as integer with value fib_memoized(n - 1) + fib_memoized(n - 2)
+    set fib_cache with value set_key(fib_cache, n, result)
+    return result
+end
+
+print "--- Memoized Recursive Fibonacci ---"
+
+# Clear cache before use
+set fib_cache with value map()
+
+print "F(0)  = {fib_memoized(0)}"
+print "F(10) = {fib_memoized(10)}"
+print "F(20) = {fib_memoized(20)}"
+print "F(30) = {fib_memoized(30)}"
+print "F(40) = {fib_memoized(40)}"
+print ""
+
+# --------------------------------------------------
+# 4. Verify all three approaches agree
+# --------------------------------------------------
+
+print "--- Verification ---"
+for each n in [0, 1, 5, 10, 15, 20] do
+    create variable r1 as integer with value fib_recursive(n)
+    create variable r2 as integer with value fib_iterative(n)
+    # Clear cache for fair test
+    set fib_cache with value map()
+    create variable r3 as integer with value fib_memoized(n)
+
+    create variable all_match as boolean with value (r1 == r2) and (r2 == r3)
+    create variable check as text with value "OK"
+    when not all_match do
+        set check with value "MISMATCH!"
+    end
+    print "F({n}): recursive={r1}, iterative={r2}, memoized={r3} [{check}]"
+end
+
+print ""
+
+# --------------------------------------------------
+# 5. Performance comparison with clock()
+# --------------------------------------------------
+# Time how long each approach takes for a moderate
+# input. The recursive version is intentionally
+# limited to small n due to its exponential cost.
+
+print "--- Performance Comparison ---"
+
+create variable start_time as float
+create variable elapsed as float
+
+# Time iterative for F(35)
+set start_time with value clock()
+create variable iter_result as integer with value fib_iterative(35)
+set elapsed with value clock() - start_time
+print "Iterative F(35) = {iter_result} in {elapsed} seconds"
+
+# Time memoized for F(35)
+set fib_cache with value map()
+set start_time with value clock()
+create variable memo_result as integer with value fib_memoized(35)
+set elapsed with value clock() - start_time
+print "Memoized  F(35) = {memo_result} in {elapsed} seconds"
+
+# Time iterative for F(45) (larger input, still fast)
+set start_time with value clock()
+create variable iter_result2 as integer with value fib_iterative(45)
+set elapsed with value clock() - start_time
+print "Iterative F(45) = {iter_result2} in {elapsed} seconds"
+
+# Time memoized for F(45)
+set fib_cache with value map()
+set start_time with value clock()
+create variable memo_result2 as integer with value fib_memoized(45)
+set elapsed with value clock() - start_time
+print "Memoized  F(45) = {memo_result2} in {elapsed} seconds"
+
+print ""
+
+# --------------------------------------------------
+# 6. Generate Fibonacci sequence
+# --------------------------------------------------
+# Build a list of the first N Fibonacci numbers.
+
+function fibonacci_sequence with count as integer returns list
+    create variable seq as list with value []
+    create variable i as integer with value 0
+    while i < count do
+        set seq with value append(seq, fib_iterative(i))
+        set i with value i + 1
+    end
+    return seq
+end
+
+print "--- Fibonacci Sequence ---"
+create variable first_20 as list with value fibonacci_sequence(20)
+print "First 20 Fibonacci numbers:"
+print first_20
+
+print ""
+
+# --------------------------------------------------
+# 7. Golden ratio approximation
+# --------------------------------------------------
+# As n grows, F(n)/F(n-1) approaches the golden ratio phi ~ 1.618034
+
+print "--- Golden Ratio Approximation ---"
+create variable prev_fib as integer with value fib_iterative(29)
+create variable curr_fib as integer with value fib_iterative(30)
+create variable ratio as float with value float(curr_fib) / float(prev_fib)
+print "F(30) / F(29) = {curr_fib} / {prev_fib} = {ratio}"
+print "Golden ratio phi ~ 1.6180339887"
+
+create variable prev_fib2 as integer with value fib_iterative(39)
+create variable curr_fib2 as integer with value fib_iterative(40)
+create variable ratio2 as float with value float(curr_fib2) / float(prev_fib2)
+print "F(40) / F(39) = {curr_fib2} / {prev_fib2} = {ratio2}"
+
+print ""
+print "=== Fibonacci Examples Complete ==="

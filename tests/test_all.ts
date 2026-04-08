@@ -1669,6 +1669,128 @@ test('builtin: system echo', () => {
 });
 
 // ============================================================
+// DESTRUCTURING TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mDestructuring Tests\x1b[0m');
+
+test('destructure: list destructuring', () => {
+  const r = run(`create variable a, b, c as list with value [10, 20, 30]
+print a
+print b
+print c`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '10');
+  assertIncludes(r.output, '20');
+  assertIncludes(r.output, '30');
+});
+
+test('destructure: two variables from list', () => {
+  const r = run(`create variable first_val, rest as list with value [1, 2]
+print first_val
+print rest`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+  assertIncludes(r.output, '2');
+});
+
+test('destructure: string destructuring', () => {
+  const r = run(`create variable x, y, z as text with value "abc"
+print x
+print y
+print z`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'a');
+  assertIncludes(r.output, 'b');
+  assertIncludes(r.output, 'c');
+});
+
+test('destructure: from range', () => {
+  const r = run(`create variable low, high as list with value [min(1, 10), max(1, 10)]
+print low
+print high`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+  assertIncludes(r.output, '10');
+});
+
+test('destructure: undersupply (fewer values than names)', () => {
+  const r = run(`create variable a, b, c as list with value [42]
+print a
+print type_of(b)`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '42');
+});
+
+// ============================================================
+// FORMAT / UTILITY BUILTINS TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mFormat & Utility Builtins Tests\x1b[0m');
+
+test('builtin: format with placeholders', () => {
+  const r = run('print format("Hello, {}! You are {} years old.", "Alice", 25)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'Hello, Alice! You are 25 years old.');
+});
+
+test('builtin: format single placeholder', () => {
+  const r = run('print format("Result: {}", 42)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'Result: 42');
+});
+
+test('builtin: zip', () => {
+  const r = run(`create variable zipped as list with value zip([1, 2, 3], ["a", "b", "c"])
+print length(zipped)
+print first(first(zipped))`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+  assertIncludes(r.output, '1');
+});
+
+test('builtin: enumerate', () => {
+  const r = run(`create variable items as list with value enumerate(["a", "b", "c"])
+print first(items)`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('builtin: count_by', () => {
+  const r = run(`create variable counts with value count_by(["apple", "banana", "apple", "cherry", "banana", "apple"])
+print get_key(counts, "apple")`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('builtin: clamp', () => {
+  const r = run(`print clamp(150, 0, 100)
+print clamp(-10, 0, 100)
+print clamp(50, 0, 100)`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '100');
+  assertIncludes(r.output, '0');
+  assertIncludes(r.output, '50');
+});
+
+test('builtin: interleave', () => {
+  const r = run(`create variable result as list with value interleave([1, 2, 3], ["a", "b", "c"])
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1, a, 2, b, 3, c');
+});
+
+test('builtin: join_map', () => {
+  const r = run(`function to_str with x as integer returns text
+  return format("({})", x)
+end
+create variable result with value join_map([1, 2, 3], "to_str", ", ")
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '(1), (2), (3)');
+});
+
+// ============================================================
 // SUMMARY
 // ============================================================
 

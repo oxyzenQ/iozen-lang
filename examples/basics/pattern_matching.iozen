@@ -1,0 +1,267 @@
+# =============================================
+# Pattern Matching in IOZEN
+# =============================================
+# This example demonstrates the match expression,
+# IOZEN's powerful way to branch on values.
+#
+# Features shown:
+#   - Match with integer literals
+#   - Match with string literals
+#   - Match with wildcard (_)
+#   - Match with catch-all binding
+#   - Match with otherwise (default branch)
+#   - Match nested inside functions
+#   - Practical: simple calculator
+#   - Practical: day-of-week checker
+# =============================================
+
+import "math"
+
+# --------------------------------------------------
+# 1. Match on integer literals
+# --------------------------------------------------
+# Use exact integer values as case patterns.
+# The match expression returns a value in IOZEN.
+
+function describe_number with n as integer returns text
+    match n
+        case 0 do
+            print "Zero is neither positive nor negative."
+            return "zero"
+        end
+        case 1 do
+            print "One is the loneliest number."
+            return "one"
+        end
+        case 2 do
+            print "Two is a pair."
+            return "two"
+        end
+        case _ do
+            print "That number is {n}."
+            return "other"
+        end
+    end
+end
+
+print "--- Integer Pattern Matching ---"
+create variable result1 as text with value describe_number(0)
+create variable result2 as text with value describe_number(1)
+create variable result3 as text with value describe_number(42)
+
+# --------------------------------------------------
+# 2. Match on string literals
+# --------------------------------------------------
+# Strings can also be used as case patterns.
+
+function classify_response with response as text returns text
+    match response
+        case "yes" do
+            return "Positive response received!"
+        end
+        case "no" do
+            return "Negative response received."
+        end
+        case "maybe" do
+            return "Uncertain response."
+        end
+        case _ do
+            return "Unknown response: {response}"
+        end
+    end
+end
+
+print ""
+print "--- String Pattern Matching ---"
+print classify_response("yes")
+print classify_response("no")
+print classify_response("maybe")
+print classify_response("huh?")
+
+# --------------------------------------------------
+# 3. Match with wildcard (_)
+# --------------------------------------------------
+# The underscore matches any value and discards it.
+# It acts like a "don't care" pattern.
+
+function grade_letter with score as integer returns text
+    match score
+        case 90 do return "A" end
+        case 80 do return "B" end
+        case 70 do return "C" end
+        case 60 do return "D" end
+        case _ do return "F" end
+    end
+end
+
+print ""
+print "--- Wildcard Matching (Grades) ---"
+print "Score 95 => {grade_letter(95)}"
+print "Score 82 => {grade_letter(82)}"
+print "Score 73 => {grade_letter(73)}"
+print "Score 55 => {grade_letter(55)}"
+
+# --------------------------------------------------
+# 4. Match with catch-all binding
+# --------------------------------------------------
+# Instead of discarding, bind the matched value to a name
+# so you can use it in the branch body.
+#
+# Note: In IOZEN, the match result can be captured directly
+# into a variable using 'as'.
+
+print ""
+print "--- Catch-all Binding ---"
+create variable shape as text with value "circle"
+
+create variable description as text with value match shape
+    case "circle" do "round shape" end
+    case "square" do "four equal sides" end
+    case "triangle" do "three sides" end
+    case _ do "unrecognized shape: {shape}" end
+end
+
+print "Shape '{shape}': {description}"
+
+# --------------------------------------------------
+# 5. Match with otherwise (default branch)
+# --------------------------------------------------
+# 'otherwise' is an alternative to 'case _' for the
+# default/fallback branch. It must come last.
+
+function month_days with month as text returns integer
+    match month
+        case "January" do return 31 end
+        case "February" do return 28 end
+        case "March" do return 31 end
+        case "April" do return 30 end
+        case "May" do return 31 end
+        case "June" do return 30 end
+        case "July" do return 31 end
+        case "August" do return 31 end
+        case "September" do return 30 end
+        case "October" do return 31 end
+        case "November" do return 30 end
+        case "December" do return 31 end
+        otherwise do
+            return 0
+        end
+    end
+end
+
+print ""
+print "--- Otherwise Branch (Month Days) ---"
+print "January has {month_days("January")} days"
+print "February has {month_days("February")} days"
+print "April has {month_days("April")} days"
+
+# --------------------------------------------------
+# 6. Practical: Simple Calculator
+# --------------------------------------------------
+# A calculator that matches on the operator string.
+
+function calculate with a as float and op as text and b as float returns float
+    match op
+        case "+" do return a + b end
+        case "-" do return a - b end
+        case "*" do return a * b end
+        case "/" do
+            when b != 0.0 do
+                return a / b
+            otherwise do
+                print "Error: division by zero!"
+                return 0.0
+            end
+        end
+        case "^" do return pow(a, b) end
+        otherwise do
+            print "Unknown operator: {op}"
+            return 0.0
+        end
+    end
+end
+
+print ""
+print "--- Practical: Simple Calculator ---"
+print "10 + 3 = {calculate(10, "+", 3)}"
+print "10 - 3 = {calculate(10, "-", 3)}"
+print "10 * 3 = {calculate(10, "*", 3)}"
+print "10 / 3 = {calculate(10, "/", 3)}"
+print "2 ^ 10 = {calculate(2, "^", 10)}"
+print "10 ? 3 = {calculate(10, "?", 3)}"
+
+# --------------------------------------------------
+# 7. Practical: Day-of-Week Checker
+# --------------------------------------------------
+# Map a day number (1-7) to the day name and a type
+# (weekday or weekend).
+
+function day_info with day_num as integer returns text
+    match day_num
+        case 1 do return "Monday (Weekday)" end
+        case 2 do return "Tuesday (Weekday)" end
+        case 3 do return "Wednesday (Weekday)" end
+        case 4 do return "Thursday (Weekday)" end
+        case 5 do return "Friday (Weekday)" end
+        case 6 do return "Saturday (Weekend)" end
+        case 7 do return "Sunday (Weekend)" end
+        otherwise do
+            return "Invalid day number: {day_num}"
+        end
+    end
+end
+
+print ""
+print "--- Practical: Day-of-Week Checker ---"
+create variable day as integer with value 1
+while day <= 7 do
+    print "Day {day}: {day_info(day)}"
+    increase day by 1
+end
+
+print "Day 0: {day_info(0)}"
+print "Day 9: {day_info(9)}"
+
+# --------------------------------------------------
+# 8. Match inside another match (nested)
+# --------------------------------------------------
+# Matches can be nested for more complex logic.
+
+function describe_coordinate with x as integer and y as integer returns text
+    match x
+        case 0 do
+            match y
+                case 0 do return "Origin" end
+                otherwise do return "On the Y-axis" end
+            end
+        end
+        case _ do
+            match y
+                case 0 do return "On the X-axis" end
+                otherwise do
+                    when x > 0 do
+                        when y > 0 do return "Quadrant I" end
+                        otherwise do return "Quadrant IV" end
+                    end
+                    otherwise do
+                        when y > 0 do return "Quadrant II" end
+                        otherwise do return "Quadrant III" end
+                    end
+                end
+            end
+        end
+    end
+end
+
+print ""
+print "--- Nested Match (Coordinate Quadrants) ---"
+print "(0, 0) => {describe_coordinate(0, 0)}"
+print "(3, 4) => {describe_coordinate(3, 4)}"
+print "(-3, 4) => {describe_coordinate(-3, 4)}"
+print "(-3, -4) => {describe_coordinate(-3, -4)}"
+print "(3, -4) => {describe_coordinate(3, -4)}"
+print "(0, 5) => {describe_coordinate(0, 5)}"
+print "(7, 0) => {describe_coordinate(7, 0)}"
+
+print ""
+print "=== Pattern Matching Examples Complete ==="

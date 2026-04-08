@@ -42,7 +42,8 @@ export type ASTNode =
   | MatchCaseNode
   | TryCatchNode
   | ThrowNode
-  | PipelineExprNode;
+  | PipelineExprNode
+  | DestructureNode;
 
 // ---- Program ----
 export interface ProgramNode {
@@ -61,6 +62,7 @@ export interface ImportNode {
 export interface VariableDeclNode {
   kind: 'VariableDecl';
   name: string;
+  names: string[];         // for destructuring: [a, b, c]
   typeName: string;
   qualifiers: string[];
   value: ASTNode | null;
@@ -273,6 +275,13 @@ export interface HasValueNode {
 export interface ValueInsideNode {
   kind: 'ValueInside';
   expression: ASTNode;
+}
+
+// ---- Destructuring ----
+export interface DestructureNode {
+  kind: 'Destructure';
+  names: string[];
+  value: ASTNode;
 }
 
 // ---- Match Expression ----

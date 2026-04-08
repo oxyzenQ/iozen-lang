@@ -1,0 +1,334 @@
+# =============================================
+# Sorting in IOZEN
+# =============================================
+# This example demonstrates various sorting approaches
+# including manual implementation and built-in functions.
+#
+# Features shown:
+#   - Bubble sort implementation
+#   - Selection sort implementation
+#   - Using the sort builtin
+#   - Custom sort with map_list and filter_list
+#   - Sorting maps by values
+#   - Performance timing with clock()
+# =============================================
+
+import "time"
+
+# --------------------------------------------------
+# 1. Bubble Sort
+# --------------------------------------------------
+# A simple O(n^2) comparison sort. Repeatedly steps
+# through the list, compares adjacent elements, and
+# swaps them if they are in the wrong order.
+
+function bubble_sort with arr as list returns list
+    # Work on a copy to avoid mutating the original
+    create variable result as list with value copy_list(arr)
+    create variable n as integer with value length(result)
+    create variable i as integer with value 0
+
+    while i < n do
+        create variable j as integer with value 0
+        create variable swapped as boolean with value false
+        while j < n - i - 1 do
+            create variable a as integer with value item(result, j)
+            create variable b as integer with value item(result, j + 1)
+            when a > b do
+                # Swap elements at positions j and j+1
+                set result with value set_item(result, j, b)
+                set result with value set_item(result, j + 1, a)
+                set swapped with value true
+            end
+            set j with value j + 1
+        end
+        # If no swaps occurred, the list is already sorted
+        when not swapped do
+            exit
+        end
+        set i with value i + 1
+    end
+
+    return result
+end
+
+print "--- Bubble Sort ---"
+create variable unsorted1 as list with value [64, 34, 25, 12, 22, 11, 90]
+print "Original: {unsorted1}"
+create variable sorted1 as list with value bubble_sort(unsorted1)
+print "Sorted:   {sorted1}"
+print ""
+
+# --------------------------------------------------
+# 2. Selection Sort
+# --------------------------------------------------
+# Another O(n^2) sort. Finds the minimum element
+# from the unsorted part and puts it at the beginning.
+
+function selection_sort with arr as list returns list
+    create variable result as list with value copy_list(arr)
+    create variable n as integer with value length(result)
+    create variable i as integer with value 0
+
+    while i < n do
+        # Find the index of the minimum element in the remaining unsorted part
+        create variable min_idx as integer with value i
+        create variable j as integer with value i + 1
+        while j < n do
+            when item(result, j) < item(result, min_idx) do
+                set min_idx with value j
+            end
+            set j with value j + 1
+        end
+
+        # Swap the found minimum with the element at position i
+        when min_idx != i do
+            create variable temp as integer with value item(result, i)
+            set result with value set_item(result, i, item(result, min_idx))
+            set result with value set_item(result, min_idx, temp)
+        end
+
+        set i with value i + 1
+    end
+
+    return result
+end
+
+print "--- Selection Sort ---"
+create variable unsorted2 as list with value [29, 10, 14, 37, 13, 42, 8]
+print "Original: {unsorted2}"
+create variable sorted2 as list with value selection_sort(unsorted2)
+print "Sorted:   {sorted2}"
+print ""
+
+# --------------------------------------------------
+# 3. Insertion Sort
+# --------------------------------------------------
+# O(n^2) but efficient for small or nearly-sorted data.
+# Builds the sorted array one element at a time.
+
+function insertion_sort with arr as list returns list
+    create variable result as list with value copy_list(arr)
+    create variable n as integer with value length(result)
+    create variable i as integer with value 1
+
+    while i < n do
+        create variable key as integer with value item(result, i)
+        create variable j as integer with value i - 1
+
+        # Shift elements greater than key to the right
+        while j >= 0 and item(result, j) > key do
+            set result with value set_item(result, j + 1, item(result, j))
+            set j with value j - 1
+        end
+
+        set result with value set_item(result, j + 1, key)
+        set i with value i + 1
+    end
+
+    return result
+end
+
+print "--- Insertion Sort ---"
+create variable unsorted3 as list with value [12, 11, 13, 5, 6, 7]
+print "Original: {unsorted3}"
+create variable sorted3 as list with value insertion_sort(unsorted3)
+print "Sorted:   {sorted3}"
+print ""
+
+# --------------------------------------------------
+# 4. Using the built-in sort
+# --------------------------------------------------
+# IOZEN provides a built-in sort function.
+
+print "--- Built-in sort ---"
+create variable unsorted4 as list with value [38, 27, 43, 3, 9, 82, 10]
+print "Original: {unsorted4}"
+create variable sorted4 as list with value unsorted4 |> sort
+print "Sorted:   {sorted4}"
+print ""
+
+# --------------------------------------------------
+# 5. Sort descending (using reverse)
+# --------------------------------------------------
+
+print "--- Sort Descending ---"
+create variable unsorted5 as list with value [5, 2, 8, 1, 9, 3, 7]
+print "Original:         {unsorted5}"
+create variable asc_sorted as list with value unsorted5 |> sort
+print "Ascending:        {asc_sorted}"
+create variable desc_sorted as list with value unsorted5 |> sort |> reverse
+print "Descending:       {desc_sorted}"
+print ""
+
+# --------------------------------------------------
+# 6. Custom sort with map_list and filter_list
+# --------------------------------------------------
+# Sort by a derived property using a pipeline.
+
+print "--- Custom Sorting ---"
+
+# Sort a list of numbers by their absolute value
+create variable mixed as list with value [-5, 3, -1, 4, -2, 0, -3, 2, 1, -4]
+print "Mixed numbers: {mixed}"
+
+# Create pairs of (absolute_value, original) then sort by first element
+create variable abs_sorted as list with value mixed
+    |> map_list(fn(x) -> map("abs", abs(x), "val", x))
+    |> sort_by(fn(m) -> get(m, "abs"))
+    |> map_list(fn(m) -> get(m, "val"))
+
+print "Sorted by absolute value: {abs_sorted}"
+
+# Sort strings by length
+create variable words as list with value ["banana", "apple", "cherry", "date", "elderberry", "fig"]
+print ""
+print "Words: {words}"
+
+create variable by_length as list with value words
+    |> map_list(fn(w) -> map("len", length(w), "word", w))
+    |> sort_by(fn(m) -> get(m, "len"))
+    |> map_list(fn(m) -> get(m, "word"))
+
+print "Sorted by length: {by_length}"
+
+print ""
+
+# --------------------------------------------------
+# 7. Sort a map by values (word frequencies)
+# --------------------------------------------------
+
+print "--- Sorting Map by Values ---"
+
+create variable freq as map with value map(
+    "apple", 5,
+    "banana", 2,
+    "cherry", 8,
+    "date", 3,
+    "elderberry", 1,
+    "fig", 6
+)
+
+# Convert map to list of entries, sort by value descending
+create variable entries as list with value map_keys(freq)
+    |> map_list(fn(k) -> map("word", k, "count", get(freq, k)))
+    |> sort_by(fn(e) -> get(e, "count"))
+    |> reverse
+
+print "Word frequencies (sorted by count):"
+for each entry in entries do
+    print "  {get(entry, "word")}: {get(entry, "count")}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 8. Verify all sorts produce the same result
+# --------------------------------------------------
+
+print "--- Verification ---"
+create variable test_data as list with value [42, 17, 93, 1, 56, 78, 23, 65, 88, 4, 31, 69]
+print "Test data: {test_data}"
+
+create variable b_sorted as list with value bubble_sort(test_data)
+create variable s_sorted as list with value selection_sort(test_data)
+create variable i_sorted as list with value insertion_sort(test_data)
+create variable builtin_sorted as list with value test_data |> sort
+
+create variable all_match as boolean with value true
+create variable idx as integer with value 0
+while idx < length(test_data) do
+    when item(b_sorted, idx) != item(builtin_sorted, idx) do
+        set all_match with value false
+    end
+    set idx with value idx + 1
+end
+
+print "Bubble:    {b_sorted}"
+print "Selection: {s_sorted}"
+print "Insertion: {i_sorted}"
+print "Builtin:   {builtin_sorted}"
+when all_match do
+    print "All sorting algorithms agree!"
+otherwise do
+    print "WARNING: Sorting algorithms disagree!"
+end
+
+print ""
+
+# --------------------------------------------------
+# 9. Performance comparison with clock()
+# --------------------------------------------------
+
+print "--- Performance Comparison ---"
+
+# Generate a large shuffled list
+create variable large_list as list with value range(1, 1001) |> reverse
+
+# Time bubble sort (use smaller size due to O(n^2))
+create variable bubble_data as list with value range(1, 501) |> reverse
+create variable t1_start as float with value clock()
+create variable _ as list with value bubble_sort(bubble_data)
+create variable t1_end as float with value clock()
+print "Bubble sort (500 items):    {t1_end - t1_start} seconds"
+
+# Time insertion sort
+create variable insert_data as list with value range(1, 501) |> reverse
+create variable t2_start as float with value clock()
+set _ with value insertion_sort(insert_data)
+create variable t2_end as float with value clock()
+print "Insertion sort (500 items): {t2_end - t2_start} seconds"
+
+# Time selection sort
+create variable select_data as list with value range(1, 501) |> reverse
+create variable t3_start as float with value clock()
+set _ with value selection_sort(select_data)
+create variable t3_end as float with value clock()
+print "Selection sort (500 items): {t3_end - t3_start} seconds"
+
+# Time built-in sort (much larger, should still be fast)
+create variable t4_start as float with value clock()
+set _ with value large_list |> sort
+create variable t4_end as float with value clock()
+print "Built-in sort (1000 items): {t4_end - t4_start} seconds"
+
+print ""
+print "Note: The built-in sort is typically much faster because it"
+print "uses an optimized algorithm (like quicksort or mergesort)."
+print ""
+
+# --------------------------------------------------
+# 10. Stable sort example
+# --------------------------------------------------
+# Demonstrate sorting records by multiple criteria.
+
+print "--- Multi-criteria Sort ---"
+
+create variable students as list with value [
+    map("name", "Alice", "grade", 85, "age", 20),
+    map("name", "Bob", "grade", 92, "age", 19),
+    map("name", "Charlie", "grade", 85, "age", 21),
+    map("name", "Diana", "grade", 78, "age", 20),
+    map("name", "Eve", "grade", 92, "age", 22)
+]
+
+print "Students:"
+for each s in students do
+    print "  {get(s, "name")}: grade={get(s, "grade")}, age={get(s, "age")}"
+end
+
+# Sort by grade descending, then by age ascending
+create variable sorted_students as list with value students
+    |> map_list(fn(s) -> map("s", s, "grade_key", -get(s, "grade"), "age_key", get(s, "age")))
+    |> sort_by(fn(m) -> get(m, "grade_key"))
+    |> sort_by(fn(m) -> get(m, "age_key"))
+    |> map_list(fn(m) -> get(m, "s"))
+
+print ""
+print "Sorted by grade (desc), then age (asc):"
+for each s in sorted_students do
+    print "  {get(s, "name")}: grade={get(s, "grade")}, age={get(s, "age")}"
+end
+
+print ""
+print "=== Sorting Examples Complete ==="

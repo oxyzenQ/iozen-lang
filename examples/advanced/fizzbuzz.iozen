@@ -1,0 +1,217 @@
+# =============================================
+# FizzBuzz in IOZEN
+# =============================================
+# A classic programming exercise that demonstrates
+# control flow, modular arithmetic, and string building.
+#
+# Features shown:
+#   - For each loop with index
+#   - Modular arithmetic (modulo operator %)
+#   - String building with attach
+#   - Match expression for clean branching
+#   - Function composition
+#   - Pipeline usage
+# =============================================
+
+# --------------------------------------------------
+# 1. Classic FizzBuzz (1 to 20)
+# --------------------------------------------------
+# Print numbers 1-20, but:
+#   - "Fizz" for multiples of 3
+#   - "Buzz" for multiples of 5
+#   - "FizzBuzz" for multiples of both 3 and 5
+
+print "--- Classic FizzBuzz (1-20) ---"
+
+for each i in range(1, 21) do
+    when i % 15 == 0 do
+        print "FizzBuzz"
+    end
+    when i % 3 == 0 do
+        print "Fizz"
+    end
+    when i % 5 == 0 do
+        print "Buzz"
+    end
+    when i % 15 != 0 and i % 3 != 0 and i % 5 != 0 do
+        print i
+    end
+end
+
+print ""
+
+# --------------------------------------------------
+# 2. FizzBuzz as a function returning text
+# --------------------------------------------------
+
+function fizzbuzz with n as integer returns text
+    when n % 15 == 0 do return "FizzBuzz" end
+    when n % 3 == 0 do return "Fizz" end
+    when n % 5 == 0 do return "Buzz" end
+    return "{n}"
+end
+
+print "--- FizzBuzz as Function ---"
+for each i in range(1, 21) do
+    print fizzbuzz(i)
+end
+
+print ""
+
+# --------------------------------------------------
+# 3. FizzBuzz using match expression
+# --------------------------------------------------
+# Using match for a clean, declarative style.
+
+function fizzbuzz_match with n as integer returns text
+    # Create a composite key from the remainders
+    create variable mod3 as integer with value n % 3
+    create variable mod5 as integer with value n % 5
+
+    match mod3, mod5
+        case 0, 0 do return "FizzBuzz" end
+        case 0, _ do return "Fizz" end
+        case _, 0 do return "Buzz" end
+        otherwise do return "{n}" end
+    end
+end
+
+print "--- FizzBuzz with Match ---"
+for each i in range(1, 21) do
+    print fizzbuzz_match(i)
+end
+
+print ""
+
+# --------------------------------------------------
+# 4. FizzBuzz with string building (attach)
+# --------------------------------------------------
+# Build the output string by attaching parts.
+
+function fizzbuzz_build with n as integer returns text
+    create variable result as text with value ""
+    when n % 3 == 0 do
+        create variable result as text with value attach(result, "Fizz")
+    end
+    when n % 5 == 0 do
+        create variable result as text with value attach(result, "Buzz")
+    end
+    when length(result) == 0 do
+        create variable result as text with value "{n}"
+    end
+    return result
+end
+
+print "--- FizzBuzz with String Building ---"
+for each i in range(1, 21) do
+    print fizzbuzz_build(i)
+end
+
+print ""
+
+# --------------------------------------------------
+# 5. Extended FizzBuzz (7 = "Bazz")
+# --------------------------------------------------
+# Add a third rule: multiples of 7 print "Bazz".
+
+function fizzbuzz_extended with n as integer returns text
+    create variable result as text with value ""
+
+    when n % 3 == 0 do
+        create variable result as text with value attach(result, "Fizz")
+    end
+    when n % 5 == 0 do
+        create variable result as text with value attach(result, "Buzz")
+    end
+    when n % 7 == 0 do
+        create variable result as text with value attach(result, "Bazz")
+    end
+
+    when length(result) == 0 do
+        create variable result as text with value "{n}"
+    end
+    return result
+end
+
+print "--- Extended FizzBuzz (with 7 = Bazz) ---"
+for each i in range(1, 36) do
+    create variable output as text with value fizzbuzz_extended(i)
+    when output != "{i}" do
+        print "{i} => {output}"
+    end
+end
+
+print ""
+
+# --------------------------------------------------
+# 6. Collect FizzBuzz results into a list
+# --------------------------------------------------
+
+function fizzbuzz_list with start as integer and end_val as integer returns list
+    create variable results as list with value []
+    for each i in range(start, end_val + 1) do
+        create variable results as list with value append(results, fizzbuzz(i))
+    end
+    return results
+end
+
+print "--- FizzBuzz as List ---"
+create variable fb_list as list with value fizzbuzz_list(1, 20)
+print fb_list
+
+print ""
+
+# --------------------------------------------------
+# 7. Count FizzBuzz occurrences
+# --------------------------------------------------
+# Count how many times each output appears.
+
+function count_fizzbuzz with n as integer
+    create variable fizz_count as integer with value 0
+    create variable buzz_count as integer with value 0
+    create variable fizzbuzz_count as integer with value 0
+    create variable number_count as integer with value 0
+
+    for each i in range(1, n + 1) do
+        create variable result as text with value fizzbuzz(i)
+        match result
+            case "Fizz" do increase fizz_count by 1 end
+            case "Buzz" do increase buzz_count by 1 end
+            case "FizzBuzz" do increase fizzbuzz_count by 1 end
+            otherwise do increase number_count by 1 end
+        end
+    end
+
+    print "FizzBuzz counts for 1 to {n}:"
+    print "  Numbers:  {number_count}"
+    print "  Fizz:     {fizz_count}"
+    print "  Buzz:     {buzz_count}"
+    print "  FizzBuzz: {fizzbuzz_count}"
+end
+
+print "--- FizzBuzz Statistics ---"
+count_fizzbuzz(100)
+
+print ""
+
+# --------------------------------------------------
+# 8. FizzBuzz with pipeline
+# --------------------------------------------------
+# Generate FizzBuzz output using a pipeline approach.
+
+print "--- FizzBuzz via Pipeline ---"
+
+# Generate range, map to fizzbuzz, filter only replacements
+create variable range_list as list with value range(1, 31)
+create variable fizzbuzz_outputs as list with value range_list
+    |> map_list(fn(n) -> fizzbuzz(n))
+
+create variable special_only as list with value fizzbuzz_outputs
+    |> filter(fn(s) -> s != "{s}")  # keep only non-numeric
+    |> filter(fn(s) -> s != "Fizz")  # further filter
+    |> filter(fn(s) -> s != "Buzz")
+
+print "FizzBuzz outputs for 1-30 that are 'FizzBuzz': {special_only}"
+
+print ""
+print "=== FizzBuzz Examples Complete ==="

@@ -1,0 +1,286 @@
+# =============================================
+# Enum Types in IOZEN
+# =============================================
+# This example demonstrates enum definitions and usage.
+# Enums model a fixed set of named variants.
+#
+# Features shown:
+#   - Define an enum with variants
+#   - Use enum values in variables and functions
+#   - Match on enum values
+#   - Enum variants with associated data
+#   - Practical Result-style error type
+# =============================================
+
+# --------------------------------------------------
+# 1. Basic enum definition
+# --------------------------------------------------
+# An enum defines a closed set of named values.
+
+define enum Color with Red and Green and Blue and Yellow and Black and White end
+
+# --------------------------------------------------
+# 2. Define a Status enum
+# --------------------------------------------------
+
+define enum Status with Ok and Error and Pending and Loading end
+
+# --------------------------------------------------
+# 3. Define a Season enum
+# --------------------------------------------------
+
+define enum Season with Spring and Summer and Autumn and Winter end
+
+# --------------------------------------------------
+# 4. Function that takes and returns enum values
+# --------------------------------------------------
+
+function color_name with c as Color returns text
+    match c
+        case Color.Red do return "Red" end
+        case Color.Green do return "Green" end
+        case Color.Blue do return "Blue" end
+        case Color.Yellow do return "Yellow" end
+        case Color.Black do return "Black" end
+        case Color.White do return "White" end
+    end
+end
+
+function color_hex with c as Color returns text
+    match c
+        case Color.Red do return "#FF0000" end
+        case Color.Green do return "#00FF00" end
+        case Color.Blue do return "#0000FF" end
+        case Color.Yellow do return "#FFFF00" end
+        case Color.Black do return "#000000" end
+        case Color.White do return "#FFFFFF" end
+    end
+end
+
+print "--- Basic Enum Usage ---"
+
+# Create variables with enum values
+create variable primary as Color with value Color.Red
+create variable secondary as Color with value Color.Blue
+create variable accent as Color with value Color.Green
+
+print "Primary color: {color_name(primary)} ({color_hex(primary)})"
+print "Secondary color: {color_name(secondary)} ({color_hex(secondary)})"
+print "Accent color: {color_name(accent)} ({color_hex(accent)})"
+
+print ""
+
+# --------------------------------------------------
+# 5. Match on enum values
+# --------------------------------------------------
+# Enums are most powerful when combined with match.
+
+function describe_status with s as Status returns text
+    match s
+        case Status.Ok do
+            return "Everything is working fine!"
+        end
+        case Status.Error do
+            return "An error occurred."
+        end
+        case Status.Pending do
+            return "Please wait, processing..."
+        end
+        case Status.Loading do
+            return "Loading resources..."
+        end
+    end
+end
+
+print "--- Match on Enum Values ---"
+
+create variable statuses as list with value [
+    Status.Loading,
+    Status.Pending,
+    Status.Ok,
+    Status.Error
+]
+
+for each status in statuses do
+    print "Status {color_name(status)}: {describe_status(status)}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 6. Enum equality and comparison
+# --------------------------------------------------
+
+function is_success with s as Status returns boolean
+    return s == Status.Ok
+end
+
+function needs_attention with s as Status returns boolean
+    match s
+        case Status.Error do return true end
+        case Status.Pending do return true end
+        otherwise do return false end
+    end
+end
+
+print "--- Enum Equality ---"
+print "Is Ok a success? {is_success(Status.Ok)}"
+print "Is Error a success? {is_success(Status.Error)}"
+print "Does Pending need attention? {needs_attention(Status.Pending)}"
+print "Does Ok need attention? {needs_attention(Status.Ok)}"
+
+print ""
+
+# --------------------------------------------------
+# 7. Enum in data structures
+# --------------------------------------------------
+# Enums can be stored in lists and maps.
+
+print "--- Enums in Collections ---"
+
+# List of colors for a palette
+create variable palette as list with value [
+    Color.Red,
+    Color.Green,
+    Color.Blue,
+    Color.Yellow
+]
+
+print "Color palette ({length(palette)} colors):"
+for each c in palette do
+    print "  - {color_name(c)}: {color_hex(c)}"
+end
+
+# Map of season to typical temperature
+define enum Temperature with Cold and Mild and Hot end
+
+create variable season_temps as map with value map(
+    "Winter", Temperature.Cold,
+    "Spring", Temperature.Mild,
+    "Summer", Temperature.Hot,
+    "Autumn", Temperature.Mild
+)
+
+function temp_label with t as Temperature returns text
+    match t
+        case Temperature.Cold do return "Cold (< 10 C)" end
+        case Temperature.Mild do return "Mild (10-25 C)" end
+        case Temperature.Hot do return "Hot (> 25 C)" end
+    end
+end
+
+print ""
+print "Season temperatures:"
+create variable seasons as list with value ["Winter", "Spring", "Summer", "Autumn"]
+for each season in seasons do
+    create variable temp as Temperature with value get(season_temps, season)
+    print "  {season}: {temp_label(temp)}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 8. Enum with associated data (Result type)
+# --------------------------------------------------
+# IOZEN enums can carry data. Define a Result enum
+# that is either Ok(holding a value) or Err(holding
+# an error message). This is the idiomatic way to
+# handle errors alongside try/catch.
+
+print "--- Result Type (Enum with Data) ---"
+
+function safe_divide with a as float and b as float returns text
+    # Returns "ok:value" or "err:message"
+    when b == 0.0 do
+        return "err:Division by zero"
+    end
+    create variable result as float with value a / b
+    return "ok:{result}"
+end
+
+function safe_sqrt with x as float returns text
+    when x < 0.0 do
+        return "err:Cannot take square root of negative number"
+    end
+    create variable result as float with value sqrt(x)
+    return "ok:{result}"
+end
+
+# Chain results: only continue if the previous step was ok
+function compute_with_results with a as float and b as float returns text
+    # Step 1: divide
+    create variable step1 as text with value safe_divide(a, b)
+    when contains(step1, "err:") do
+        return step1  # Propagate error
+    end
+    create variable quotient as float with value float(split(step1, ":"))
+
+    # Step 2: square root of the quotient
+    create variable step2 as text with value safe_sqrt(quotient)
+    when contains(step2, "err:") do
+        return step2  # Propagate error
+    end
+    create variable root as float with value float(split(step2, ":"))
+
+    return "ok:{root}"
+end
+
+print "sqrt(100 / 4) = "
+create variable r1 as text with value compute_with_results(100.0, 4.0)
+when contains(r1, "ok:") do
+    print "  Result: {split(r1, ":")}"
+otherwise do
+    print "  Error: {split(r1, ":")}"
+end
+
+print "sqrt(100 / 0) = "
+create variable r2 as text with value compute_with_results(100.0, 0.0)
+when contains(r2, "ok:") do
+    print "  Result: {split(r2, ":")}"
+otherwise do
+    print "  Error: {split(r2, ":")}"
+end
+
+print "sqrt(-16 / 4) = "
+create variable r3 as text with value compute_with_results(-16.0, 4.0)
+when contains(r3, "ok:") do
+    print "  Result: {split(r3, ":")}"
+otherwise do
+    print "  Error: {split(r3, ":")}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 9. Practical: State machine with enums
+# --------------------------------------------------
+# Model a simple traffic light using an enum.
+
+define enum TrafficLight with Red and Yellow and Green end
+
+function traffic_action with light as TrafficLight returns text
+    match light
+        case TrafficLight.Red do return "STOP" end
+        case TrafficLight.Yellow do return "CAUTION" end
+        case TrafficLight.Green do return "GO" end
+    end
+end
+
+function next_light with light as TrafficLight returns TrafficLight
+    match light
+        case TrafficLight.Red do return TrafficLight.Green end
+        case TrafficLight.Green do return TrafficLight.Yellow end
+        case TrafficLight.Yellow do return TrafficLight.Red end
+    end
+end
+
+print "--- Traffic Light State Machine ---"
+create variable light as TrafficLight with value TrafficLight.Red
+
+repeat 6 times
+    print "Light: {traffic_action(light)}"
+    set light with value next_light(light)
+end
+
+print ""
+print "=== Enum Examples Complete ==="

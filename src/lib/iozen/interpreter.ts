@@ -16,7 +16,7 @@ import type {
   LiteralNode, FunctionCallExprNode, MemberAccessNode,
   IndexAccessNode, ListLiteralNode, HasValueNode, ValueInsideNode,
   LambdaNode, ExitNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
-  PipelineExprNode,
+  PipelineExprNode, DestructureNode,
 } from './ast';
 
 // Special signal to unwind the call stack for return/exit
@@ -143,6 +143,9 @@ export class Interpreter {
         break;
       case 'Throw':
         this.execThrow(node as ThrowNode, env);
+        break;
+      case 'Destructure':
+        this.execDestructure(node as DestructureNode, env);
         break;
       case 'Increase':
         this.execIncrease(node as IncreaseNode, env);
@@ -434,6 +437,30 @@ export class Interpreter {
   private execThrow(node: ThrowNode, env: Environment): void {
     const val = node.value ? this.evaluate(node.value, env) : null;
     throw new ThrowSignal(val);
+  }
+
+  private execDestructure(node: DestructureNode, env: Environment): void {
+    const val = this.evaluate(node.value, env);
+    if (Array.isArray(val)) {
+      // Destructure list: create variable a, b, c with value [1, 2, 3]
+      for (let i = 0; i < node.names.length; i++) {
+        env.define(node.names[i], i < val.length ? val[i] : null);
+      }
+    } else if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+      // Destructure map/object: create variable a, b with value map("a", 1, "b", 2)
+      for (const name of node.names) {
+        if ((val as Record<string, IOZENValue>)[name] !== undefined) {
+          env.define(name, (val as Record<string, IOZENValue>)[name]);
+        } else {
+          env.define(name, null);
+        }
+      }
+    } else if (typeof val === 'string') {
+      // Destructure string into characters
+      for (let i = 0; i < node.names.length; i++) {
+        env.define(node.names[i], i < val.length ? val[i] : null);
+      }
+    }
   }
 
   private execMatch(node: MatchNode, env: Environment): void {
@@ -1878,6 +1905,149 @@ export class Interpreter {
       const { execSync } = require('node:child_process');
       execSync(`sleep ${ms / 1000}`, { timeout: ms + 1000 });
       this.env.define('__last_result__', true);
+      return true;
+    }
+
+    // ---- Format / Utility ----
+    if (n === 'format' && args.length >= 1) {
+      let template = String(args[0]);
+      for (let i = 1; i < args.length; i++) {
+        template = template.replace('{}', this.iozenValueToString(args[i]));
+      }
+      this.env.define('__last_result__', template);
+      return true;
+    }
+    if (n === 'typeof' && args.length >= 1) {
+      const v = args[0];
+      if (v === null || v === undefined) this.env.define('__last_result__', 'nothing');
+      else if (typeof v === 'number') this.env.define('__last_result__', Number.isInteger(v) ? 'integer' : 'float');
+      else if (typeof v === 'string') this.env.define('__last_result__', 'text');
+      else if (typeof v === 'boolean') this.env.define('__last_result__', 'boolean');
+      else if (Array.isArray(v)) this.env.define('__last_result__', 'list');
+      else this.env.define('__last_result__', 'object');
+      return true;
+    }
+    if (n === 'zip' && args.length >= 2 && Array.isArray(args[0]) && Array.isArray(args[1])) {
+      const a = args[0] as IOZENValue[];
+      const b = args[1] as IOZENValue[];
+      const result: IOZENValue[] = [];
+      const len = Math.min(a.length, b.length);
+      for (let i = 0; i < len; i++) {
+        result.push([a[i], b[i]]);
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'enumerate' && args.length >= 1 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const result: IOZENValue[] = [];
+      for (let i = 0; i < arr.length; i++) {
+        result.push([i, arr[i]]);
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'takewhile' && args.length >= 2 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const funcName = String(args[1]);
+      const result: IOZENValue[] = [];
+      const func = env.get(funcName) as IOZENFunction;
+      if (func && func.__iozen_type === 'function') {
+        for (const item of arr) {
+          const funcEnv = func.closure.child();
+          funcEnv.define(func.parameters[0]?.name || 'arg', item);
+          try { this.executeBlock(func.body, funcEnv); }
+          catch (e) { if (e instanceof ReturnSignal && !this.isTruthy(e.value)) break; else if (e instanceof ReturnSignal) result.push(item); else throw e; }
+        }
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'dropwhile' && args.length >= 2 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const funcName = String(args[1]);
+      const result: IOZENValue[] = [];
+      let dropping = true;
+      const func = env.get(funcName) as IOZENFunction;
+      if (func && func.__iozen_type === 'function') {
+        for (const item of arr) {
+          if (dropping) {
+            const funcEnv = func.closure.child();
+            funcEnv.define(func.parameters[0]?.name || 'arg', item);
+            try { this.executeBlock(func.body, funcEnv); }
+            catch (e) { if (e instanceof ReturnSignal) { if (this.isTruthy(e.value)) continue; else dropping = false; } else throw e; }
+          }
+          result.push(item);
+        }
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'count_by' && args.length >= 1 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const counts: IOZENValue = { __iozen_type: 'map' as const };
+      for (const item of arr) {
+        const key = String(item);
+        if ((counts as Record<string, IOZENValue>)[key] === undefined) {
+          (counts as Record<string, IOZENValue>)[key] = 1;
+        } else {
+          (counts as Record<string, IOZENValue>)[key] = (this.toNumber((counts as Record<string, IOZENValue>)[key]) + 1);
+        }
+      }
+      this.env.define('__last_result__', counts);
+      return true;
+    }
+    if (n === 'contains_any' && args.length >= 2 && Array.isArray(args[0]) && Array.isArray(args[1])) {
+      const haystack = args[0] as IOZENValue[];
+      const needles = args[1] as IOZENValue[];
+      this.env.define('__last_result__', needles.some(n => haystack.includes(n)));
+      return true;
+    }
+    if (n === 'to_map' && args.length >= 1 && Array.isArray(args[0])) {
+      const pairs = args[0] as IOZENValue[];
+      const m: IOZENValue = { __iozen_type: 'map' as const };
+      for (const pair of pairs) {
+        if (Array.isArray(pair) && pair.length >= 2) {
+          (m as Record<string, IOZENValue>)[String(pair[0])] = pair[1];
+        }
+      }
+      this.env.define('__last_result__', m);
+      return true;
+    }
+    if (n === 'clamp' && args.length >= 3) {
+      const val = this.toNumber(args[0]);
+      const lo = this.toNumber(args[1]);
+      const hi = this.toNumber(args[2]);
+      this.env.define('__last_result__', Math.max(lo, Math.min(val, hi)));
+      return true;
+    }
+    if (n === 'interleave' && args.length >= 2 && Array.isArray(args[0]) && Array.isArray(args[1])) {
+      const a = args[0] as IOZENValue[];
+      const b = args[1] as IOZENValue[];
+      const result: IOZENValue[] = [];
+      const len = Math.max(a.length, b.length);
+      for (let i = 0; i < len; i++) {
+        if (i < a.length) result.push(a[i]);
+        if (i < b.length) result.push(b[i]);
+      }
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'join_map' && args.length >= 2 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const funcName = String(args[1]);
+      const separator = args.length >= 3 ? String(args[2]) : '';
+      const func = env.get(funcName) as IOZENFunction;
+      const parts: string[] = [];
+      if (func && func.__iozen_type === 'function') {
+        for (const item of arr) {
+          const funcEnv = func.closure.child();
+          funcEnv.define(func.parameters[0]?.name || 'arg', item);
+          try { this.executeBlock(func.body, funcEnv); }
+          catch (e) { if (e instanceof ReturnSignal) parts.push(String(e.value)); else throw e; }
+        }
+      }
+      this.env.define('__last_result__', parts.join(separator));
       return true;
     }
 

@@ -15,7 +15,7 @@ import type {
   FunctionCallExprNode, MemberAccessNode, ListLiteralNode,
   ForceUnwrapNode, OrDefaultNode, HasValueNode, ValueInsideNode,
   LambdaNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
-  PipelineExprNode,
+  PipelineExprNode, DestructureNode,
 } from './ast';
 
 export class ParseError extends Error {
@@ -115,16 +115,18 @@ export class Parser {
   private parseImport(): ASTNode {
     this.consume(TokenType.Import, 'Expected "import"');
 
-    // import <module_path>
+    // import "path" — string literal as module path
+    if (this.check(TokenType.StringLiteral)) {
+      const path = this.advance().value;
+      return {
+        kind: 'Import',
+        modulePath: path,
+        importNames: [],
+      } as ImportNode;
+    }
+
     // import <name1>, <name2> from <module_path>
     const importNames: string[] = [];
-
-    // Collect names before "from"
-    while (!this.isAtEnd() && !this.check(TokenType.From) && this.peek().type !== TokenType.Identifier) {
-      // If it looks like a module path (identifier or dot), stop collecting names
-      if (this.peek().type === TokenType.Identifier) break;
-      this.advance();
-    }
 
     // Check for "import X, Y from module" pattern
     if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.Comma) {
@@ -165,14 +167,24 @@ export class Parser {
       }
     }
 
-    // variable <name>
+    // variable <name> [, <name2>, <name3>, ...]   (destructuring)
     // For "create constant X", "variable" keyword is optional
     if (isConstant && this.check(TokenType.Identifier)) {
       // "create constant X" — skip "variable" keyword
     } else {
       this.consume(TokenType.Variable, 'Expected "variable"');
     }
-    const name = this.consumeName('Expected variable name').value;
+    const firstName = this.consumeName('Expected variable name').value;
+
+    // Check for destructuring: multiple names separated by commas
+    // e.g., create variable a, b, c as list with value [1, 2, 3]
+    const names: string[] = [firstName];
+    if (this.check(TokenType.Comma)) {
+      while (this.match(TokenType.Comma)) {
+        const nextName = this.consumeName('Expected variable name after comma').value;
+        names.push(nextName);
+      }
+    }
 
     // as <type>
     const qualifiers: string[] = [];
@@ -218,9 +230,15 @@ export class Parser {
       throw new ParseError('Constant must have an initial value (use "with value ...")', this.peek());
     }
 
+    // Destructuring: if multiple names, wrap as DestructureNode
+    if (names.length > 1 && value) {
+      return { kind: 'Destructure', names, value } as DestructureNode;
+    }
+
     return {
       kind: 'VariableDecl',
-      name,
+      name: firstName,
+      names: [],
       typeName,
       qualifiers,
       value,
