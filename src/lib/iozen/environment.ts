@@ -10,6 +10,7 @@ export type IOZENValue =
   | null
   | IOZENValue[]
   | IOZENObject
+  | IOZENMap
   | IOZENFunction
   | IOZENResult;
 
@@ -26,6 +27,11 @@ export interface IOZENFunction {
   returnType: string;
   body: unknown[];
   closure: Environment;
+}
+
+export interface IOZENMap {
+  __iozen_type: 'map';
+  [key: string]: IOZENValue;
 }
 
 export interface IOZENResult {

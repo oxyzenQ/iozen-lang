@@ -6,7 +6,7 @@
 import { Lexer } from './lexer';
 import { Parser } from './parser';
 import { ParseError } from './parser';
-import { Environment, RuntimeError, IOZENValue, IOZENResult, IOZENObject, IOZENFunction } from './environment';
+import { Environment, RuntimeError, IOZENValue, IOZENResult, IOZENObject, IOZENMap, IOZENFunction } from './environment';
 import type {
   ASTNode, ProgramNode, VariableDeclNode, FunctionDeclNode,
   StructureDeclNode, EnumDeclNode, PrintStmtNode, ReturnStmtNode,
@@ -242,10 +242,9 @@ export class Interpreter {
     if (node.value) {
       const evaluated = this.evaluate(node.value, env);
 
-      // If the value is a __struct_init__ result (plain object), attach class name
+      // If the value is a __struct_init__ result, attach the declared class name
       if (evaluated && typeof evaluated === 'object' &&
           !(Array.isArray(evaluated)) &&
-          !(evaluated as any).__iozen_type &&
           node.value.kind === 'FunctionCallExpr' &&
           (node.value as FunctionCallExprNode).name === '__struct_init__') {
         // Tag it as an IOZEN object with the declared type name
@@ -800,6 +799,105 @@ export class Interpreter {
       return true;
     }
 
+    // Map functions
+    if (n === 'map' && args.length >= 0) {
+      const m: Record<string, IOZENValue> = { __iozen_type: 'map' as const };
+      for (let i = 0; i < args.length; i += 2) {
+        m[String(args[i])] = i + 1 < args.length ? args[i + 1] : null;
+      }
+      this.env.define('__last_result__', m);
+      return true;
+    }
+    if (n === 'has_key' && args.length >= 2) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        const key = String(args[1]);
+        this.env.define('__last_result__', key in m);
+      } else {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+    if (n === 'get_key' && args.length >= 2) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        const key = String(args[1]);
+        this.env.define('__last_result__', key in m ? (m as Record<string, IOZENValue>)[key] : null);
+      } else {
+        this.env.define('__last_result__', null);
+      }
+      return true;
+    }
+    if (n === 'set_key' && args.length >= 3) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        (m as Record<string, IOZENValue>)[String(args[1])] = args[2];
+        this.env.define('__last_result__', m);
+      } else {
+        this.env.define('__last_result__', null);
+      }
+      return true;
+    }
+    if (n === 'keys' && args.length >= 1) {
+      const m = args[0];
+      if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
+        const result = Object.keys(m).filter(k => !k.startsWith('__'));
+        this.env.define('__last_result__', result);
+      } else {
+        this.env.define('__last_result__', []);
+      }
+      return true;
+    }
+
+    // List remove operations
+    if (n === 'remove' && args.length >= 2 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const idx = Math.floor(this.toNumber(args[1]));
+      if (idx >= 0 && idx < arr.length) {
+        const removed = arr.splice(idx, 1);
+        this.env.define('__last_result__', removed[0] !== undefined ? removed[0] : null);
+      } else {
+        this.env.define('__last_result__', null);
+      }
+      return true;
+    }
+    if (n === 'remove_last' && args.length >= 1 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      this.env.define('__last_result__', arr.length > 0 ? arr.pop()! : null);
+      return true;
+    }
+
+    // type_of builtin
+    if (n === 'type_of' && args.length >= 1) {
+      const v = args[0];
+      if (v === null || v === undefined) {
+        this.env.define('__last_result__', 'nothing');
+      } else if (typeof v === 'number') {
+        this.env.define('__last_result__', Number.isInteger(v) ? 'integer' : 'float');
+      } else if (typeof v === 'string') {
+        this.env.define('__last_result__', 'text');
+      } else if (typeof v === 'boolean') {
+        this.env.define('__last_result__', 'boolean');
+      } else if (Array.isArray(v)) {
+        this.env.define('__last_result__', 'list');
+      } else if (typeof v === 'object') {
+        if ((v as IOZENMap).__iozen_type === 'map') {
+          this.env.define('__last_result__', 'map');
+        } else if ((v as IOZENObject).__iozen_type === 'object') {
+          this.env.define('__last_result__', 'object');
+        } else if ((v as IOZENResult).__iozen_type === 'result') {
+          this.env.define('__last_result__', 'result');
+        } else if ((v as IOZENFunction).__iozen_type === 'function') {
+          this.env.define('__last_result__', 'function');
+        } else {
+          this.env.define('__last_result__', 'object');
+        }
+      } else {
+        this.env.define('__last_result__', 'nothing');
+      }
+      return true;
+    }
+
     // Special IOZEN keywords that function as built-ins
     // Input / Output
     if (n === 'read_line' && args.length >= 0) {
@@ -854,12 +952,22 @@ export class Interpreter {
         const r = value as IOZENResult;
         return r.ok ? `Ok(${this.iozenValueToString(r.value!)})` : `Error("${r.error}")`;
       }
+      if ((value as IOZENMap).__iozen_type === 'map') {
+        const m = value as IOZENMap;
+        const entries = Object.entries(m)
+          .filter(([k]) => !k.startsWith('__'))
+          .map(([k, v]) => `${k}: ${this.iozenValueToString(v)}`);
+        return `{ ${entries.join(', ')} }`;
+      }
       if ((value as IOZENObject).__iozen_type === 'object') {
         const obj = value as IOZENObject;
         const fields = Object.entries(obj)
           .filter(([k]) => !k.startsWith('__'))
           .map(([k, v]) => `${k}: ${this.iozenValueToString(v)}`);
         return `${obj.__class_name} { ${fields.join(', ')} }`;
+      }
+      if ((value as IOZENFunction).__iozen_type === 'function') {
+        return `<function ${(value as IOZENFunction).name}>`;
       }
       return JSON.stringify(value);
     }
@@ -896,6 +1004,8 @@ export class Interpreter {
     'ord', 'chr', 'to_integer', 'int', 'to_float', 'to_text',
     'push', 'pop', 'sort', 'reverse', 'length', 'range', 'sum',
     'read_line', 'read_file',
+    'map', 'remove', 'remove_last', 'type_of',
+    'has_key', 'get_key', 'set_key', 'keys',
   ];
 
   private suggestSimilar(name: string): string | null {

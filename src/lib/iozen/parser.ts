@@ -1018,7 +1018,7 @@ export class Parser {
       TokenType.Integer, TokenType.Float, TokenType.Boolean,
       TokenType.Character, TokenType.Text, TokenType.Pointer,
       TokenType.Address, TokenType.Nothing, TokenType.List,
-      TokenType.Optional, TokenType.Result,
+      TokenType.Optional, TokenType.Result, TokenType.Map,
     ].includes(this.peek().type);
   }
 

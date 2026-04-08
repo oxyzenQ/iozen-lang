@@ -27,6 +27,7 @@ export enum TokenType {
   List = 'List',
   Optional = 'Optional',
   Result = 'Result',
+  Map = 'Map',
 
   // --- Statement keywords ---
   Create = 'Create',
@@ -164,6 +165,7 @@ export const KEYWORDS: Record<string, TokenType> = {
   'list': TokenType.List,
   'optional': TokenType.Optional,
   'result': TokenType.Result,
+  'map': TokenType.Map,
 
   // Statements
   'create': TokenType.Create,

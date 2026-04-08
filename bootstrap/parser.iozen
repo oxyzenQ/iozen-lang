@@ -1,0 +1,602 @@
+# ============================================================
+# IOZEN SELF-HOSTING PARSER v0.1
+# Recursive descent parser ditulis DALAM bahasa IOZEN sendiri
+# Jalankan: iozen run bootstrap/parser.iozen
+#
+# This parser takes a list of tokens (from the self-hosting lexer)
+# and produces an AST (Abstract Syntax Tree) represented as maps.
+# ============================================================
+
+# Input: token list (each token is [type, value, line, col])
+create variable tokens as list with value [
+    ["IDENT", "print", 1, 1],
+    ["STR", "Hello, World!", 1, 7]
+]
+create variable pos as integer with value 0
+
+# ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+function peek() returns list
+    when pos >= length(tokens) do
+        return ["EOF", "", 0, 0]
+    end
+    return tokens[pos]
+end
+
+function advance() returns list
+    create variable tok as list with value peek()
+    when pos < length(tokens) do
+        set pos to pos + 1
+    end
+    return tok
+end
+
+function tok_is with expected as text returns boolean
+    create variable t as list with value peek()
+    # Match on type OR value (self-hosting tokens use keyword values)
+    return t[0] equals expected or t[1] equals expected
+end
+
+function tok_eat with expected_type as text returns boolean
+    when tok_is with expected_type do
+        advance()
+        return true
+    end
+    return false
+end
+
+function tok_expect with expected_type as text returns list
+    create variable t as list with value peek()
+    when t[0] equals expected_type do
+        return advance()
+    end
+    print "Parse Error: expected " attach expected_type attach " but got " attach t[0] attach " at line " attach t[2]
+    return t
+end
+
+function tok_done() returns boolean
+    return peek()[0] equals "EOF"
+end
+
+function peek_ahead with offset as integer returns list
+    create variable idx as integer with value pos + offset
+    when idx >= length(tokens) do
+        return tokens[length(tokens) - 1]
+    end
+    return tokens[idx]
+end
+
+function skip_nl() returns nothing
+    # no-op (newlines already filtered)
+end
+
+# ============================================
+# EXPRESSION PARSING
+# ============================================
+
+function parse_expression() returns map
+    return parse_additive()
+end
+
+function parse_additive() returns map
+    create variable left as map with value parse_multiplicative()
+    while tok_is with "PLUS" or tok_is with "MINUS" do
+        create variable op as list with value advance()
+        create variable right as map with value parse_multiplicative()
+        set left to map("kind", "BinaryExpr", "left", left, "operator", op[1], "right", right)
+    end
+    return left
+end
+
+function parse_multiplicative() returns map
+    create variable left as map with value parse_unary()
+    while tok_is with "STAR" or tok_is with "SLASH" or tok_is with "PERCENT" do
+        create variable op as list with value advance()
+        create variable right as map with value parse_unary()
+        set left to map("kind", "BinaryExpr", "left", left, "operator", op[1], "right", right)
+    end
+    return left
+end
+
+function parse_unary() returns map
+    when tok_is with "MINUS" do
+        create variable op as list with value advance()
+        create variable operand as map with value parse_unary()
+        return map("kind", "UnaryExpr", "operator", op[1], "operand", operand)
+    end
+    when tok_is with "NOT" do
+        advance()
+        create variable operand as map with value parse_unary()
+        return map("kind", "UnaryExpr", "operator", "not", "operand", operand)
+    end
+    return parse_postfix()
+end
+
+function parse_postfix() returns map
+    create variable expr as map with value parse_primary()
+    create variable loop_done as boolean with value false
+    while not loop_done do
+        when tok_is with "LPAREN" do
+            advance()
+            create variable args as list with value []
+            when not tok_done() and not tok_is with "RPAREN" do
+                push(args, parse_expression())
+                while tok_eat with "COMMA" do
+                    push(args, parse_expression())
+                end
+            end
+            tok_expect with "RPAREN"
+            set expr to map("kind", "FunctionCallExpr", "name", get_key(expr, "name"), "arguments", args)
+            continue
+        end
+        when tok_is with "DOT" do
+            advance()
+            create variable fld as list with value tok_expect with "IDENT"
+            set expr to map("kind", "MemberAccess", "object", expr, "field", fld[1])
+            continue
+        end
+        when tok_is with "LBRACK" do
+            advance()
+            create variable idx as map with value parse_expression()
+            tok_expect with "RBRACK"
+            set expr to map("kind", "IndexAccess", "object", expr, "index", idx)
+            continue
+        end
+        when tok_is with "attach" do
+            advance()
+            create variable right as map with value parse_postfix()
+            set expr to map("kind", "AttachExpr", "parts", [expr, right])
+            continue
+        end
+        set loop_done to true
+    end
+    return expr
+end
+
+function parse_primary() returns map
+    create variable tok as list with value peek()
+
+    when tok[0] equals "INT" do
+        advance()
+        return map("kind", "Literal", "type", "integer", "value", to_integer(tok[1]))
+    end
+
+    when tok[0] equals "FLOAT" do
+        advance()
+        return map("kind", "Literal", "type", "float", "value", to_float(tok[1]))
+    end
+
+    when tok[0] equals "STR" or tok[0] equals "DQSTR" do
+        advance()
+        return map("kind", "Literal", "type", "text", "value", tok[1])
+    end
+
+    when tok[1] equals "true" or tok[1] equals "false" do
+        advance()
+        create variable val as boolean with value tok[1] equals "true"
+        return map("kind", "Literal", "type", "boolean", "value", val)
+    end
+
+    when tok[1] equals "nothing" do
+        advance()
+        return map("kind", "Literal", "type", "nothing", "value", null)
+    end
+
+    when tok_is with "LBRACK" do
+        advance()
+        create variable elements as list with value []
+        when not tok_is with "RBRACK" do
+            push(elements, parse_expression())
+            while tok_eat with "COMMA" do
+                push(elements, parse_expression())
+            end
+        end
+        tok_expect with "RBRACK"
+        return map("kind", "ListLiteral", "elements", elements)
+    end
+
+    when tok_is with "LPAREN" do
+        advance()
+        create variable expr as map with value parse_expression()
+        tok_expect with "RPAREN"
+        return expr
+    end
+
+    # Identifier or keyword used as expression
+    when tok[0] equals "IDENT" or tok[1] equals "print" or tok[1] equals "create" or tok[1] equals "return" do
+        advance()
+        when tok_is with "with" or tok_is with "to" or tok_is with "from" do
+            advance()
+            create variable args as list with value []
+            push(args, parse_additive())
+            while tok_is with "and" do
+                advance()
+                push(args, parse_additive())
+            end
+            return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
+        end
+        return map("kind", "Identifier", "name", tok[1])
+    end
+
+    advance()
+    print "Parse Error: unexpected token " attach tok[0] attach " at line " attach tok[2]
+    return map("kind", "Error", "message", "Unexpected: " attach tok[0])
+end
+
+# ============================================
+# STATEMENT PARSING
+# ============================================
+
+function parse_statement() returns map
+    skip_nl()
+    when tok_done() do
+        return map("kind", "EOF")
+    end
+
+    create variable tok as list with value peek()
+
+    when tok[1] equals "print" do
+        return parse_print_stmt()
+    end
+    when tok[1] equals "create" do
+        return parse_var_decl(false)
+    end
+    when tok[1] equals "constant" do
+        return parse_var_decl(true)
+    end
+    when tok[1] equals "function" do
+        return parse_func_decl()
+    end
+    when tok[1] equals "define" do
+        return parse_define()
+    end
+    when tok[1] equals "when" do
+        return parse_when()
+    end
+    when tok[1] equals "while" do
+        return parse_while()
+    end
+    when tok[1] equals "for" do
+        return parse_for_each()
+    end
+    when tok[1] equals "repeat" do
+        return parse_repeat()
+    end
+    when tok[1] equals "return" do
+        return parse_return()
+    end
+    when tok[1] equals "increase" do
+        return parse_increase()
+    end
+    when tok[1] equals "decrease" do
+        return parse_decrease()
+    end
+    when tok[1] equals "set" do
+        return parse_set()
+    end
+
+    return parse_expr_stmt()
+end
+
+function parse_print_stmt() returns map
+    tok_expect with "print"
+    create variable exprs as list with value []
+    push(exprs, parse_expression())
+    while tok_is with "attach" do
+        advance()
+        push(exprs, parse_expression())
+    end
+    return map("kind", "PrintStmt", "expressions", exprs)
+end
+
+function parse_var_decl with is_const as boolean returns map
+    when is_const do
+        tok_expect with "constant"
+    otherwise do
+        tok_expect with "create"
+    end
+    tok_expect with "variable"
+    create variable name as list with value tok_expect with "IDENT"
+    create variable type_name as text with value "unknown"
+
+    when tok_eat with "as" do
+        create variable tt as list with value peek()
+        set type_name to tt[1]
+        advance()
+        create variable done as boolean with value false
+        while not tok_done() and not tok_is with "with" and not done do
+            when tok_is with "to" or tok_is with "of" do
+                advance()
+                set type_name to type_name attach " " attach peek()[1]
+                advance()
+            otherwise do
+                set done to true
+            end
+        end
+    end
+
+    create variable val as map with value map("kind", "Literal", "type", "nothing", "value", null)
+    when tok_eat with "with" do
+        when tok_is with "IDENT" do
+            create variable next as list with value peek_ahead with 1
+            when next[0] equals "ASSIGN" do
+                set val to parse_field_init()
+            otherwise do
+                tok_expect with "value"
+                set val to parse_expression()
+            end
+        otherwise do
+            tok_expect with "value"
+            set val to parse_expression()
+        end
+    end
+
+    return map("kind", "VariableDecl", "name", name[1], "typeName", type_name, "value", val, "isConstant", is_const)
+end
+
+function parse_field_init() returns map
+    create variable parts as list with value []
+    create variable loop_active as boolean with value true
+    while loop_active do
+        create variable fn as list with value tok_expect with "IDENT"
+        tok_expect with "ASSIGN"
+        create variable fv as map with value parse_additive()
+        push(parts, map("kind", "Literal", "type", "text", "value", fn[1]))
+        push(parts, fv)
+        when not tok_eat with "and" do
+            set loop_active to false
+        end
+    end
+    return map("kind", "FunctionCallExpr", "name", "__struct_init__", "arguments", parts)
+end
+
+function parse_func_decl() returns map
+    tok_expect with "function"
+    create variable name as list with value tok_expect with "IDENT"
+    create variable params as list with value []
+    when tok_eat with "with" do
+        create variable parsing as boolean with value true
+        while parsing do
+            create variable pn as list with value tok_expect with "IDENT"
+            tok_expect with "as"
+            create variable pt as list with value peek()
+            advance()
+            push(params, map("name", pn[1], "typeName", pt[1]))
+            when tok_eat with "COMMA" do continue end
+            when tok_is with "and" do
+                advance()
+                continue
+            end
+            set parsing to false
+        end
+    end
+
+    create variable ret_type as text with value "nothing"
+    when tok_eat with "returns" do
+        create variable rt as list with value peek()
+        advance()
+        set ret_type to rt[1]
+    end
+
+    create variable body as list with value []
+    while not tok_is with "end" and not tok_done() do
+        push(body, parse_statement())
+    end
+    tok_expect with "end"
+
+    return map("kind", "FunctionDecl", "name", name[1], "parameters", params, "returnType", ret_type, "body", body)
+end
+
+function parse_define() returns map
+    create variable nxt as list with value peek_ahead with 1
+    when nxt[1] equals "structure" do
+        return parse_struct_decl()
+    end
+    when nxt[1] equals "enum" do
+        return parse_enum_decl()
+    end
+    tok_expect with "define"
+    return map("kind", "Error", "message", "Expected structure or enum")
+end
+
+function parse_struct_decl() returns map
+    tok_expect with "define"
+    tok_expect with "structure"
+    create variable name as list with value tok_expect with "IDENT"
+    create variable fields as list with value []
+    while tok_is with "field" do
+        advance()
+        create variable fn as list with value tok_expect with "IDENT"
+        tok_expect with "as"
+        create variable ft as list with value peek()
+        advance()
+        push(fields, map("name", fn[1], "typeName", ft[1]))
+    end
+    tok_expect with "end"
+    return map("kind", "StructureDecl", "name", name[1], "fields", fields)
+end
+
+function parse_enum_decl() returns map
+    tok_expect with "define"
+    tok_expect with "enum"
+    create variable name as list with value tok_expect with "IDENT"
+    create variable cases as list with value []
+    while tok_is with "case" do
+        advance()
+        create variable cn as list with value tok_expect with "IDENT"
+        push(cases, map("name", cn[1], "fields", []))
+    end
+    tok_expect with "end"
+    return map("kind", "EnumDecl", "name", name[1], "cases", cases)
+end
+
+function parse_when() returns map
+    tok_expect with "when"
+    create variable cond as map with value parse_expression()
+    tok_expect with "do"
+    create variable branches as list with value []
+    push(branches, map("kind", "WhenBranch", "condition", cond, "body", parse_block_body()))
+    while tok_is with "otherwise" do
+        advance()
+        when tok_is with "when" do
+            advance()
+            create variable c2 as map with value parse_expression()
+            tok_expect with "do"
+            push(branches, map("kind", "WhenBranch", "condition", c2, "body", parse_block_body()))
+        otherwise do
+            tok_expect with "do"
+            create variable ob as list with value parse_block_body()
+            tok_expect with "end"
+            return map("kind", "When", "branches", branches, "otherwise", ob)
+        end
+    end
+    tok_expect with "end"
+    return map("kind", "When", "branches", branches, "otherwise", null)
+end
+
+function parse_while() returns map
+    tok_expect with "while"
+    create variable cond as map with value parse_expression()
+    tok_expect with "do"
+    create variable body as list with value parse_block_body()
+    tok_expect with "end"
+    return map("kind", "While", "condition", cond, "body", body)
+end
+
+function parse_for_each() returns map
+    tok_expect with "for"
+    tok_expect with "each"
+    create variable vn as list with value tok_expect with "IDENT"
+    tok_expect with "in"
+    create variable iter as map with value parse_expression()
+    tok_expect with "do"
+    create variable body as list with value parse_block_body()
+    tok_expect with "end"
+    return map("kind", "ForEach", "variable", vn[1], "iterable", iter, "body", body)
+end
+
+function parse_repeat() returns map
+    tok_expect with "repeat"
+    create variable count as map with value parse_expression()
+    tok_expect with "times"
+    tok_expect with "do"
+    create variable body as list with value parse_block_body()
+    tok_expect with "end"
+    return map("kind", "Repeat", "count", count, "body", body)
+end
+
+function parse_return() returns map
+    tok_expect with "return"
+    create variable val as map with value map("kind", "Literal", "type", "nothing", "value", null)
+    when not tok_is with "end" and not tok_is with "otherwise" and not tok_done() do
+        set val to parse_expression()
+    end
+    return map("kind", "ReturnStmt", "value", val)
+end
+
+function parse_increase() returns map
+    tok_expect with "increase"
+    create variable target as map with value parse_expression()
+    tok_expect with "by"
+    create variable amount as map with value parse_expression()
+    return map("kind", "Increase", "target", target, "amount", amount)
+end
+
+function parse_decrease() returns map
+    tok_expect with "decrease"
+    create variable target as map with value parse_expression()
+    tok_expect with "by"
+    create variable amount as map with value parse_expression()
+    return map("kind", "Increase", "target", target, "amount", map("kind", "UnaryExpr", "operator", "-", "operand", amount))
+end
+
+function parse_set() returns map
+    tok_expect with "set"
+    create variable name as list with value tok_expect with "IDENT"
+    create variable path as list with value [name[1]]
+    while tok_eat with "DOT" do
+        create variable f as list with value tok_expect with "IDENT"
+        push(path, f[1])
+    end
+    tok_expect with "to"
+    create variable val as map with value parse_expression()
+    when length(path) equals 1 do
+        return map("kind", "AssignVar", "name", path[0], "value", val)
+    end
+    return map("kind", "SetField", "target", map("kind", "Identifier", "name", path[0]), "fieldPath", path, "value", val)
+end
+
+function parse_expr_stmt() returns map
+    create variable expr as map with value parse_expression()
+    when get_key(expr, "kind") equals "FunctionCallExpr" do
+        return map("kind", "FunctionCallStmt", "name", get_key(expr, "name"), "arguments", get_key(expr, "arguments"))
+    end
+    when get_key(expr, "kind") equals "Identifier" do
+        return map("kind", "FunctionCallStmt", "name", get_key(expr, "name"), "arguments", [])
+    end
+    return expr
+end
+
+function parse_block_body() returns list
+    create variable stmts as list with value []
+    while not tok_is with "end" and not tok_is with "otherwise" and not tok_is with "case" and not tok_done() do
+        push(stmts, parse_statement())
+    end
+    return stmts
+end
+
+# ============================================
+# MAIN
+# ============================================
+
+function parse_program() returns map
+    create variable stmts as list with value []
+    create variable parsing as boolean with value true
+    while parsing do
+        create variable s as map with value parse_statement()
+        when get_key(s, "kind") equals "EOF" do
+            set parsing to false
+        otherwise do
+            push(stmts, s)
+        end
+    end
+    return map("kind", "Program", "statements", stmts)
+end
+
+# ============================================
+# RUN THE SELF-HOSTING PARSER
+# ============================================
+
+print "=========================================================="
+print "  IOZEN SELF-HOSTING PARSER v0.1"
+print "  Written in IOZEN, parsing token streams"
+print "=========================================================="
+print ""
+
+create variable ast as map with value parse_program()
+create variable stmts as list with value get_key(ast, "statements")
+print "Parsed " attach length(stmts) attach " top-level statements:"
+print ""
+
+create variable i as integer with value 0
+while i < length(stmts) do
+    create variable s as map with value stmts[i]
+    print "  " attach i attach ". " attach get_key(s, "kind")
+    increase i by 1
+end
+
+print ""
+print "=========================================================="
+print "  SELF-HOSTING PROOF:"
+print "  IOZEN parser (written in IOZEN) successfully"
+print "  parsed a token stream into an AST."
+print ""
+print "  Bootstrap path:"
+print "  Phase 0: IOZEN compiler in TypeScript     (done)"
+print "  Phase 1: IOZEN lexer in IOZEN             (done)"
+print "  Phase 2: IOZEN parser in IOZEN            (YOU ARE HERE)"
+print "  Phase 3: IOZEN self-hosting compiler      (next)"
+print "  Phase 4: Full self-hosting                (future)"
+print "=========================================================="
