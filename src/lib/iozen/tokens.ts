@@ -77,6 +77,11 @@ export enum TokenType {
   LessOrEqual = 'LessOrEqual',
   GreaterOrEqual = 'GreaterOrEqual',
   Assign = 'Assign',
+  PlusAssign = 'PlusAssign',
+  MinusAssign = 'MinusAssign',
+  StarAssign = 'StarAssign',
+  SlashAssign = 'SlashAssign',
+  PercentAssign = 'PercentAssign',
 
   // --- Type qualifiers ---
   As = 'As',
@@ -289,6 +294,11 @@ export const SYMBOLS: Record<string, TokenType> = {
   '->': TokenType.Arrow,
   '|>': TokenType.Pipe,
   '#': TokenType.Hash,
+  '+=': TokenType.PlusAssign,
+  '-=': TokenType.MinusAssign,
+  '*=': TokenType.StarAssign,
+  '/=': TokenType.SlashAssign,
+  '%=': TokenType.PercentAssign,
 };
 
 export function tokenToString(token: Token): string {

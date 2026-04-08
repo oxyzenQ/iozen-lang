@@ -33,6 +33,10 @@ export type ASTNode =
   | MemberAccessNode
   | IndexAccessNode
   | ListLiteralNode
+  | MapLiteralNode
+  | ListCompNode
+  | TernaryExprNode
+  | CompoundAssignNode
   | ForceUnwrapNode
   | OrDefaultNode
   | HasValueNode
@@ -254,6 +258,32 @@ export interface IndexAccessNode {
 export interface ListLiteralNode {
   kind: 'ListLiteral';
   elements: ASTNode[];
+}
+
+export interface MapLiteralNode {
+  kind: 'MapLiteral';
+  entries: { key: ASTNode; value: ASTNode }[];
+}
+
+export interface ListCompNode {
+  kind: 'ListComp';
+  expression: ASTNode;
+  variable: string;
+  iterable: ASTNode;
+}
+
+export interface TernaryExprNode {
+  kind: 'TernaryExpr';
+  condition: ASTNode;
+  thenExpr: ASTNode;
+  elseExpr: ASTNode;
+}
+
+export interface CompoundAssignNode {
+  kind: 'CompoundAssign';
+  name: string;
+  operator: string;
+  value: ASTNode;
 }
 
 export interface ForceUnwrapNode {

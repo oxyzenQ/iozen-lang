@@ -16,7 +16,8 @@ import type {
   LiteralNode, FunctionCallExprNode, MemberAccessNode,
   IndexAccessNode, ListLiteralNode, HasValueNode, ValueInsideNode,
   LambdaNode, ExitNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
-  PipelineExprNode, DestructureNode,
+  PipelineExprNode, DestructureNode, MapLiteralNode, ListCompNode,
+  TernaryExprNode, CompoundAssignNode,
 } from './ast';
 
 // Special signal to unwind the call stack for return/exit
@@ -161,6 +162,9 @@ export class Interpreter {
         break;
       case 'Block':
         this.executeBlock(node.statements, env);
+        break;
+      case 'CompoundAssign':
+        this.execCompoundAssign(node as CompoundAssignNode, env);
         break;
       default:
         // If it's an expression, evaluate it (side effects)
@@ -691,6 +695,23 @@ export class Interpreter {
           throw e;
         }
       }
+    } else if (typeof iterable === 'object' && iterable !== null && !Array.isArray(iterable) && (iterable as IOZENMap).__iozen_type === 'map') {
+      // Map iteration: for each key, value in my_map
+      const mapObj = iterable as Record<string, IOZENValue>;
+      const childEnv = env.child();
+      for (const [key, val] of Object.entries(mapObj)) {
+        if (key.startsWith('__')) continue;
+        childEnv.define(node.variable, key);
+        if (node.indexVariable) {
+          childEnv.define(node.indexVariable, val);
+        }
+        try {
+          this.executeBlock(node.body, childEnv);
+        } catch (e) {
+          if (e instanceof ExitSignal) { if (!e.target) break; throw e; }
+          throw e;
+        }
+      }
     } else {
       throw new RuntimeError(`Cannot iterate over ${typeof iterable}`, ...this.findNodeLine('for each'));
     }
@@ -726,6 +747,34 @@ export class Interpreter {
   private execAssignVar(node: AssignVarNode, env: Environment): void {
     const value = this.evaluate(node.value, env);
     env.set(node.name, value);
+  }
+
+  private execCompoundAssign(node: CompoundAssignNode, env: Environment): void {
+    const current = env.get(node.name);
+    const rhs = this.evaluate(node.value, env);
+    let result: IOZENValue;
+    switch (node.operator) {
+      case '+=':
+        if (typeof current === 'string' || typeof rhs === 'string') {
+          result = String(current) + String(rhs);
+        } else {
+          result = this.toNumber(current) + this.toNumber(rhs);
+        }
+        break;
+      case '-=': result = this.toNumber(current) - this.toNumber(rhs); break;
+      case '*=':
+        if (typeof current === 'string' && typeof rhs === 'number') {
+          result = String(current).repeat(Math.max(0, Math.floor(rhs)));
+        } else {
+          result = this.toNumber(current) * this.toNumber(rhs);
+        }
+        break;
+      case '/=': result = this.toNumber(current) / this.toNumber(rhs); break;
+      case '%=': result = this.toNumber(current) % this.toNumber(rhs); break;
+      default: result = null;
+    }
+    env.set(node.name, result);
+    this.env.define('__last_result__', result);
   }
 
   private execFunctionCallStmt(node: FunctionCallStmtNode, env: Environment): void {
@@ -797,6 +846,52 @@ export class Interpreter {
         return l.elements.map(el => this.evaluate(el, env));
       }
 
+      case 'MapLiteral': {
+        const m = node as MapLiteralNode;
+        const mapObj: Record<string, IOZENValue> = { __iozen_type: 'map' as const };
+        for (const entry of m.entries) {
+          const key = String(this.evaluate(entry.key, env));
+          mapObj[key] = this.evaluate(entry.value, env);
+        }
+        this.env.define('__last_result__', mapObj);
+        return mapObj;
+      }
+
+      case 'ListComp': {
+        const lc = node as ListCompNode;
+        const iterable = this.evaluate(lc.iterable, env);
+        const result: IOZENValue[] = [];
+        if (Array.isArray(iterable)) {
+          for (const item of iterable) {
+            const childEnv = env.child();
+            childEnv.define(lc.variable, item);
+            result.push(this.evaluate(lc.expression, childEnv));
+          }
+        } else if (typeof iterable === 'string') {
+          for (const ch of iterable) {
+            const childEnv = env.child();
+            childEnv.define(lc.variable, ch);
+            result.push(this.evaluate(lc.expression, childEnv));
+          }
+        } else if (typeof iterable === 'object' && iterable !== null && !Array.isArray(iterable) && (iterable as IOZENMap).__iozen_type === 'map') {
+            for (const [key, val] of Object.entries(iterable as Record<string, IOZENValue>)) {
+              if (key.startsWith('__')) continue;
+              const childEnv = env.child();
+              childEnv.define(lc.variable, val);
+              result.push(this.evaluate(lc.expression, childEnv));
+            }
+          }
+        this.env.define('__last_result__', result);
+        return result;
+      }
+
+      case 'TernaryExpr': {
+        const t = node as TernaryExprNode;
+        return this.isTruthy(this.evaluate(t.condition, env))
+          ? this.evaluate(t.thenExpr, env)
+          : this.evaluate(t.elseExpr, env);
+      }
+
       case 'HasValue': {
         const h = node as HasValueNode;
         const val = this.evaluate(h.expression, env);
@@ -852,7 +947,14 @@ export class Interpreter {
         }
         return this.toNumber(left) + this.toNumber(right);
       case '-': return this.toNumber(left) - this.toNumber(right);
-      case '*': return this.toNumber(left) * this.toNumber(right);
+      case '*':
+        if (typeof left === 'string' && typeof right === 'number') {
+          return String(left).repeat(Math.max(0, Math.floor(right)));
+        }
+        if (typeof left === 'number' && typeof right === 'string') {
+          return String(right).repeat(Math.max(0, Math.floor(left)));
+        }
+        return this.toNumber(left) * this.toNumber(right);
       case '/':
         if (this.toNumber(right) === 0) throw new RuntimeError('Division by zero', ...this.findNodeLine('/'));
         return this.toNumber(left) / this.toNumber(right);
@@ -2048,6 +2150,205 @@ export class Interpreter {
         }
       }
       this.env.define('__last_result__', parts.join(separator));
+      return true;
+    }
+
+    // ---- Additional math constants ----
+    if (n === 'pi' && args.length === 0) {
+      this.env.define('__last_result__', Math.PI);
+      return true;
+    }
+    if (n === 'e' && args.length === 0) {
+      this.env.define('__last_result__', Math.E);
+      return true;
+    }
+    if (n === 'trunc' && args.length >= 1) {
+      this.env.define('__last_result__', Math.trunc(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'mod' && args.length >= 2) {
+      this.env.define('__last_result__', this.toNumber(args[0]) % this.toNumber(args[1]));
+      return true;
+    }
+    if (n === 'log2' && args.length >= 1) {
+      this.env.define('__last_result__', Math.log2(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'atan' && args.length >= 1) {
+      this.env.define('__last_result__', Math.atan(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'asin' && args.length >= 1) {
+      this.env.define('__last_result__', Math.asin(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'acos' && args.length >= 1) {
+      this.env.define('__last_result__', Math.acos(this.toNumber(args[0])));
+      return true;
+    }
+    if (n === 'sign' && args.length >= 1) {
+      const v = this.toNumber(args[0]);
+      this.env.define('__last_result__', v > 0 ? 1 : v < 0 ? -1 : 0);
+      return true;
+    }
+    if (n === 'gcd' && args.length >= 2) {
+      let a = Math.abs(Math.floor(this.toNumber(args[0])));
+      let b = Math.abs(Math.floor(this.toNumber(args[1])));
+      while (b !== 0) { [a, b] = [b, a % b]; }
+      this.env.define('__last_result__', a);
+      return true;
+    }
+    if (n === 'lcm' && args.length >= 2) {
+      let a = Math.abs(Math.floor(this.toNumber(args[0])));
+      let b = Math.abs(Math.floor(this.toNumber(args[1])));
+      const g = (x: number, y: number) => { while (y !== 0) { [x, y] = [y, x % y]; } return x; };
+      this.env.define('__last_result__', (a / g(a, b)) * b);
+      return true;
+    }
+
+    // ---- Additional list builtins ----
+    if (n === 'take' && args.length >= 2 && Array.isArray(args[0])) {
+      const count = Math.max(0, Math.floor(this.toNumber(args[1])));
+      this.env.define('__last_result__', (args[0] as IOZENValue[]).slice(0, count));
+      return true;
+    }
+    if (n === 'drop' && args.length >= 2 && Array.isArray(args[0])) {
+      const count = Math.max(0, Math.floor(this.toNumber(args[1])));
+      this.env.define('__last_result__', (args[0] as IOZENValue[]).slice(count));
+      return true;
+    }
+    if (n === 'count' && args.length >= 2) {
+      const arr = args[0];
+      const target = args[1];
+      if (Array.isArray(arr)) {
+        let c = 0;
+        for (const item of arr) { if (item === target) c++; }
+        this.env.define('__last_result__', c);
+      } else if (typeof arr === 'string') {
+        let c = 0;
+        const sub = String(target);
+        for (const ch of arr) { if (ch === sub) c++; }
+        this.env.define('__last_result__', c);
+      } else {
+        this.env.define('__last_result__', 0);
+      }
+      return true;
+    }
+    if (n === 'cycle' && args.length >= 2 && Array.isArray(args[0])) {
+      const arr = args[0] as IOZENValue[];
+      const times = Math.max(0, Math.floor(this.toNumber(args[1])));
+      const result: IOZENValue[] = [];
+      for (let i = 0; i < times; i++) result.push(...arr);
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'is_empty' && args.length >= 1) {
+      const v = args[0];
+      if (v === null || v === undefined) { this.env.define('__last_result__', true); return true; }
+      if (typeof v === 'string') { this.env.define('__last_result__', v.length === 0); return true; }
+      if (Array.isArray(v)) { this.env.define('__last_result__', v.length === 0); return true; }
+      if (typeof v === 'object' && (v as IOZENMap).__iozen_type === 'map') {
+        this.env.define('__last_result__', Object.keys(v).filter(k => !k.startsWith('__')).length === 0);
+        return true;
+      }
+      this.env.define('__last_result__', false);
+      return true;
+    }
+    if (n === 'not_empty' && args.length >= 1) {
+      const v = args[0];
+      if (v === null || v === undefined) { this.env.define('__last_result__', false); return true; }
+      if (typeof v === 'string') { this.env.define('__last_result__', v.length > 0); return true; }
+      if (Array.isArray(v)) { this.env.define('__last_result__', v.length > 0); return true; }
+      if (typeof v === 'object' && (v as IOZENMap).__iozen_type === 'map') {
+        this.env.define('__last_result__', Object.keys(v).filter(k => !k.startsWith('__')).length > 0);
+        return true;
+      }
+      this.env.define('__last_result__', true);
+      return true;
+    }
+    if (n === 'find_index' && args.length >= 2) {
+      const arr = args[0];
+      const target = args[1];
+      if (Array.isArray(arr)) {
+        this.env.define('__last_result__', arr.indexOf(target));
+      } else if (typeof arr === 'string') {
+        this.env.define('__last_result__', String(arr).indexOf(String(target)));
+      } else {
+        this.env.define('__last_result__', -1);
+      }
+      return true;
+    }
+    if (n === 'nth' && args.length >= 2 && Array.isArray(args[0])) {
+      const idx = Math.floor(this.toNumber(args[1]));
+      const arr = args[0] as IOZENValue[];
+      this.env.define('__last_result__', idx >= 0 && idx < arr.length ? arr[idx] : null);
+      return true;
+    }
+    if (n === 'compact' && args.length >= 1 && Array.isArray(args[0])) {
+      this.env.define('__last_result__', (args[0] as IOZENValue[]).filter(v => v !== null && v !== undefined));
+      return true;
+    }
+    if (n === 'zip' && args.length >= 2 && Array.isArray(args[0]) && Array.isArray(args[1])) {
+      const a = args[0] as IOZENValue[];
+      const b = args[1] as IOZENValue[];
+      const result: IOZENValue[] = [];
+      const len = Math.min(a.length, b.length);
+      for (let i = 0; i < len; i++) result.push([a[i], b[i]]);
+      this.env.define('__last_result__', result);
+      return true;
+    }
+    if (n === 'slice' && args.length >= 2) {
+      const arr = args[0];
+      const start = Math.floor(this.toNumber(args[1]));
+      const end = args.length >= 3 ? Math.floor(this.toNumber(args[2])) : undefined;
+      if (Array.isArray(arr)) { this.env.define('__last_result__', arr.slice(start, end)); return true; }
+      if (typeof arr === 'string') { this.env.define('__last_result__', String(arr).slice(start, end)); return true; }
+      this.env.define('__last_result__', null);
+      return true;
+    }
+    if (n === 'has' && args.length >= 2) {
+      const arr = args[0];
+      const target = args[1];
+      if (Array.isArray(arr)) { this.env.define('__last_result__', arr.includes(target)); return true; }
+      if (typeof arr === 'string') { this.env.define('__last_result__', String(arr).includes(String(target))); return true; }
+      this.env.define('__last_result__', false);
+      return true;
+    }
+    if (n === 'at' && args.length >= 2) {
+      const arr = args[0];
+      const idx = Math.floor(this.toNumber(args[1]));
+      if (Array.isArray(arr)) { this.env.define('__last_result__', idx >= 0 && idx < arr.length ? arr[idx] : null); return true; }
+      if (typeof arr === 'string') { this.env.define('__last_result__', arr[idx] !== undefined ? arr[idx] : null); return true; }
+      this.env.define('__last_result__', null);
+      return true;
+    }
+
+    // ---- Additional string builtins ----
+    if (n === 'words' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).split(/\s+/).filter(Boolean));
+      return true;
+    }
+    if (n === 'reverse_string' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).split('').reverse().join(''));
+      return true;
+    }
+    if (n === 'repeat' && args.length >= 2) {
+      this.env.define('__last_result__', String(args[0]).repeat(Math.max(0, Math.floor(this.toNumber(args[1])))));
+      return true;
+    }
+    if (n === 'strip' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).trim());
+      return true;
+    }
+    if (n === 'to_map' && args.length >= 1 && Array.isArray(args[0])) {
+      const pairs = args[0] as IOZENValue[];
+      const m: IOZENValue = { __iozen_type: 'map' as const };
+      for (const pair of pairs) {
+        if (Array.isArray(pair) && pair.length >= 2) {
+          (m as Record<string, IOZENValue>)[String(pair[0])] = pair[1];
+        }
+      }
+      this.env.define('__last_result__', m);
       return true;
     }
 

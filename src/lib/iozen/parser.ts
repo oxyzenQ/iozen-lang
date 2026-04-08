@@ -12,7 +12,8 @@ import type {
   WhileNode, ForEachNode, LabelNode, ExitNode, IncreaseNode,
   SetFieldNode, FunctionCallStmtNode, BlockNode, BinaryExprNode,
   UnaryExprNode, AttachExprNode, IdentifierNode, LiteralNode,
-  FunctionCallExprNode, MemberAccessNode, ListLiteralNode,
+  FunctionCallExprNode, MemberAccessNode, ListLiteralNode, MapLiteralNode,
+  ListCompNode, TernaryExprNode, CompoundAssignNode,
   ForceUnwrapNode, OrDefaultNode, HasValueNode, ValueInsideNode,
   LambdaNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
   PipelineExprNode, DestructureNode,
@@ -752,6 +753,23 @@ export class Parser {
   }
 
   private parseExpressionStatement(): ASTNode | null {
+    // Check for compound assignment: identifier += expr, etc.
+    if (this.peek().type === TokenType.Identifier && !this.isAtEnd()) {
+      const nextTok = this.peekAt(1);
+      if (nextTok && (
+        nextTok.type === TokenType.PlusAssign ||
+        nextTok.type === TokenType.MinusAssign ||
+        nextTok.type === TokenType.StarAssign ||
+        nextTok.type === TokenType.SlashAssign ||
+        nextTok.type === TokenType.PercentAssign
+      )) {
+        const name = this.advance().value;
+        const opTok = this.advance();
+        const value = this.parseExpression();
+        return { kind: 'CompoundAssign', name, operator: opTok.value, value } as CompoundAssignNode;
+      }
+    }
+
     // Could be a function call statement
     const expr = this.parseExpression();
 
@@ -1052,6 +1070,19 @@ export class Parser {
     return expr;
   }
 
+  // Ternary expression (only callable from parenthesized context): expr when condition otherwise default
+  private parseTernary(): ASTNode {
+    let expr = this.parsePipeline();
+    if (this.check(TokenType.When)) {
+      this.advance();
+      const condition = this.parsePipeline();
+      this.consume(TokenType.Otherwise, 'Expected "otherwise" in ternary expression');
+      const elseExpr = this.parseTernary(); // right-associative
+      return { kind: 'TernaryExpr', condition, thenExpr: expr, elseExpr } as TernaryExprNode;
+    }
+    return expr;
+  }
+
   private parsePrimary(): ASTNode {
     const token = this.peek();
 
@@ -1096,15 +1127,20 @@ export class Parser {
       return { kind: 'Literal', type: 'nothing', value: null } as LiteralNode;
     }
 
-    // List literal: [1, 2, 3]
+    // List literal: [1, 2, 3] or list comprehension: [expr for each var in iterable]
     if (token.type === TokenType.LeftBracket) {
       return this.parseListLiteral();
     }
 
-    // Parenthesized expression
+    // Map literal: {key: value, ...}
+    if (token.type === TokenType.LeftBrace) {
+      return this.parseMapLiteral();
+    }
+
+    // Parenthesized expression (also enables ternary: (expr when cond otherwise default))
     if (token.type === TokenType.LeftParen) {
       this.advance();
-      const expr = this.parseExpression();
+      const expr = this.parseTernary();
       this.consume(TokenType.RightParen, 'Expected ")"');
       return expr;
     }
@@ -1260,17 +1296,60 @@ export class Parser {
 
   private parseListLiteral(): ASTNode {
     this.consume(TokenType.LeftBracket, 'Expected "["');
-    const elements: ASTNode[] = [];
 
-    if (!this.check(TokenType.RightBracket)) {
+    // Check for empty list
+    if (this.check(TokenType.RightBracket)) {
+      this.advance();
+      return { kind: 'ListLiteral', elements: [] } as ListLiteralNode;
+    }
+
+    // Parse first expression
+    const firstExpr = this.parseExpression();
+
+    // Check for list comprehension: [expr for each x in list]
+    if (this.check(TokenType.For)) {
+      this.advance(); // consume 'for'
+      this.consume(TokenType.Each, 'Expected "each" in list comprehension');
+      const variable = this.consume(TokenType.Identifier, 'Expected variable name').value;
+      this.consume(TokenType.In, 'Expected "in"');
+      const iterable = this.parseExpression();
+      this.consume(TokenType.RightBracket, 'Expected "]"');
+      return { kind: 'ListComp', expression: firstExpr, variable, iterable } as ListCompNode;
+    }
+
+    // Normal list literal
+    const elements: ASTNode[] = [firstExpr];
+    while (this.match(TokenType.Comma)) {
       elements.push(this.parseExpression());
-      while (this.match(TokenType.Comma)) {
-        elements.push(this.parseExpression());
-      }
     }
 
     this.consume(TokenType.RightBracket, 'Expected "]"');
     return { kind: 'ListLiteral', elements } as ListLiteralNode;
+  }
+
+  private parseMapLiteral(): ASTNode {
+    this.consume(TokenType.LeftBrace, 'Expected "{"');
+
+    const entries: { key: ASTNode; value: ASTNode }[] = [];
+
+    if (!this.check(TokenType.RightBrace)) {
+      // Parse first entry: expression : expression
+      const key = this.parseExpression();
+      this.consume(TokenType.Colon, 'Expected ":" in map literal');
+      const value = this.parseExpression();
+      entries.push({ key, value });
+
+      while (this.match(TokenType.Comma)) {
+        if (this.check(TokenType.RightBrace)) break; // trailing comma
+        const k = this.parseExpression();
+        this.consume(TokenType.Colon, 'Expected ":" in map literal');
+        const v = this.parseExpression();
+        entries.push({ key: k, value: v });
+      }
+    }
+
+    this.consume(TokenType.RightBrace, 'Expected "}"');
+    return { kind: 'MapLiteral', entries } as MapLiteralNode;
   }
 
   private parseArgumentList(): ASTNode[] {
