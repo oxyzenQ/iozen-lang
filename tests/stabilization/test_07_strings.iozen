@@ -1,0 +1,12 @@
+# Test 07: String operations - attach operator
+create variable first as text with value "Hello"
+create variable second as text with value "World"
+create variable combined as text with value first attach ", " attach second
+
+print combined
+
+when combined equals "Hello, World" do
+    print "Test 07: PASS"
+otherwise do
+    print "Test 07: FAIL"
+end

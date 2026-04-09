@@ -1,0 +1,21 @@
+# Test 08: Natural language comparisons
+create variable x as integer with value 10
+create variable y as integer with value 20
+
+when x is less than y do
+    print "less than: OK"
+end
+
+when y is greater than x do
+    print "greater than: OK"
+end
+
+when x equals 10 do
+    print "equals: OK"
+end
+
+when x is less than or equal to 10 do
+    print "less or equal: OK"
+end
+
+print "Test 08: PASS"

@@ -1,0 +1,16 @@
+# Test 06: Recursion - Factorial function
+function factorial with n as integer returns integer
+    when n is less than or equal to 1 do
+        return 1
+    end
+    return n * factorial with n - 1
+end
+
+create variable f5 as integer with value factorial with 5
+print f5
+
+when f5 equals 120 do
+    print "Test 06: PASS"
+otherwise do
+    print "Test 06: FAIL"
+end

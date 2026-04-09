@@ -1,0 +1,18 @@
+# Test 10: Nested control flow - when inside while
+create variable i as integer with value 1
+create variable even_count as integer with value 0
+
+while i is less than or equal to 10 do
+    when i % 2 equals 0 do
+        increase even_count by 1
+    end
+    increase i by 1
+end
+
+print even_count
+
+when even_count equals 5 do
+    print "Test 10: PASS"
+otherwise do
+    print "Test 10: FAIL"
+end

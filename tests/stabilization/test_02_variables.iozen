@@ -1,0 +1,11 @@
+# Test 02: Variables - Integer and float operations
+create variable a as integer with value 10
+create variable b as integer with value 20
+create variable c as integer with value a + b
+print c
+
+when c equals 30 do
+    print "Test 02: PASS"
+otherwise do
+    print "Test 02: FAIL"
+end

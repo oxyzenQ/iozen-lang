@@ -1,0 +1,15 @@
+# Test 09: List operations
+create variable nums as list with value [1, 2, 3, 4, 5]
+print length(nums)
+
+push(nums, 6)
+print length(nums)
+
+create variable total as integer with value sum(nums)
+print total
+
+when total equals 21 do
+    print "Test 09: PASS"
+otherwise do
+    print "Test 09: FAIL"
+end

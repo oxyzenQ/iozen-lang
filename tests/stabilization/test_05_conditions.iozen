@@ -1,0 +1,21 @@
+# Test 05: Conditions - when/otherwise chains
+create variable score as integer with value 85
+create variable grade as text with value ""
+
+when score is greater than or equal to 90 do
+    set grade to "A"
+otherwise when score is greater than or equal to 80 do
+    set grade to "B"
+otherwise when score is greater than or equal to 70 do
+    set grade to "C"
+otherwise do
+    set grade to "F"
+end
+
+print grade
+
+when grade equals "B" do
+    print "Test 05: PASS"
+otherwise do
+    print "Test 05: FAIL"
+end

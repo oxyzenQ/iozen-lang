@@ -1,0 +1,14 @@
+# Test 03: Functions - Declaration and calls
+function add with x as integer and y as integer returns integer
+    return x + y
+end
+
+function greet with name as text returns text
+    return "Hello, " attach name
+end
+
+create variable result as integer with value add with 5 and 3
+print result
+
+print greet with "IOZEN"
+print "Test 03: PASS"
