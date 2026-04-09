@@ -1,0 +1,964 @@
+# ============================================================
+# IOZENC IR — Internal Representation Compiler v0.1
+# Phase 9: Architecture Consolidation — Minimal IR Layer
+#
+# Pipeline: Source → AST → IR → C99 → Binary
+#           (1)   (2)  (3)  (4)    (5)
+#
+# IR Layer isolates backend from frontend syntax details.
+# This enables future backends (LLVM, WASM, etc) without
+# touching parser or AST.
+# ============================================================
+
+print "╔══════════════════════════════════════════╗"
+print "║  IOZENC IR — Architecture Consolidation  ║"
+print "║  AST → IR → C99 Compiler                  ║"
+print "╚══════════════════════════════════════════╝"
+print ""
+
+# ============================================================
+# INPUT
+# ============================================================
+# Test runner - change this to test different files
+create variable test_files as list with value [
+    "tests/stabilization/test_01_hello.iozen",
+    "tests/stabilization/test_02_variables.iozen",
+    "tests/stabilization/test_03_functions.iozen",
+    "tests/stabilization/test_04_loops.iozen",
+    "tests/stabilization/test_05_conditions.iozen",
+    "tests/stabilization/test_06_recursion.iozen",
+    "tests/stabilization/test_07_strings.iozen",
+    "tests/stabilization/test_08_comparisons.iozen",
+    "tests/stabilization/test_09_lists.iozen",
+    "tests/stabilization/test_10_nested.iozen"
+]
+create variable current_test as integer with value 0
+create variable source_file as text with value test_files[current_test]
+create variable source as text with value read_file(source_file)
+
+when source equals "" do
+    print "Error: Could not read " attach source_file
+    exit
+end
+
+print "Compiling: " attach source_file
+print ""
+
+# ============================================================
+# STAGE 1-2: LEXER + PARSER (reused from iozenc.iozen)
+# ============================================================
+create variable lex_pos as integer with value 0
+create variable lex_len as integer with value length(source)
+create variable tokens as list with value []
+
+function lex_is_alpha(ch) returns boolean
+    create variable c as integer with value ord(ch)
+    when c >= 97 and c <= 122 do return true end
+    when c >= 65 and c <= 90 do return true end
+    when c equals 95 do return true end
+    return false
+end
+
+function lex_is_digit(ch) returns boolean
+    create variable c as integer with value ord(ch)
+    when c >= 48 and c <= 57 do return true end
+    return false
+end
+
+function lex_is_alnum(ch) returns boolean
+    when lex_is_alpha(ch) do return true end
+    return lex_is_digit(ch)
+end
+
+function lex_is_keyword(word) returns boolean
+    when word equals "print" do return true end
+    when word equals "create" do return true end
+    when word equals "variable" do return true end
+    when word equals "as" do return true end
+    when word equals "with" do return true end
+    when word equals "value" do return true end
+    when word equals "integer" do return true end
+    when word equals "float" do return true end
+    when word equals "text" do return true end
+    when word equals "boolean" do return true end
+    when word equals "function" do return true end
+    when word equals "returns" do return true end
+    when word equals "return" do return true end
+    when word equals "end" do return true end
+    when word equals "when" do return true end
+    when word equals "otherwise" do return true end
+    when word equals "do" do return true end
+    when word equals "while" do return true end
+    when word equals "repeat" do return true end
+    when word equals "times" do return true end
+    when word equals "and" do return true end
+    when word equals "or" do return true end
+    when word equals "not" do return true end
+    when word equals "is" do return true end
+    when word equals "true" do return true end
+    when word equals "false" do return true end
+    when word equals "nothing" do return true end
+    when word equals "increase" do return true end
+    when word equals "decrease" do return true end
+    when word equals "by" do return true end
+    when word equals "set" do return true end
+    when word equals "to" do return true end
+    when word equals "attach" do return true end
+    when word equals "greater" do return true end
+    when word equals "less" do return true end
+    when word equals "than" do return true end
+    when word equals "equal" do return true end
+    when word equals "equals" do return true end
+    return false
+end
+
+function lex_read_ident() returns list
+    create variable word as text with value ""
+    while lex_pos < lex_len and lex_is_alnum(char_at(source, lex_pos)) do
+        set word to word attach char_at(source, lex_pos)
+        set lex_pos to lex_pos + 1
+    end
+    when lex_is_keyword(word) do
+        return [word, word]
+    end
+    return ["IDENT", word]
+end
+
+function lex_read_num() returns list
+    create variable num as text with value ""
+    while lex_pos < lex_len and lex_is_digit(char_at(source, lex_pos)) do
+        set num to num attach char_at(source, lex_pos)
+        set lex_pos to lex_pos + 1
+    end
+    return ["INT", num]
+end
+
+function lex_read_str() returns list
+    set lex_pos to lex_pos + 1
+    create variable str as text with value ""
+    while lex_pos < lex_len do
+        create variable ch as text with value char_at(source, lex_pos)
+        when ch equals "\"" do
+            set lex_pos to lex_pos + 1
+            return ["STR", str]
+        end
+        set str to str attach ch
+        set lex_pos to lex_pos + 1
+    end
+    return ["STR", str]
+end
+
+function tokenize() returns list
+    create variable matched as boolean with value false
+    while lex_pos < lex_len do
+        while lex_pos < lex_len and char_at(source, lex_pos) equals " " do
+            set lex_pos to lex_pos + 1
+        end
+        when lex_pos >= lex_len do return tokens end
+        create variable ch as text with value char_at(source, lex_pos)
+        set matched to false
+        when ch equals "\n" or ch equals "\t" or ch equals "\r" do
+            set lex_pos to lex_pos + 1
+            set matched to true
+        end
+        when ch equals "#" do
+            while lex_pos < lex_len and char_at(source, lex_pos) != "\n" do
+                set lex_pos to lex_pos + 1
+            end
+            set matched to true
+        end
+        when ch equals "\"" do
+            push(tokens, lex_read_str())
+            set matched to true
+        end
+        when lex_is_digit(ch) do
+            push(tokens, lex_read_num())
+            set matched to true
+        end
+        when lex_is_alpha(ch) do
+            push(tokens, lex_read_ident())
+            set matched to true
+        end
+        when ch equals "+" do push(tokens, ["PLUS", "+"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "-" do push(tokens, ["MINUS", "-"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "*" do push(tokens, ["STAR", "*"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "/" do push(tokens, ["SLASH", "/"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "%" do push(tokens, ["PERCENT", "%"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "," do push(tokens, ["COMMA", ","]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "(" do push(tokens, ["LPAREN", "("]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals ")" do push(tokens, ["RPAREN", ")"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "=" do push(tokens, ["ASSIGN", "="]) set lex_pos to lex_pos + 1 set matched to true end
+        when matched equals false and lex_pos < lex_len do
+            set lex_pos to lex_pos + 1
+        end
+    end
+    return tokens
+end
+
+# Parser
+create variable par_pos as integer with value 0
+
+function par_peek() returns list
+    when par_pos >= length(tokens) do return ["EOF", "", 0, 0] end
+    return tokens[par_pos]
+end
+
+function par_advance() returns list
+    create variable tok as list with value par_peek()
+    when par_pos < length(tokens) do set par_pos to par_pos + 1 end
+    return tok
+end
+
+function par_tok_is with expected as text returns boolean
+    create variable t as list with value par_peek()
+    return t[0] equals expected or t[1] equals expected
+end
+
+function par_expect with expected as text returns list
+    create variable t as list with value par_peek()
+    when t[0] equals expected or t[1] equals expected do
+        return par_advance()
+    end
+    return t
+end
+
+function parse_expression() returns map
+    return parse_comparison()
+end
+
+function parse_comparison() returns map
+    create variable left as map with value parse_addition()
+    while par_tok_is with "EQ" or par_tok_is with "NEQ" or par_tok_is with "LT" or par_tok_is with "GT" or par_tok_is with "LTE" or par_tok_is with "GTE" do
+        create variable op_tok as list with value par_advance()
+        create variable right as map with value parse_addition()
+        set left to map("kind", "BinaryExpr", "operator", op_tok[1], "left", left, "right", right)
+    end
+    while par_tok_is with "equals" do
+        par_advance()
+        create variable right as map with value parse_addition()
+        set left to map("kind", "BinaryExpr", "operator", "==", "left", left, "right", right)
+    end
+    while par_tok_is with "is" do
+        par_advance()
+        create variable op as text with value ""
+        when par_tok_is with "greater" do
+            par_advance()
+            par_expect with "than"
+            set op to ">"
+            when par_tok_is with "or" do
+                par_advance()
+                par_expect with "equal"
+                par_expect with "to"
+                set op to ">="
+            end
+        end
+        when par_tok_is with "less" do
+            par_advance()
+            par_expect with "than"
+            set op to "<"
+            when par_tok_is with "or" do
+                par_advance()
+                par_expect with "equal"
+                par_expect with "to"
+                set op to "<="
+            end
+        end
+        create variable right as map with value parse_addition()
+        set left to map("kind", "BinaryExpr", "operator", op, "left", left, "right", right)
+    end
+    return left
+end
+
+function parse_addition() returns map
+    create variable left as map with value parse_multiply()
+    while par_tok_is with "PLUS" or par_tok_is with "MINUS" do
+        create variable op_tok as list with value par_advance()
+        create variable right as map with value parse_multiply()
+        set left to map("kind", "BinaryExpr", "operator", op_tok[1], "left", left, "right", right)
+    end
+    return left
+end
+
+function parse_multiply() returns map
+    create variable left as map with value parse_unary()
+    while par_tok_is with "STAR" or par_tok_is with "SLASH" or par_tok_is with "PERCENT" do
+        create variable op_tok as list with value par_advance()
+        create variable right as map with value parse_unary()
+        set left to map("kind", "BinaryExpr", "operator", op_tok[1], "left", left, "right", right)
+    end
+    return left
+end
+
+function parse_unary() returns map
+    when par_tok_is with "MINUS" do
+        create variable op as list with value par_advance()
+        create variable operand as map with value parse_unary()
+        return map("kind", "UnaryExpr", "operator", op[1], "operand", operand)
+    end
+    when par_tok_is with "not" do
+        par_advance()
+        create variable operand as map with value parse_unary()
+        return map("kind", "UnaryExpr", "operator", "not", "operand", operand)
+    end
+    return parse_postfix()
+end
+
+function parse_postfix() returns map
+    create variable expr as map with value parse_primary()
+    when par_tok_is with "LPAREN" do
+        when get_key(expr, "kind") equals "Identifier" do
+            par_advance()
+            create variable args as list with value []
+            when not (par_tok_is with "RPAREN") do
+                push(args, parse_expression())
+                while par_tok_is with "COMMA" do
+                    par_advance()
+                    push(args, parse_expression())
+                end
+            end
+            par_expect with "RPAREN"
+            return map("kind", "FunctionCallExpr", "name", get_key(expr, "name"), "arguments", args)
+        end
+    end
+    return expr
+end
+
+function parse_primary() returns map
+    when par_tok_is with "INT" do
+        create variable tok as list with value par_advance()
+        return map("kind", "Literal", "type", "integer", "value", to_integer(tok[1]))
+    end
+    when par_tok_is with "STR" do
+        create variable tok as list with value par_advance()
+        return map("kind", "Literal", "type", "text", "value", tok[1])
+    end
+    when par_tok_is with "true" do
+        par_advance()
+        return map("kind", "Literal", "type", "boolean", "value", true)
+    end
+    when par_tok_is with "false" do
+        par_advance()
+        return map("kind", "Literal", "type", "boolean", "value", false)
+    end
+    when par_tok_is with "nothing" do
+        par_advance()
+        return map("kind", "Literal", "type", "nothing", "value", nothing)
+    end
+    when par_tok_is with "LPAREN" do
+        par_advance()
+        create variable expr as map with value parse_expression()
+        par_expect with "RPAREN"
+        return expr
+    end
+    when par_tok_is with "IDENT" do
+        create variable tok as list with value par_advance()
+        when par_tok_is with "LPAREN" do
+            par_advance()
+            create variable args as list with value []
+            when not (par_tok_is with "RPAREN") do
+                push(args, parse_expression())
+                while par_tok_is with "COMMA" do
+                    par_advance()
+                    push(args, parse_expression())
+                end
+            end
+            par_expect with "RPAREN"
+            return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
+        end
+        when par_tok_is with "with" do
+            par_advance()
+            create variable args as list with value []
+            push(args, parse_expression())
+            while par_tok_is with "and" do
+                par_advance()
+                push(args, parse_expression())
+            end
+            return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
+        end
+        return map("kind", "Identifier", "name", tok[1])
+    end
+    par_advance()
+    return map("kind", "Literal", "type", "nothing", "value", nothing)
+end
+
+function parse_statement() returns map
+    when par_tok_is with "print" do
+        par_advance()
+        create variable expr as map with value parse_expression()
+        return map("kind", "PrintStmt", "expressions", [expr])
+    end
+    when par_tok_is with "create" do
+        par_advance()
+        when par_tok_is with "constant" do par_advance() end
+        par_expect with "variable"
+        create variable name_tok as list with value par_expect with "IDENT"
+        create variable type_name as text with value "unknown"
+        when par_tok_is with "as" do
+            par_advance()
+            create variable type_tok as list with value par_advance()
+            set type_name to type_tok[1]
+        end
+        create variable val as map with value nothing
+        when par_tok_is with "with" do
+            par_advance()
+            par_expect with "value"
+            set val to parse_expression()
+        end
+        return map("kind", "VariableDecl", "name", name_tok[1], "typeName", type_name, "isConstant", false, "value", val)
+    end
+    when par_tok_is with "set" do
+        par_advance()
+        create variable name_tok as list with value par_expect with "IDENT"
+        par_expect with "to"
+        create variable val as map with value parse_expression()
+        return map("kind", "AssignVar", "name", name_tok[1], "value", val)
+    end
+    when par_tok_is with "return" do
+        par_advance()
+        when par_tok_is with "end" or par_tok_is with "EOF" do
+            return map("kind", "ReturnStmt", "value", nothing)
+        end
+        create variable val as map with value parse_expression()
+        return map("kind", "ReturnStmt", "value", val)
+    end
+    when par_tok_is with "when" do
+        par_advance()
+        create variable cond as map with value parse_expression()
+        par_expect with "do"
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "otherwise") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        create variable branches as list with value [map("kind", "WhenBranch", "condition", cond, "body", body)]
+        create variable otherwise_body as list with value []
+        when par_tok_is with "otherwise" do
+            par_advance()
+            par_expect with "do"
+            while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+                push(otherwise_body, parse_statement())
+            end
+        end
+        par_expect with "end"
+        return map("kind", "When", "branches", branches, "otherwise", otherwise_body)
+    end
+    when par_tok_is with "while" do
+        par_advance()
+        create variable cond as map with value parse_expression()
+        par_expect with "do"
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        par_expect with "end"
+        return map("kind", "While", "condition", cond, "body", body)
+    end
+    when par_tok_is with "repeat" do
+        par_advance()
+        create variable count as map with value parse_expression()
+        par_expect with "times"
+        par_expect with "do"
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        par_expect with "end"
+        return map("kind", "Repeat", "count", count, "body", body)
+    end
+    when par_tok_is with "increase" do
+        par_advance()
+        create variable target as map with value parse_expression()
+        par_expect with "by"
+        create variable amount as map with value parse_expression()
+        return map("kind", "Increase", "target", target, "amount", amount)
+    end
+    when par_tok_is with "function" do
+        par_advance()
+        create variable name_tok as list with value par_expect with "IDENT"
+        create variable params as list with value []
+        when par_tok_is with "with" do
+            par_advance()
+            while par_tok_is with "IDENT" do
+                create variable pname as list with value par_expect with "IDENT"
+                par_expect with "as"
+                create variable ptype as list with value par_advance()
+                push(params, map("name", pname[1], "typeName", ptype[1]))
+            end
+        end
+        create variable ret_type as text with value "nothing"
+        when par_tok_is with "returns" do
+            par_advance()
+            create variable rt as list with value par_advance()
+            set ret_type to rt[1]
+        end
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        par_expect with "end"
+        return map("kind", "FunctionDecl", "name", name_tok[1], "parameters", params, "returnType", ret_type, "body", body)
+    end
+    when par_tok_is with "EOF" do
+        return map("kind", "ExprStmt", "expression", map("kind", "Literal", "type", "nothing", "value", nothing))
+    end
+    par_advance()
+    return map("kind", "ExprStmt", "expression", map("kind", "Literal", "type", "nothing", "value", nothing))
+end
+
+function parse_program() returns map
+    create variable stmts as list with value []
+    while not (par_tok_is with "EOF") do
+        push(stmts, parse_statement())
+    end
+    return map("kind", "Program", "statements", stmts)
+end
+
+# ============================================================
+# STAGE 3: AST → IR TRANSFORMER (NEW IR LAYER)
+# ============================================================
+
+# IR Expression Types:
+# - IRLiteral: {type, value}
+# - IRVariable: {name}
+# - IRBinaryOp: {op, left, right}
+# - IRUnaryOp: {op, operand}
+# - IRCall: {func, args}
+
+# IR Statement Types:
+# - IRVarDecl: {name, type, init}
+# - IRAssign: {name, value}
+# - IRPrint: {value}
+# - IRReturn: {value}
+# - IRIf: {cond, then_body, else_body}
+# - IRWhile: {cond, body}
+# - IRRepeat: {count, body}
+# - IRBlock: {stmts}
+
+# IR Function: {name, params, ret_type, body}
+# IR Module: {functions, globals}
+
+function ast_to_ir_expr(ast_node) returns map
+    create variable kind as text with value get_key(ast_node, "kind")
+    when kind equals "Literal" do
+        return map("type", "IRLiteral", "literal_type", get_key(ast_node, "type"), "value", get_key(ast_node, "value"))
+    end
+    when kind equals "Identifier" do
+        return map("type", "IRVariable", "name", get_key(ast_node, "name"))
+    end
+    when kind equals "BinaryExpr" do
+        create variable op as text with value get_key(ast_node, "operator")
+        create variable left as map with value ast_to_ir_expr(get_key(ast_node, "left"))
+        create variable right as map with value ast_to_ir_expr(get_key(ast_node, "right"))
+        when op equals "==" do set op to "EQ" end
+        when op equals ">" do set op to "GT" end
+        when op equals "<" do set op to "LT" end
+        when op equals ">=" do set op to "GTE" end
+        when op equals "<=" do set op to "LTE" end
+        when op equals "+" do set op to "ADD" end
+        when op equals "-" do set op to "SUB" end
+        when op equals "*" do set op to "MUL" end
+        when op equals "/" do set op to "DIV" end
+        when op equals "%" do set op to "MOD" end
+        when op equals "&&" do set op to "AND" end
+        when op equals "||" do set op to "OR" end
+        return map("type", "IRBinaryOp", "op", op, "left", left, "right", right)
+    end
+    when kind equals "UnaryExpr" do
+        create variable op as text with value get_key(ast_node, "operator")
+        create variable operand as map with value ast_to_ir_expr(get_key(ast_node, "operand"))
+        when op equals "!" do set op to "NOT" end
+        return map("type", "IRUnaryOp", "op", op, "operand", operand)
+    end
+    when kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(ast_node, "name")
+        create variable args as list with value []
+        create variable ast_args as list with value get_key(ast_node, "arguments")
+        create variable i as integer with value 0
+        while i < length(ast_args) do
+            push(args, ast_to_ir_expr(ast_args[i]))
+            increase i by 1
+        end
+        return map("type", "IRCall", "func", func_name, "args", args)
+    end
+    return map("type", "IRLiteral", "literal_type", "nothing", "value", nothing)
+end
+
+function ast_to_ir_stmt(ast_stmt) returns map
+    create variable kind as text with value get_key(ast_stmt, "kind")
+    when kind equals "VariableDecl" do
+        create variable var_name as text with value get_key(ast_stmt, "name")
+        create variable var_type as text with value get_key(ast_stmt, "typeName")
+        create variable init_val as map with value get_key(ast_stmt, "value")
+        when init_val equals nothing do
+            return map("type", "IRVarDecl", "name", var_name, "var_type", var_type, "init", map("type", "IRLiteral", "literal_type", "nothing", "value", nothing))
+        end
+        create variable ir_init as map with value ast_to_ir_expr(init_val)
+        return map("type", "IRVarDecl", "name", var_name, "var_type", var_type, "init", ir_init)
+    end
+    when kind equals "AssignVar" do
+        create variable var_name as text with value get_key(ast_stmt, "name")
+        create variable ir_val as map with value ast_to_ir_expr(get_key(ast_stmt, "value"))
+        return map("type", "IRAssign", "name", var_name, "value", ir_val)
+    end
+    when kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(ast_stmt, "expressions")
+        create variable ir_val as map with value ast_to_ir_expr(exprs[0])
+        return map("type", "IRPrint", "value", ir_val)
+    end
+    when kind equals "ReturnStmt" do
+        create variable ret_val as map with value get_key(ast_stmt, "value")
+        when ret_val equals nothing do
+            return map("type", "IRReturn", "value", map("type", "IRLiteral", "literal_type", "nothing", "value", nothing))
+        end
+        create variable ir_val as map with value ast_to_ir_expr(ret_val)
+        return map("type", "IRReturn", "value", ir_val)
+    end
+    when kind equals "When" do
+        create variable branches as list with value get_key(ast_stmt, "branches")
+        create variable first_branch as map with value branches[0]
+        create variable ir_cond as map with value ast_to_ir_expr(get_key(first_branch, "condition"))
+        create variable then_body as list with value []
+        create variable ast_then as list with value get_key(first_branch, "body")
+        create variable i as integer with value 0
+        while i < length(ast_then) do
+            push(then_body, ast_to_ir_stmt(ast_then[i]))
+            increase i by 1
+        end
+        create variable else_body as list with value []
+        create variable ast_else as list with value get_key(ast_stmt, "otherwise")
+        when ast_else != nothing do
+            set i to 0
+            while i < length(ast_else) do
+                push(else_body, ast_to_ir_stmt(ast_else[i]))
+                increase i by 1
+            end
+        end
+        return map("type", "IRIf", "cond", ir_cond, "then_body", then_body, "else_body", else_body)
+    end
+    when kind equals "While" do
+        create variable ir_cond as map with value ast_to_ir_expr(get_key(ast_stmt, "condition"))
+        create variable body as list with value []
+        create variable ast_body as list with value get_key(ast_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(ast_body) do
+            push(body, ast_to_ir_stmt(ast_body[i]))
+            increase i by 1
+        end
+        return map("type", "IRWhile", "cond", ir_cond, "body", body)
+    end
+    when kind equals "Repeat" do
+        create variable ir_count as map with value ast_to_ir_expr(get_key(ast_stmt, "count"))
+        create variable body as list with value []
+        create variable ast_body as list with value get_key(ast_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(ast_body) do
+            push(body, ast_to_ir_stmt(ast_body[i]))
+            increase i by 1
+        end
+        return map("type", "IRRepeat", "count", ir_count, "body", body)
+    end
+    when kind equals "Increase" do
+        create variable target as map with value get_key(ast_stmt, "target")
+        create variable amount as map with value get_key(ast_stmt, "amount")
+        create variable var_name as text with value ""
+        when get_key(target, "kind") equals "Identifier" do
+            set var_name to get_key(target, "name")
+        end
+        create variable ir_amount as map with value ast_to_ir_expr(amount)
+        return map("type", "IRAssign", "name", var_name, "value", map("type", "IRBinaryOp", "op", "ADD", "left", map("type", "IRVariable", "name", var_name), "right", ir_amount))
+    end
+    when kind equals "FunctionDecl" do
+        create variable func_name as text with value get_key(ast_stmt, "name")
+        create variable params as list with value []
+        create variable ast_params as list with value get_key(ast_stmt, "parameters")
+        create variable i as integer with value 0
+        while i < length(ast_params) do
+            create variable p as map with value ast_params[i]
+            push(params, map("name", get_key(p, "name"), "param_type", get_key(p, "typeName")))
+            increase i by 1
+        end
+        create variable body as list with value []
+        create variable ast_body as list with value get_key(ast_stmt, "body")
+        set i to 0
+        while i < length(ast_body) do
+            push(body, ast_to_ir_stmt(ast_body[i]))
+            increase i by 1
+        end
+        return map("type", "IRFunction", "name", func_name, "params", params, "ret_type", get_key(ast_stmt, "returnType"), "body", body)
+    end
+    when kind equals "ExprStmt" do
+        # Expression statement (function call without assignment)
+        create variable expr as map with value get_key(ast_stmt, "expression")
+        when get_key(expr, "kind") equals "FunctionCallExpr" do
+            return ast_to_ir_stmt(map("kind", "FunctionCallStmt", "expression", expr))
+        end
+    end
+    return map("type", "IRBlock", "stmts", [])
+end
+
+function ast_to_ir_program(ast) returns map
+    create variable functions as list with value []
+    create variable globals as list with value []
+    create variable stmts as list with value get_key(ast, "statements")
+    create variable i as integer with value 0
+    while i < length(stmts) do
+        create variable stmt as map with value stmts[i]
+        create variable ir_stmt as map with value ast_to_ir_stmt(stmt)
+        when get_key(ir_stmt, "type") equals "IRFunction" do
+            push(functions, ir_stmt)
+        otherwise do
+            push(globals, ir_stmt)
+        end
+        increase i by 1
+    end
+    return map("type", "IRModule", "functions", functions, "globals", globals)
+end
+
+# ============================================================
+# STAGE 4: IR → C CODE GENERATOR
+# ============================================================
+
+function ir_type_to_c(ir_type) returns text
+    when ir_type equals "integer" do return "long long" end
+    when ir_type equals "float" do return "double" end
+    when ir_type equals "boolean" do return "bool" end
+    when ir_type equals "text" do return "char*" end
+    when ir_type equals "nothing" do return "void" end
+    return ir_type
+end
+
+function gen_c_indent(level) returns text
+    create variable out as text with value ""
+    create variable i as integer with value 0
+    while i < level do
+        set out to out attach "    "
+        increase i by 1
+    end
+    return out
+end
+
+function ir_to_c_expr(ir_expr) returns text
+    create variable etype as text with value get_key(ir_expr, "type")
+    when etype equals "IRLiteral" do
+        create variable lit_type as text with value get_key(ir_expr, "literal_type")
+        create variable lit_val as anything with value get_key(ir_expr, "value")
+        when lit_type equals "text" do return "\"" attach lit_val attach "\"" end
+        when lit_type equals "boolean" do
+            when lit_val equals true do return "true" end
+            return "false"
+        end
+        return to_text(lit_val)
+    end
+    when etype equals "IRVariable" do
+        return get_key(ir_expr, "name")
+    end
+    when etype equals "IRBinaryOp" do
+        create variable left as text with value ir_to_c_expr(get_key(ir_expr, "left"))
+        create variable right as text with value ir_to_c_expr(get_key(ir_expr, "right"))
+        create variable op as text with value get_key(ir_expr, "op")
+        when op equals "EQ" do set op to "==" end
+        when op equals "GT" do set op to ">" end
+        when op equals "LT" do set op to "<" end
+        when op equals "GTE" do set op to ">=" end
+        when op equals "LTE" do set op to "<=" end
+        when op equals "ADD" do set op to "+" end
+        when op equals "SUB" do set op to "-" end
+        when op equals "MUL" do set op to "*" end
+        when op equals "DIV" do set op to "/" end
+        when op equals "MOD" do set op to "%" end
+        when op equals "AND" do set op to "&&" end
+        when op equals "OR" do set op to "||" end
+        return "(" attach left attach " " attach op attach " " attach right attach ")"
+    end
+    when etype equals "IRUnaryOp" do
+        create variable operand as text with value ir_to_c_expr(get_key(ir_expr, "operand"))
+        create variable op as text with value get_key(ir_expr, "op")
+        when op equals "NOT" do set op to "!" end
+        when op equals "MINUS" do set op to "-" end
+        return "(" attach op attach operand attach ")"
+    end
+    when etype equals "IRCall" do
+        create variable func_name as text with value get_key(ir_expr, "func")
+        create variable args as list with value get_key(ir_expr, "args")
+        create variable out as text with value func_name attach "("
+        create variable i as integer with value 0
+        while i < length(args) do
+            set out to out attach ir_to_c_expr(args[i])
+            when i < length(args) - 1 do set out to out attach ", " end
+            increase i by 1
+        end
+        return out attach ")"
+    end
+    return "0"
+end
+
+function ir_to_c_stmt(ir_stmt, indent) returns text
+    create variable stype as text with value get_key(ir_stmt, "type")
+    create variable ind as text with value gen_c_indent(indent)
+    when stype equals "IRVarDecl" do
+        create variable name as text with value get_key(ir_stmt, "name")
+        create variable var_type as text with value ir_type_to_c(get_key(ir_stmt, "var_type"))
+        create variable init as map with value get_key(ir_stmt, "init")
+        return ind attach var_type attach " " attach name attach " = " attach ir_to_c_expr(init) attach ";\n"
+    end
+    when stype equals "IRAssign" do
+        create variable var_name as text with value get_key(ir_stmt, "name")
+        create variable var_value as map with value get_key(ir_stmt, "value")
+        return ind attach var_name attach " = " attach ir_to_c_expr(var_value) attach ";\n"
+    end
+    when stype equals "IRPrint" do
+        create variable print_val as map with value get_key(ir_stmt, "value")
+        create variable expr_code as text with value ir_to_c_expr(print_val)
+        create variable lit_type as text with value get_key(get_key(ir_stmt, "value"), "literal_type")
+        when lit_type equals "text" do
+            return ind attach "printf(\"%s\\n\", " attach expr_code attach ");\n"
+        end
+        return ind attach "printf(\"%lld\\n\", " attach expr_code attach ");\n"
+    end
+    when stype equals "IRReturn" do
+        create variable ret_value as map with value get_key(ir_stmt, "value")
+        return ind attach "return " attach ir_to_c_expr(ret_value) attach ";\n"
+    end
+    when stype equals "IRIf" do
+        create variable cond as text with value ir_to_c_expr(get_key(ir_stmt, "cond"))
+        create variable out as text with value ind attach "if (" attach cond attach ") {\n"
+        create variable then_body as list with value get_key(ir_stmt, "then_body")
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            set out to out attach ir_to_c_stmt(then_body[i], indent + 1)
+            increase i by 1
+        end
+        create variable else_body as list with value get_key(ir_stmt, "else_body")
+        when length(else_body) > 0 do
+            set out to out attach ind attach "} else {\n"
+            set i to 0
+            while i < length(else_body) do
+                set out to out attach ir_to_c_stmt(else_body[i], indent + 1)
+                increase i by 1
+            end
+        end
+        return out attach ind attach "}\n"
+    end
+    when stype equals "IRWhile" do
+        create variable cond as text with value ir_to_c_expr(get_key(ir_stmt, "cond"))
+        create variable out as text with value ind attach "while (" attach cond attach ") {\n"
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach ir_to_c_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        return out attach ind attach "}\n"
+    end
+    when stype equals "IRRepeat" do
+        create variable count as text with value ir_to_c_expr(get_key(ir_stmt, "count"))
+        create variable out as text with value ind attach "for (long long _i = 0; _i < " attach count attach "; _i++) {\n"
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach ir_to_c_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        return out attach ind attach "}\n"
+    end
+    return ""
+end
+
+function ir_function_to_c(ir_func) returns text
+    create variable name as text with value get_key(ir_func, "name")
+    create variable ret_type as text with value ir_type_to_c(get_key(ir_func, "ret_type"))
+    create variable params as list with value get_key(ir_func, "params")
+    create variable param_str as text with value ""
+    create variable i as integer with value 0
+    while i < length(params) do
+        create variable p as map with value params[i]
+        set param_str to param_str attach ir_type_to_c(get_key(p, "param_type")) attach " " attach get_key(p, "name")
+        when i < length(params) - 1 do set param_str to param_str attach ", " end
+        increase i by 1
+    end
+    when length(params) equals 0 do set param_str to "void" end
+    create variable out as text with value ret_type attach " " attach name attach "(" attach param_str attach ") {\n"
+    create variable body as list with value get_key(ir_func, "body")
+    set i to 0
+    while i < length(body) do
+        set out to out attach ir_to_c_stmt(body[i], 1)
+        increase i by 1
+    end
+    return out attach "}\n\n"
+end
+
+function ir_module_to_c(ir_mod) returns text
+    create variable out as text with value "/* Generated by IOZENC IR */\n\n"
+    set out to out attach "#include <stdio.h>\n"
+    set out to out attach "#include <stdbool.h>\n\n"
+    create variable functions as list with value get_key(ir_mod, "functions")
+    create variable i as integer with value 0
+    while i < length(functions) do
+        set out to out attach ir_function_to_c(functions[i])
+        increase i by 1
+    end
+    set out to out attach "int main() {\n"
+    create variable globals as list with value get_key(ir_mod, "globals")
+    set i to 0
+    while i < length(globals) do
+        set out to out attach ir_to_c_stmt(globals[i], 1)
+        increase i by 1
+    end
+    set out to out attach "    return 0;\n"
+    set out to out attach "}\n"
+    return out
+end
+
+# ============================================================
+# COMPILE PIPELINE: Source → AST → IR → C99 → Binary
+# ============================================================
+
+print "▸ Stage 1: Lexing..."
+tokenize()
+print "  ✓ " attach length(tokens) attach " tokens"
+print ""
+
+print "▸ Stage 2: Parsing..."
+create variable ast as map with value parse_program()
+create variable ast_stmts as list with value get_key(ast, "statements")
+print "  ✓ " attach length(ast_stmts) attach " AST statements"
+print ""
+
+print "▸ Stage 3: AST → IR Transformation..."
+create variable ir_module as map with value ast_to_ir_program(ast)
+create variable ir_funcs as list with value get_key(ir_module, "functions")
+create variable ir_globals as list with value get_key(ir_module, "globals")
+print "  ✓ IR Module: " attach length(ir_funcs) attach " functions, " attach length(ir_globals) attach " globals"
+print ""
+
+print "▸ Stage 4: IR → C99 Code Generation..."
+create variable c_output as text with value ir_module_to_c(ir_module)
+print "  ✓ C code generated"
+print ""
+
+# Output
+create variable c_file as text with value "target/output_ir.c"
+create variable binary_file as text with value "target/output_ir"
+
+system("mkdir -p target")
+print "▸ Stage 5: Saving C code..."
+write_file(c_file, c_output)
+print "  ✓ Saved to " attach c_file
+print ""
+
+print "▸ Stage 6: Compiling to binary..."
+create variable compile_cmd as text with value "gcc -o " attach binary_file attach " " attach c_file attach " -lm"
+create variable compile_result as integer with value system(compile_cmd)
+when compile_result equals 0 do
+    print "  ✓ Native binary: " attach binary_file
+    print ""
+    print "  Running: ./" attach binary_file
+    print ""
+    create variable run_result as integer with value system("./" attach binary_file)
+    print ""
+    print "╔══════════════════════════════════════════╗"
+    print "║  ✓ IR PIPELINE SUCCESS                    ║"
+    print "║  Source → AST → IR → C99 → Binary ✓       ║"
+    print "╚══════════════════════════════════════════╝"
+otherwise do
+    print "  ✗ Compilation failed (code: " attach compile_result attach ")"
+end
