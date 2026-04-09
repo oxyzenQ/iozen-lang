@@ -39,7 +39,16 @@ Added 5 new statement parsers to bootstrap/parser.iozen:
 - 4 with-call function tests
 - 4 equals comparison tests
 
-### Next Steps (Phase 3)
-- Self-hosting interpreter/codegen in IOZEN
-- Type checking system
+## Session 6: Phase 3 — Self-Hosting Interpreter
+**Date**: 2026-04-09
+**Status**: Completed
+
+### Achievements
+- **Phase 3 milestone reached**: Self-hosting interpreter in IOZEN is fully functional.
+- Implemented `bootstrap/interpreter.iozen` supporting core evaluation, control flow, functions, call stack, and environments.
+- README Roadmap updated to reflect Phase 3 completion.
+
+### Next Steps (Phase 4)
+- Type checking system / AST validation
+- Language engine stabilizations
 - Ownership/borrowing implementation

@@ -1,0 +1,344 @@
+# ============================================================
+# IOZEN SELF-HOSTING TYPECHECKER v0.1
+# Lexical Structural AST Type Validator
+# ============================================================
+
+create variable type_env_stack as list with value [map()]
+create variable func_env as map with value map()
+create variable expected_return_type as text with value "nothing"
+create variable has_type_errors as boolean with value false
+
+function get_type with name as text returns text
+    create variable i as integer with value length(type_env_stack) - 1
+    while i >= 0 do
+        create variable env as map with value type_env_stack[i]
+        when has_key(env, name) do
+            return get_key(env, name)
+        end
+        decrease i by 1
+    end
+    print "Type Error: Undefined variable '" attach name attach "'"
+    set has_type_errors to true
+    return "error"
+end
+
+function set_type with name as text and typ as text returns nothing
+    create variable current as map with value type_env_stack[length(type_env_stack) - 1]
+    set_key(current, name, typ)
+end
+
+function typecheck with node as map returns text
+    create variable kind as text with value get_key(node, "kind")
+
+    when kind equals "Literal" do
+        return get_key(node, "type")
+    end
+
+    when kind equals "Identifier" do
+        create variable name as text with value get_key(node, "name")
+        return get_type(name)
+    end
+
+    when kind equals "BinaryExpr" do
+        create variable left_type as text with value typecheck(get_key(node, "left"))
+        create variable right_type as text with value typecheck(get_key(node, "right"))
+        create variable op as text with value get_key(node, "operator")
+
+        when left_type equals "error" or right_type equals "error" do
+            return "error"
+        end
+
+        when op equals "+" or op equals "-" or op equals "*" or op equals "/" do
+            when left_type equals "integer" and right_type equals "integer" do
+                return "integer"
+            end
+            when left_type equals "float" and right_type equals "float" do
+                return "float"
+            end
+            when left_type equals "integer" and right_type equals "float" do
+                return "float"
+            end
+            when left_type equals "float" and right_type equals "integer" do
+                return "float"
+            end
+            print "Type Error: Operator '" attach op attach "' cannot be applied to " attach left_type attach " and " attach right_type
+            set has_type_errors to true
+            return "error"
+        end
+
+        when op equals "==" or op equals "equals" or op equals "!=" or op equals "not equals" do
+            when not (left_type equals right_type) do
+                print "Type Error: Comparison between incompatible types " attach left_type attach " and " attach right_type
+                set has_type_errors to true
+                return "error"
+            end
+            return "boolean"
+        end
+
+        when op equals "<" or op equals "<=" or op equals ">" or op equals ">=" do
+            when not (left_type equals "integer" or left_type equals "float") or not (right_type equals "integer" or right_type equals "float") do
+                print "Type Error: Relational operator '" attach op attach "' requires numeric types, got " attach left_type attach " and " attach right_type
+                set has_type_errors to true
+                return "error"
+            end
+            return "boolean"
+        end
+
+        when op equals "and" or op equals "or" do
+            when not (left_type equals "boolean") or not (right_type equals "boolean") do
+                print "Type Error: Logic operator '" attach op attach "' requires boolean types, got " attach left_type attach " and " attach right_type
+                set has_type_errors to true
+                return "error"
+            end
+            return "boolean"
+        end
+    end
+
+    when kind equals "UnaryExpr" do
+        create variable op as text with value get_key(node, "operator")
+        create variable operand_type as text with value typecheck(get_key(node, "operand"))
+        
+        when operand_type equals "error" do return "error" end
+        
+        when op equals "not" do
+            when not (operand_type equals "boolean") do
+                print "Type Error: Operator 'not' requires boolean type, got " attach operand_type
+                set has_type_errors to true
+                return "error"
+            end
+            return "boolean"
+        end
+        when op equals "-" do
+            when not (operand_type equals "integer") and not (operand_type equals "float") do
+                print "Type Error: Unary '-' requires numeric type, got " attach operand_type
+                set has_type_errors to true
+                return "error"
+            end
+            return operand_type
+        end
+    end
+
+    when kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(node, "name")
+        when not has_key(func_env, func_name) do
+            print "Type Error: Calling undefined function '" attach func_name attach "'"
+            set has_type_errors to true
+            return "error"
+        end
+        create variable func_decl as map with value get_key(func_env, func_name)
+        create variable params as list with value get_key(func_decl, "parameters")
+        create variable args as list with value get_key(node, "arguments")
+        
+        when not (length(args) equals length(params)) do
+            print "Type Error: Function '" attach func_name attach "' expects " attach length(params) attach " arguments, got " attach length(args)
+            set has_type_errors to true
+            return "error"
+        end
+        
+        create variable k as integer with value 0
+        while k < length(args) do
+            create variable arg_typ as text with value typecheck(args[k])
+            create variable par_typ as text with value get_key(params[k], "typeName")
+            when not (arg_typ equals par_typ) and not (arg_typ equals "error") do
+                print "Type Error: Argument " attach k attach " for '" attach func_name attach "' must be " attach par_typ attach ", got " attach arg_typ
+                set has_type_errors to true
+            end
+            increase k by 1
+        end
+        return get_key(func_decl, "returnType")
+    end
+
+    when kind equals "FunctionCallStmt" do
+        create variable p as map with value map("kind", "FunctionCallExpr", "name", get_key(node, "name"), "arguments", get_key(node, "arguments"))
+        typecheck(p)
+        return "nothing"
+    end
+
+    print "Type Error: Unknown expression kind '" attach kind attach "'"
+    set has_type_errors to true
+    return "error"
+end
+
+function check_stmt with stmt as map returns nothing
+    create variable kind as text with value get_key(stmt, "kind")
+    
+    when kind equals "VariableDecl" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable decl_type as text with value get_key(stmt, "typeName")
+        create variable val_type as text with value typecheck(get_key(stmt, "value"))
+        
+        when val_type equals "error" do return nothing end
+        
+        when not (decl_type equals "unknown") and not (decl_type equals val_type) do
+            print "Type Error: Cannot assign " attach val_type attach " to variable '" attach name attach "' of type " attach decl_type
+            set has_type_errors to true
+        end
+        
+        create variable saved_type as text with value val_type
+        when not (decl_type equals "unknown") do
+            set saved_type to decl_type
+        end
+        
+        set_type(name, saved_type)
+        return nothing
+    end
+
+    when kind equals "AssignVar" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable val_type as text with value typecheck(get_key(stmt, "value"))
+        
+        when val_type equals "error" do return nothing end
+        
+        create variable expected_type as text with value get_type(name)
+        when expected_type equals "error" do return nothing end
+        
+        when not (val_type equals expected_type) do
+            print "Type Error: Cannot assign " attach val_type attach " to variable '" attach name attach "' of type " attach expected_type
+            set has_type_errors to true
+        end
+        return nothing
+    end
+
+    when kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(stmt, "expressions")
+        create variable i as integer with value 0
+        while i < length(exprs) do
+            typecheck(exprs[i])
+            increase i by 1
+        end
+        return nothing
+    end
+
+    when kind equals "While" do
+        create variable cond as map with value get_key(stmt, "condition")
+        create variable cond_type as text with value typecheck(cond)
+        when not (cond_type equals "boolean") and not (cond_type equals "error") do
+            print "Type Error: While condition must be boolean, got " attach cond_type
+            set has_type_errors to true
+        end
+        
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            check_stmt(body[i])
+            increase i by 1
+        end
+        return nothing
+    end
+    
+    when kind equals "When" do
+        create variable branches as list with value get_key(stmt, "branches")
+        create variable otherwise_body as anything with value get_key(stmt, "otherwise")
+        create variable i as integer with value 0
+        
+        while i < length(branches) do
+            create variable branch as map with value branches[i]
+            create variable cond_type as text with value typecheck(get_key(branch, "condition"))
+            when not (cond_type equals "boolean") and not (cond_type equals "error") do
+                print "Type Error: When condition must be boolean, got " attach cond_type
+                set has_type_errors to true
+            end
+            
+            create variable body as list with value get_key(branch, "body")
+            create variable j as integer with value 0
+            while j < length(body) do
+                check_stmt(body[j])
+                increase j by 1
+            end
+            increase i by 1
+        end
+        
+        when not (otherwise_body equals nothing) do
+            create variable j as integer with value 0
+            while j < length(otherwise_body) do
+                check_stmt(otherwise_body[j])
+                increase j by 1
+            end
+        end
+        return nothing
+    end
+
+    when kind equals "ReturnStmt" do
+        create variable ret_type as text with value typecheck(get_key(stmt, "value"))
+        when ret_type equals "error" do return nothing end
+        when not (ret_type equals expected_return_type) do
+            print "Type Error: Invalid return type. Expected " attach expected_return_type attach " but got " attach ret_type
+            set has_type_errors to true
+        end
+        return nothing
+    end
+
+    when kind equals "FunctionDecl" do
+        create variable fname as text with value get_key(stmt, "name")
+        set_key(func_env, fname, stmt)
+        
+        create variable params as list with value get_key(stmt, "parameters")
+        create variable body as list with value get_key(stmt, "body")
+        
+        create variable prev_ret as text with value expected_return_type
+        set expected_return_type to get_key(stmt, "returnType")
+        
+        push(type_env_stack, map())
+        create variable j as integer with value 0
+        while j < length(params) do
+            create variable p_name as text with value get_key(params[j], "name")
+            create variable p_typ as text with value get_key(params[j], "typeName")
+            set_type(p_name, p_typ)
+            increase j by 1
+        end
+        
+        set j to 0
+        while j < length(body) do
+            check_stmt(body[j])
+            increase j by 1
+        end
+        
+        pop(type_env_stack)
+        set expected_return_type to prev_ret
+        return nothing
+    end
+
+    when kind equals "Literal" or kind equals "BinaryExpr" or kind equals "Identifier" do
+        typecheck(stmt)
+        return nothing
+    end
+end
+
+function check_program with ast as map returns nothing
+    create variable stmts as list with value get_key(ast, "statements")
+    create variable i as integer with value 0
+    while i < length(stmts) do
+        check_stmt(stmts[i])
+        increase i by 1
+    end
+end
+
+# ============================================================
+# DEMO / TEST PAYLOAD
+# ============================================================
+
+create variable test_ast as map with value map(
+    "kind", "Program",
+    "statements", [
+        map("kind", "FunctionDecl", "name", "adder", "parameters", [map("name", "base", "typeName", "integer"), map("name", "delta", "typeName", "integer")], "returnType", "integer", "body", [
+            map("kind", "ReturnStmt", "value", map("kind", "BinaryExpr", "operator", "+", "left", map("kind", "Identifier", "name", "base"), "right", map("kind", "Identifier", "name", "delta")))
+        ]),
+        map("kind", "FunctionDecl", "name", "bad_func", "parameters", [], "returnType", "text", "body", [
+            map("kind", "ReturnStmt", "value", map("kind", "Literal", "type", "integer", "value", 99))
+        ]),
+        map("kind", "VariableDecl", "name", "result", "typeName", "integer", "isConstant", false, "value", map("kind", "FunctionCallExpr", "name", "adder", "arguments", [
+            map("kind", "Literal", "type", "integer", "value", 10),
+            map("kind", "Literal", "type", "text", "value", "wrong arg")
+        ]))
+    ]
+)
+
+print "--- AST Typechecker Phase 4 Test ---"
+check_program(test_ast)
+when not has_type_errors do
+    print "✔ Success: 0 Type Errors"
+end
+when has_type_errors do
+    print "✖ Failed: Semantic violations found"
+end
+print "--- Execution Finished ---"

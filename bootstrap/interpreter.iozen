@@ -1,0 +1,302 @@
+# ============================================================
+# IOZEN SELF-HOSTING INTERPRETER v0.1
+# Tree-walking interpreter ditulis DALAM bahasa IOZEN sendiri
+# ============================================================
+
+create variable env_stack as list with value [map()]
+create variable is_returning as boolean with value false
+create variable return_value as map with value nothing
+
+function get_var with name as text returns map
+    create variable i as integer with value length(env_stack) - 1
+    while i >= 0 do
+        create variable env as map with value env_stack[i]
+        when has_key(env, name) do
+            return get_key(env, name)
+        end
+        decrease i by 1
+    end
+    print "Runtime Error: Undefined variable '" attach name attach "'"
+    return map("kind", "Literal", "type", "nothing", "value", nothing)
+end
+
+function set_var with name as text and val as map returns nothing
+    create variable current as map with value env_stack[length(env_stack) - 1]
+    set_key(current, name, val)
+end
+
+function assign_var with name as text and val as map returns nothing
+    create variable i as integer with value length(env_stack) - 1
+    while i >= 0 do
+        create variable env as map with value env_stack[i]
+        when has_key(env, name) do
+            set_key(env, name, val)
+            return nothing
+        end
+        decrease i by 1
+    end
+    print "Runtime Error: Cannot assign to undefined variable '" attach name attach "'"
+end
+
+function evaluate with node as map returns map
+    create variable kind as text with value get_key(node, "kind")
+
+    when kind equals "Literal" do
+        return node
+    end
+
+    when kind equals "Identifier" do
+        create variable name as text with value get_key(node, "name")
+        return get_var(name)
+    end
+
+    when kind equals "BinaryExpr" do
+        create variable left_node as map with value evaluate(get_key(node, "left"))
+        create variable right_node as map with value evaluate(get_key(node, "right"))
+        create variable op as text with value get_key(node, "operator")
+
+        create variable l_val as anything with value get_key(left_node, "value")
+        create variable r_val as anything with value get_key(right_node, "value")
+        create variable typ as text with value get_key(left_node, "type")
+
+        when op equals "+" do
+            return map("kind", "Literal", "type", typ, "value", l_val + r_val)
+        end
+        when op equals "-" do
+            return map("kind", "Literal", "type", typ, "value", l_val - r_val)
+        end
+        when op equals "*" do
+            return map("kind", "Literal", "type", typ, "value", l_val * r_val)
+        end
+        when op equals "/" do
+            return map("kind", "Literal", "type", typ, "value", l_val / r_val)
+        end
+        when op equals "==" or op equals "equals" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val equals r_val)
+        end
+        when op equals "!=" or op equals "not equals" do
+            return map("kind", "Literal", "type", "boolean", "value", not (l_val equals r_val))
+        end
+        when op equals "<" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val < r_val)
+        end
+        when op equals "<=" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val <= r_val)
+        end
+        when op equals ">" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val > r_val)
+        end
+        when op equals ">=" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val >= r_val)
+        end
+        when op equals "and" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val and r_val)
+        end
+        when op equals "or" do
+            return map("kind", "Literal", "type", "boolean", "value", l_val or r_val)
+        end
+    end
+
+    when kind equals "UnaryExpr" do
+        create variable op as text with value get_key(node, "operator")
+        create variable operand as map with value evaluate(get_key(node, "operand"))
+        create variable val as anything with value get_key(operand, "value")
+        
+        when op equals "not" do
+            return map("kind", "Literal", "type", "boolean", "value", not val)
+        end
+        when op equals "-" do
+            return map("kind", "Literal", "type", get_key(operand, "type"), "value", 0 - val)
+        end
+    end
+
+    when kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(node, "name")
+        create variable func_decl as map with value get_var(func_name)
+        create variable params as list with value get_key(func_decl, "parameters")
+        create variable args as list with value get_key(node, "arguments")
+        
+        create variable i as integer with value 0
+        create variable eval_args as list with value []
+        while i < length(args) do
+            push(eval_args, evaluate(args[i]))
+            increase i by 1
+        end
+
+        push(env_stack, map())
+        
+        set i to 0
+        while i < length(params) do
+            create variable p_name as text with value get_key(params[i], "name")
+            set_var(p_name, eval_args[i])
+            increase i by 1
+        end
+        
+        create variable body as list with value get_key(func_decl, "body")
+        set i to 0
+        while i < length(body) and not is_returning do
+            execute(body[i])
+            increase i by 1
+        end
+        
+        create variable final_val as map with value return_value
+        
+        pop(env_stack)
+        set is_returning to false
+        set return_value to map("kind", "Literal", "type", "nothing", "value", nothing)
+        
+        when not (final_val equals nothing) do
+            return final_val
+        end
+        return map("kind", "Literal", "type", "nothing", "value", nothing)
+    end
+
+    print "Runtime Error: Unknown expression kind '" attach kind attach "'"
+    return map("kind", "Literal", "type", "nothing", "value", nothing)
+end
+
+function execute with stmt as map returns nothing
+    create variable kind as text with value get_key(stmt, "kind")
+
+    when kind equals "VariableDecl" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable val as map with value evaluate(get_key(stmt, "value"))
+        set_var(name, val)
+        return nothing
+    end
+
+    when kind equals "AssignVar" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable val as map with value evaluate(get_key(stmt, "value"))
+        assign_var(name, val)
+        return nothing
+    end
+
+    when kind equals "FunctionDecl" do
+        create variable fname as text with value get_key(stmt, "name")
+        set_key(env_stack[0], fname, stmt)
+        return nothing
+    end
+
+    when kind equals "ReturnStmt" do
+        create variable r_val as map with value get_key(stmt, "value")
+        set return_value to evaluate(r_val)
+        set is_returning to true
+        return nothing
+    end
+
+    when kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(stmt, "expressions")
+        create variable i as integer with value 0
+        create variable output_str as text with value ""
+        
+        while i < length(exprs) do
+            create variable evaluated as map with value evaluate(exprs[i])
+            create variable val as anything with value get_key(evaluated, "value")
+            
+            when i equals 0 do
+                set output_str to val
+            otherwise do
+                set output_str to output_str attach val
+            end
+            increase i by 1
+        end
+        print output_str
+        return nothing
+    end
+
+    when kind equals "FunctionCallStmt" do
+        evaluate(stmt) # Simplistic evaluation for side effects
+        return nothing
+    end
+
+    when kind equals "When" do
+        create variable branches as list with value get_key(stmt, "branches")
+        create variable otherwise_body as anything with value get_key(stmt, "otherwise")
+        create variable executed as boolean with value false
+        create variable i as integer with value 0
+        
+        while i < length(branches) and not executed do
+            create variable branch as map with value branches[i]
+            create variable cond_res as map with value evaluate(get_key(branch, "condition"))
+            when get_key(cond_res, "value") do
+                create variable body as list with value get_key(branch, "body")
+                create variable j as integer with value 0
+                while j < length(body) do
+                    execute(body[j])
+                    increase j by 1
+                end
+                set executed to true
+            end
+            increase i by 1
+        end
+        
+        when not executed do
+            when not (otherwise_body equals nothing) do
+                create variable j as integer with value 0
+                while j < length(otherwise_body) do
+                    execute(otherwise_body[j])
+                    increase j by 1
+                end
+            end
+        end
+        return nothing
+    end
+
+    when kind equals "While" do
+        create variable cond as map with value get_key(stmt, "condition")
+        create variable body as list with value get_key(stmt, "body")
+        
+        create variable logic_val as boolean with value true
+        while logic_val do
+            create variable cond_res as map with value evaluate(cond)
+            set logic_val to get_key(cond_res, "value")
+            when logic_val do
+                create variable j as integer with value 0
+                while j < length(body) do
+                    execute(body[j])
+                    increase j by 1
+                end
+            end
+        end
+        return nothing
+    end
+
+    when kind equals "Literal" or kind equals "BinaryExpr" or kind equals "Identifier" do
+        evaluate(stmt)
+        return nothing
+    end
+
+    print "Runtime Error: Unknown statement kind '" attach kind attach "'"
+end
+
+function run_program with ast as map returns nothing
+    create variable stmts as list with value get_key(ast, "statements")
+    create variable i as integer with value 0
+    while i < length(stmts) do
+        execute(stmts[i])
+        increase i by 1
+    end
+end
+
+# ============================================================
+# DEMO / TEST PAYLOAD
+# ============================================================
+
+create variable test_ast as map with value map(
+    "kind", "Program",
+    "statements", [
+        map("kind", "FunctionDecl", "name", "multiply", "parameters", [map("name", "a"), map("name", "b")], "returnType", "integer", "body", [
+            map("kind", "ReturnStmt", "value", map("kind", "BinaryExpr", "operator", "*", "left", map("kind", "Identifier", "name", "a"), "right", map("kind", "Identifier", "name", "b")))
+        ]),
+        map("kind", "VariableDecl", "name", "result", "isConstant", false, "value", map("kind", "FunctionCallExpr", "name", "multiply", "arguments", [
+            map("kind", "Literal", "type", "integer", "value", 6),
+            map("kind", "Literal", "type", "integer", "value", 7)
+        ])),
+        map("kind", "PrintStmt", "expressions", [map("kind", "Literal", "type", "text", "value", "6 * 7 = "), map("kind", "Identifier", "name", "result")])
+    ]
+)
+
+print "--- Interpreter Phase 3 Test ---"
+run_program(test_ast)
+print "--- Execution Finished ---"
