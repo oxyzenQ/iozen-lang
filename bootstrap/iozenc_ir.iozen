@@ -998,6 +998,158 @@ function check_return_paths with ast_node as map returns nothing
 end
 
 # ============================================================
+# CONSTANT FOLDING OPTIMIZATION (Phase 9.5)
+# ============================================================
+
+function fold_ir_expr with ir_expr as map returns map
+    create variable etype as text with value get_key(ir_expr, "type")
+
+    when etype equals "IRBinaryOp" do
+        # Recursively fold operands first
+        create variable left_folded as map with value fold_ir_expr(get_key(ir_expr, "left"))
+        create variable right_folded as map with value fold_ir_expr(get_key(ir_expr, "right"))
+
+        create variable left_type as text with value get_key(left_folded, "type")
+        create variable right_type as text with value get_key(right_folded, "type")
+
+        # Only fold if both operands are integer literals
+        when left_type equals "IRLiteral" and right_type equals "IRLiteral" do
+            create variable left_lit_type as text with value get_key(left_folded, "literal_type")
+            create variable right_lit_type as text with value get_key(right_folded, "literal_type")
+
+            # Only fold integer operations
+            when left_lit_type equals "integer" and right_lit_type equals "integer" do
+                create variable left_val as integer with value get_key(left_folded, "value")
+                create variable right_val as integer with value get_key(right_folded, "value")
+                create variable op as text with value get_key(ir_expr, "op")
+                create variable result as integer with value 0
+
+                when op equals "+" do set result to left_val + right_val end
+                when op equals "-" do set result to left_val - right_val end
+                when op equals "*" do set result to left_val * right_val end
+                when op equals "/" do
+                    when right_val equals 0 do
+                        # Division by zero - don't fold, keep original
+                        return map("type", "IRBinaryOp", "op", op, "left", left_folded, "right", right_folded)
+                    end
+                    set result to left_val / right_val
+                end
+
+                return map("type", "IRLiteral", "literal_type", "integer", "value", result)
+            end
+        end
+
+        # Return with folded operands (even if we couldn't fold the whole expression)
+        return map("type", "IRBinaryOp", "op", get_key(ir_expr, "op"), "left", left_folded, "right", right_folded)
+    end
+
+    when etype equals "IRUnaryOp" do
+        return map("type", "IRUnaryOp", "op", get_key(ir_expr, "op"), "operand", fold_ir_expr(get_key(ir_expr, "operand")))
+    end
+
+    # Non-folding expressions return as-is
+    return ir_expr
+end
+
+function fold_ir_stmt with ir_stmt as map returns map
+    create variable stype as text with value get_key(ir_stmt, "type")
+
+    when stype equals "IRVarDecl" do
+        return map("type", "IRVarDecl", "name", get_key(ir_stmt, "name"), "symbol_id", get_key(ir_stmt, "symbol_id"), "var_type", get_key(ir_stmt, "var_type"), "init", fold_ir_expr(get_key(ir_stmt, "init")))
+    end
+
+    when stype equals "IRAssign" do
+        return map("type", "IRAssign", "name", get_key(ir_stmt, "name"), "symbol_id", get_key(ir_stmt, "symbol_id"), "value", fold_ir_expr(get_key(ir_stmt, "value")))
+    end
+
+    when stype equals "IRReturn" do
+        return map("type", "IRReturn", "value", fold_ir_expr(get_key(ir_stmt, "value")))
+    end
+
+    when stype equals "IRPrint" do
+        return map("type", "IRPrint", "value", fold_ir_expr(get_key(ir_stmt, "value")))
+    end
+
+    when stype equals "IRIf" do
+        create variable folded_then as list with value []
+        create variable then_body as list with value get_key(ir_stmt, "then_body")
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            push(folded_then, fold_ir_stmt(then_body[i]))
+            increase i by 1
+        end
+
+        create variable folded_else as list with value []
+        create variable else_body as list with value get_key(ir_stmt, "else_body")
+        set i to 0
+        while i < length(else_body) do
+            push(folded_else, fold_ir_stmt(else_body[i]))
+            increase i by 1
+        end
+
+        return map("type", "IRIf", "cond", fold_ir_expr(get_key(ir_stmt, "cond")), "then_body", folded_then, "else_body", folded_else)
+    end
+
+    when stype equals "IRWhile" do
+        create variable folded_body as list with value []
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(folded_body, fold_ir_stmt(body[i]))
+            increase i by 1
+        end
+
+        return map("type", "IRWhile", "cond", fold_ir_expr(get_key(ir_stmt, "cond")), "body", folded_body)
+    end
+
+    when stype equals "IRRepeat" do
+        create variable folded_body as list with value []
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(folded_body, fold_ir_stmt(body[i]))
+            increase i by 1
+        end
+
+        return map("type", "IRRepeat", "count", fold_ir_expr(get_key(ir_stmt, "count")), "body", folded_body)
+    end
+
+    when stype equals "IRFunction" do
+        create variable folded_body as list with value []
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(folded_body, fold_ir_stmt(body[i]))
+            increase i by 1
+        end
+
+        return map("type", "IRFunction", "name", get_key(ir_stmt, "name"), "ret_type", get_key(ir_stmt, "ret_type"), "body", folded_body)
+    end
+
+    return ir_stmt
+end
+
+function optimize_ir_module with ir_module as map returns map
+    create variable optimized_functions as list with value []
+    create variable functions as list with value get_key(ir_module, "functions")
+    create variable i as integer with value 0
+    while i < length(functions) do
+        push(optimized_functions, fold_ir_stmt(functions[i]))
+        increase i by 1
+    end
+
+    create variable optimized_globals as list with value []
+    create variable globals as list with value get_key(ir_module, "globals")
+    set i to 0
+    while i < length(globals) do
+        push(optimized_globals, fold_ir_stmt(globals[i]))
+        increase i by 1
+    end
+
+    return map("functions", optimized_functions, "globals", optimized_globals)
+end
+
+# ============================================================
 # IR DEBUG UTILITIES (Phase 9.4)
 # ============================================================
 
@@ -1549,8 +1701,13 @@ create variable ir_globals as list with value get_key(ir_module, "globals")
 print "  ✓ IR Module: " attach length(ir_funcs) attach " functions, " attach length(ir_globals) attach " globals"
 print ""
 
+print "▸ Stage 3.5: IR Optimization (Constant Folding)..."
+create variable ir_module_optimized as map with value optimize_ir_module(ir_module)
+print "  ✓ IR optimized"
+print ""
+
 print "▸ Stage 4: IR → C99 Code Generation..."
-create variable c_output as text with value ir_module_to_c(ir_module)
+create variable c_output as text with value ir_module_to_c(ir_module_optimized)
 print "  ✓ C code generated"
 print ""
 

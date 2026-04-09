@@ -1,0 +1,28 @@
+# Test 42: Constant Folding
+# Verify compile-time evaluation of constant expressions
+
+print "Test 42: Constant Folding"
+
+# Simple constant expressions - should be folded at compile time
+create variable a as integer with value 2 + 3
+create variable b as integer with value 10 - 4
+create variable c as integer with value 3 * 4
+create variable d as integer with value 20 / 4
+
+# Nested expression
+create variable e as integer with value (2 + 3) * 4
+create variable f as integer with value 10 + 5 - 3
+
+print "a = 2 + 3 = " attach a
+print "b = 10 - 4 = " attach b
+print "c = 3 * 4 = " attach c
+print "d = 20 / 4 = " attach d
+print "e = (2+3) * 4 = " attach e
+print "f = 10+5-3 = " attach f
+
+# Verify results
+when a equals 5 and b equals 6 and c equals 12 and d equals 5 and e equals 20 and f equals 12 do
+    print "PASS: All constant expressions folded correctly"
+end
+
+print "Test 42 Complete"
