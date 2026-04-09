@@ -5,7 +5,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-v0.1.0-orange?style=flat-square)]()
 [![Bootstrap: TypeScript](https://img.shields.io/badge/bootstrap-TypeScript-3178C6?style=flat-square&logo=typescript)]()
-[![Phase](https://img.shields.io/badge/phase-0%20%7C%201-purple?style=flat-square)]()
+[![Phase](https://img.shields.io/badge/phase-0%20%7C%201%20%7C%202-purple?style=flat-square)]()
 
 > *IOZEN reads like English, compiles like Rust.*
 
@@ -251,14 +251,14 @@ IOZEN follows the classic bootstrapping path pioneered by languages like Rust (O
 
 - [x] **Phase 0** — TypeScript bootstrap compiler (lexer, parser, tree-walking interpreter, CLI)
 - [x] **Phase 1** — Self-hosting lexer written in IOZEN (`bootstrap/lexer.iozen`)
-- [ ] **Phase 2** — Self-hosting parser written in IOZEN
+- [x] **Phase 2** — Self-hosting parser written in IOZEN (`bootstrap/parser.iozen`)
 - [ ] **Phase 3** — Self-hosting interpreter/codegen written in IOZEN
 - [ ] **Phase 4** — Full self-hosting: IOZEN compiles IOZEN
 
 ```
 TypeScript ──→ IOZEN Lexer ──→ IOZEN Parser ──→ IOZEN Compiler ──→ IOZEN
   (Phase 0)      (Phase 1)       (Phase 2)       (Phase 3)      (Phase 4)
-     ✅              ✅              ⏳              ⏳            ⏳
+     ✅              ✅              ✅              ⏳            ⏳
 ```
 
 > The bootstrap language doesn't determine the final language. Rust was bootstrapped from OCaml, Go from C, Zig from C++. Once self-hosting is achieved, the bootstrap language is discarded entirely.

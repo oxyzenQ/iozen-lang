@@ -1,0 +1,96 @@
+# ============================================
+# List Operations Example
+# Demonstrates list creation, manipulation,
+# sorting, filtering, and common patterns.
+# ============================================
+
+# --- Creating Lists ---
+print "--- List Creation ---"
+create variable numbers as list with value [5, 2, 8, 1, 9, 3, 7, 4, 6]
+create variable names as list with value ["Alice", "Bob", "Charlie", "Diana"]
+
+print "numbers : " attach numbers
+print "names   : " attach names
+print "length  : " attach length(numbers)
+
+# --- Adding and Removing Items ---
+print ""
+print "--- Push / Pop ---"
+push(numbers, 10)
+print "After push(10) : " attach numbers
+
+create variable last as integer with value pop(numbers)
+print "Popped item    : " attach last
+print "After pop()    : " attach numbers
+
+# --- Sort and Reverse ---
+print ""
+print "--- Sort / Reverse ---"
+create variable sorted_nums as list with value sort(numbers)
+print "sorted(numbers)    : " attach sorted_nums
+
+create variable reversed_nums as list with value reverse(numbers)
+print "reverse(numbers)   : " attach reversed_nums
+
+create variable sorted_names as list with value sort(names)
+print "sorted(names)      : " attach sorted_names
+
+# --- Sum and Range ---
+print ""
+print "--- Sum / Range ---"
+create variable total as integer with value sum(numbers)
+print "sum(numbers) : " attach total
+
+create variable countdown as list with value range(5, 11)
+print "range(5,11) : " attach countdown
+
+# --- Filtering with a Loop ---
+print ""
+print "--- Filter: Even Numbers ---"
+create variable evens as list with value []
+for each num in numbers do
+    when (num % 2) == 0 do
+        push(evens, num)
+    end
+end
+print "evens : " attach evens
+
+# --- Mapping with a Loop ---
+print ""
+print "--- Map: Square Each Number ---"
+create variable squares as list with value []
+for each num in numbers do
+    push(squares, num * num)
+end
+print "squares : " attach squares
+
+# --- Deduplication Pattern ---
+print ""
+print "--- Unique Values ---"
+create variable dupes as list with value [1, 2, 2, 3, 3, 3, 4, 5, 5]
+create variable uniques as list with value []
+create variable seen as list with value []
+for each item in dupes do
+    when not contains(seen, item) do
+        push(uniques, item)
+        push(seen, item)
+    end
+end
+print "original  : " attach dupes
+print "uniques   : " attach uniques
+
+# --- Find Maximum / Minimum ---
+print ""
+print "--- Min / Max from List ---"
+create variable max_val as integer with value -999999
+create variable min_val as integer with value 999999
+for each num in numbers do
+    when num > max_val do
+        set max_val to num
+    end
+    when num < min_val do
+        set min_val to num
+    end
+end
+print "max : " attach max_val
+print "min : " attach min_val

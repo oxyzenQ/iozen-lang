@@ -1,0 +1,71 @@
+# ============================================
+# Math Operations Example
+# Demonstrates constants, arithmetic, and
+# built-in math functions in IOZEN.
+# ============================================
+
+# --- Constants ---
+create constant PI as float with value 3.14159265
+create constant E as float with value 2.71828183
+create constant MAX_SCORE as integer with value 100
+
+# --- Basic Arithmetic ---
+create variable a as integer with value 17
+create variable b as integer with value 5
+
+print "--- Basic Arithmetic ---"
+print "a = " attach a attach ", b = " attach b
+print "a + b  = " attach (a + b)
+print "a - b  = " attach (a - b)
+print "a * b  = " attach (a * b)
+print "a / b  = " attach (a / b)
+print "a % b  = " attach (a % b)
+
+# --- Built-in Math Functions ---
+print ""
+print "--- Math Functions ---"
+
+# Absolute value
+print "abs(-42)       = " attach abs(-42)
+print "abs(3.7)       = " attach abs(3.7)
+
+# Rounding
+print "floor(3.7)     = " attach floor(3.7)
+print "ceil(3.2)      = " attach ceil(3.2)
+print "round(3.5)     = " attach round(3.5)
+
+# Powers and roots
+print "power(2, 10)   = " attach power(2, 10)
+print "sqrt(144)      = " attach sqrt(144)
+
+# Min / Max
+print "min(3, 8)      = " attach min(3, 8)
+print "max(3, 8)      = " attach max(3, 8)
+
+# Trigonometry (values in radians)
+print "sin(0)         = " attach sin(0)
+print "cos(0)         = " attach cos(0)
+print "tan(PI / 4)    = " attach tan(PI / 4)
+
+# Logarithms
+print "log(E)         = " attach log(E)
+print "log10(1000)    = " attach log10(1000)
+
+# --- Using increase / decrease ---
+print ""
+print "--- Increase / Decrease ---"
+create variable counter as integer with value 10
+print "counter = " attach counter
+increase counter by 5
+print "after +5: " attach counter
+decrease counter by 3
+print "after -3: " attach counter
+
+# --- Practical Example: Circle Stats ---
+print ""
+print "--- Circle Stats (radius = 7) ---"
+create variable radius as float with value 7.0
+create variable circumference as float with value (2 * PI * radius)
+create variable area as float with value (PI * power(radius, 2))
+print "Circumference = " attach round(circumference * 100) / 100
+print "Area          = " attach round(area * 100) / 100

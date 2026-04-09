@@ -45,6 +45,12 @@ export class Lexer {
         continue;
       }
 
+      // Multiline string literal: """..."""
+      if (ch === '"' && this.source[this.pos + 1] === '"' && this.source[this.pos + 2] === '"') {
+        this.readMultilineString();
+        continue;
+      }
+
       // String literal
       if (ch === '"') {
         this.readString();
@@ -105,6 +111,47 @@ export class Lexer {
     }
     // We don't store comments in the token stream (they're ignored)
     // But we could: this.tokens.push(this.makeToken(TokenType.Comment, comment));
+  }
+
+  private readMultilineString(): void {
+    this.advance(); this.advance(); this.advance(); // skip opening """
+    let value = '';
+
+    while (this.pos < this.source.length) {
+      // Check for closing """
+      if (this.source[this.pos] === '"' &&
+          this.source[this.pos + 1] === '"' &&
+          this.source[this.pos + 2] === '"') {
+        this.advance(); this.advance(); this.advance(); // skip closing """
+        break;
+      }
+
+      if (this.source[this.pos] === '\\') {
+        this.advance();
+        if (this.pos >= this.source.length) break;
+        const escaped = this.source[this.pos];
+        switch (escaped) {
+          case 'n': value += '\n'; break;
+          case 't': value += '\t'; break;
+          case 'r': value += '\r'; break;
+          case '\\': value += '\\'; break;
+          case '"': value += '"'; break;
+          default: value += escaped; break;
+        }
+        this.advance();
+      } else {
+        if (this.source[this.pos] === '\n') {
+          this.line++;
+          this.column = 1;
+          value += '\n';
+        } else {
+          value += this.source[this.pos];
+        }
+        this.advance();
+      }
+    }
+
+    this.tokens.push(this.makeToken(TokenType.StringLiteral, value));
   }
 
   private readString(): void {
@@ -240,6 +287,10 @@ export class Lexer {
   private advance(): void {
     this.pos++;
     this.column++;
+  }
+
+  private peekChar(): string {
+    return this.source[this.pos];
   }
 
   private peekNext(): string | undefined {

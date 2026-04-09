@@ -1,0 +1,57 @@
+# IOZEN Loop Control — exit (break) in loops
+# Demonstrates early loop termination
+
+# Exit from for-each
+print "=== Exit from for-each ==="
+create variable items as list with value [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+print "Before 5:"
+for each item in items do
+    when item is greater than 4 do
+        exit
+    end
+    print "  " attach item
+end
+print "After 5."
+
+# Exit from while
+print ""
+print "=== Exit from while ==="
+create variable i as integer with value 0
+print "Before 5:"
+while i is less than 10 do
+    when i is greater than or equal to 5 do
+        exit
+    end
+    print "  i = " attach i
+    increase i by 1
+end
+print "Done."
+
+# Nested loops with exit
+print ""
+print "=== Nested loop exit ==="
+create variable found as boolean with value false
+create variable target as integer with value 7
+repeat 100 times do
+    when found equals true do
+        exit
+    end
+    when __index__ equals target do
+        set found to true
+        print "Found " attach target attach " at iteration " attach __index__
+        exit
+    end
+end
+when found equals false do
+    print target attach " not found in 100 iterations"
+otherwise do
+    print "Search complete."
+end
+
+# Indexed for-each
+print ""
+print "=== Indexed for-each ==="
+create variable fruits as list with value ["apple", "banana", "cherry", "date", "elderberry"]
+for each fruit, i in fruits do
+    print i attach ". " attach fruit
+end

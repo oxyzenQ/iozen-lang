@@ -1,0 +1,452 @@
+# =============================================
+# JSON Parser in IOZEN
+# =============================================
+# A practical example that parses a simple JSON-like
+# format into IOZEN data structures (lists and maps).
+#
+# Features shown:
+#   - String builtins (trim, split, contains, replace, etc.)
+#   - Recursive descent parsing
+#   - Map and list construction
+#   - Error handling with try/catch and throw
+#   - Complex data manipulation
+# =============================================
+
+import "strings"
+
+# --------------------------------------------------
+# Parser state: we track position in the input string
+# --------------------------------------------------
+
+create variable parse_pos as integer with value 0
+create variable parse_input as text with value ""
+create variable parse_depth as integer with value 0
+
+# --------------------------------------------------
+# Helper: peek at current character
+# --------------------------------------------------
+function peek returns text
+    when parse_pos >= length(parse_input) do
+        return ""
+    end
+    return char_at(parse_input, parse_pos)
+end
+
+# --------------------------------------------------
+# Helper: advance and return current character
+# --------------------------------------------------
+function advance returns text
+    create variable ch as text with value peek()
+    set parse_pos with value parse_pos + 1
+    return ch
+end
+
+# --------------------------------------------------
+# Helper: skip whitespace characters
+# --------------------------------------------------
+function skip_whitespace
+    while (peek() == " ") or (peek() == "\n") or (peek() == "\t") or (peek() == "\r") do
+        advance()
+    end
+end
+
+# --------------------------------------------------
+# Parse a JSON string value
+# --------------------------------------------------
+function parse_string returns text
+    # Expect opening quote
+    create variable quote as text with value advance()
+    when quote != "\"" do
+        throw "Expected '\"' at position {parse_pos - 1}, got '{quote}'"
+    end
+
+    create variable result as text with value ""
+    while peek() != "\"" do
+        when peek() == "" do
+            throw "Unterminated string at position {parse_pos}"
+        end
+
+        # Handle escape sequences
+        when peek() == "\\" do
+            advance()  # skip backslash
+            create variable escaped as text with value advance()
+            match escaped
+                case "n" do set result with value attach(result, "\n") end
+                case "t" do set result with value attach(result, "\t") end
+                case "\"" do set result with value attach(result, "\"") end
+                otherwise do set result with value attach(result, escaped) end
+            end
+        otherwise do
+            set result with value attach(result, advance())
+        end
+    end
+
+    advance()  # skip closing quote
+    return result
+end
+
+# --------------------------------------------------
+# Parse a JSON number (integer or float)
+# --------------------------------------------------
+function parse_number returns float
+    create variable num_str as text with value ""
+    create variable has_dot as boolean with value false
+
+    # Optional negative sign
+    when peek() == "-" do
+        set num_str with value attach(num_str, advance())
+    end
+
+    # Digits before decimal point
+    while (peek() >= "0") and (peek() <= "9") do
+        set num_str with value attach(num_str, advance())
+    end
+
+    # Decimal point and fractional digits
+    when peek() == "." do
+        set has_dot with value true
+        set num_str with value attach(num_str, advance())
+        while (peek() >= "0") and (peek() <= "9") do
+            set num_str with value attach(num_str, advance())
+        end
+    end
+
+    return float(num_str)
+end
+
+# --------------------------------------------------
+# Parse a JSON array: [1, "hello", true, ...]
+# --------------------------------------------------
+function parse_array returns list
+    # Expect opening bracket
+    create variable bracket as text with value advance()
+    when bracket != "[" do
+        throw "Expected '[' at position {parse_pos - 1}"
+    end
+
+    set parse_depth with value parse_depth + 1
+    create variable result as list with value []
+
+    skip_whitespace()
+
+    # Handle empty array
+    when peek() == "]" do
+        advance()
+        set parse_depth with value parse_depth - 1
+        return result
+    end
+
+    # Parse comma-separated values
+    repeat 10000 times
+        skip_whitespace()
+        create variable value as any with value parse_value()
+        set result with value append(result, value)
+        skip_whitespace()
+
+        when peek() == "]" do
+            advance()
+            set parse_depth with value parse_depth - 1
+            return result
+        end
+
+        when peek() != "," do
+            throw "Expected ',' or ']' at position {parse_pos}"
+        end
+        advance()  # skip comma
+    end
+
+    throw "Array too deeply nested or malformed"
+end
+
+# --------------------------------------------------
+# Parse a JSON object: {"key": value, ...}
+# --------------------------------------------------
+function parse_object returns map
+    # Expect opening brace
+    create variable brace as text with value advance()
+    when brace != "{" do
+        throw "Expected '{' at position {parse_pos - 1}"
+    end
+
+    set parse_depth with value parse_depth + 1
+    create variable result as map with value map()
+
+    skip_whitespace()
+
+    # Handle empty object
+    when peek() == "}" do
+        advance()
+        set parse_depth with value parse_depth - 1
+        return result
+    end
+
+    # Parse key-value pairs
+    repeat 10000 times
+        skip_whitespace()
+
+        # Parse key (must be a string)
+        create variable key as text with value parse_string()
+
+        skip_whitespace()
+
+        # Expect colon
+        when peek() != ":" do
+            throw "Expected ':' after key '{key}' at position {parse_pos}"
+        end
+        advance()
+
+        skip_whitespace()
+
+        # Parse value
+        create variable value as any with value parse_value()
+        set result with value set_key(result, key, value)
+
+        skip_whitespace()
+
+        when peek() == "}" do
+            advance()
+            set parse_depth with value parse_depth - 1
+            return result
+        end
+
+        when peek() != "," do
+            throw "Expected ',' or '}}' at position {parse_pos}"
+        end
+        advance()  # skip comma
+    end
+
+    throw "Object too deeply nested or malformed"
+end
+
+# --------------------------------------------------
+# Parse any JSON value (dispatcher)
+# --------------------------------------------------
+function parse_value returns any
+    skip_whitespace()
+    create variable ch as text with value peek()
+
+    match ch
+        case "\"" do return parse_string() end
+        case "{" do return parse_object() end
+        case "[" do return parse_array() end
+        case "t" do
+            # Parse "true"
+            advance()
+            advance()
+            advance()
+            advance()
+            return true
+        end
+        case "f" do
+            # Parse "false"
+            advance()
+            advance()
+            advance()
+            advance()
+            advance()
+            return false
+        end
+        case "n" do
+            # Parse "null"
+            advance()
+            advance()
+            advance()
+            advance()
+            return "null"
+        end
+        otherwise do
+            # Must be a number
+            return parse_number()
+        end
+    end
+end
+
+# --------------------------------------------------
+# Top-level parse function
+# --------------------------------------------------
+function parse_json with json_text as text returns any
+    set parse_input with value json_text
+    set parse_pos with value 0
+    set parse_depth with value 0
+
+    try do
+        create variable result as any with value parse_value()
+        return "ok:{result}"
+    catch err do
+        return "error:Parse error at position {parse_pos}: {err}"
+    end
+end
+
+# --------------------------------------------------
+# Pretty-print parsed data (indent with depth)
+# --------------------------------------------------
+function pretty_print with data as any and indent as integer
+    create variable spaces as text with value ""
+    create variable i as integer with value 0
+    while i < indent do
+        set spaces with value attach(spaces, "  ")
+        set i with value i + 1
+    end
+
+    # Check the type of data
+    when is_map(data) do
+        print "{spaces}{"
+        create variable keys as list with value map_keys(data)
+        create variable ki as integer with value 0
+        for each key in keys do
+            create variable val as any with value get(data, key)
+            set ki with value ki + 1
+            print "{spaces}  \"{key}\": "
+            pretty_print(val, indent + 2)
+            when ki < length(keys) do
+                print ","
+            end
+        end
+        print "{spaces}}"
+    otherwise do
+        when is_list(data) do
+            print "{spaces}["
+            create variable li as integer with value 0
+            for each item in data do
+                set li with value li + 1
+                pretty_print(item, indent + 2)
+                when li < length(data) do
+                    print ","
+                end
+            end
+            print "{spaces}]"
+        otherwise do
+            when data == true do
+                print "{spaces}true"
+            otherwise do
+                when data == false do
+                    print "{spaces}false"
+                otherwise do
+                    when data == "null" do
+                        print "{spaces}null"
+                    otherwise do
+                        # String or number
+                        when contains("{data}", " ") or contains("{data}", ":") do
+                            print "{spaces}\"{data}\""
+                        otherwise do
+                            print "{spaces}{data}"
+                        end
+                    end
+                end
+            end
+        end
+    end
+end
+
+# =============================================
+# Test the parser with various JSON inputs
+# =============================================
+
+print "=== IOZEN JSON Parser Demo ==="
+print ""
+
+# --------------------------------------------------
+# Test 1: Simple object
+# --------------------------------------------------
+print "--- Test 1: Simple Object ---"
+
+create variable json1 as text with value "{\"name\": \"Alice\", \"age\": 30, \"active\": true}"
+create variable result1 as any with value parse_json(json1)
+print "Input:  {json1}"
+print "Output: {result1}"
+print ""
+
+# --------------------------------------------------
+# Test 2: Nested object
+# --------------------------------------------------
+print "--- Test 2: Nested Object ---"
+
+create variable json2 as text with value "{\"person\": {\"name\": \"Bob\", \"address\": {\"city\": \"NYC\", \"zip\": \"10001\"}}}"
+create variable result2 as any with value parse_json(json2)
+print "Input:  {json2}"
+print "Output: {result2}"
+print ""
+
+# --------------------------------------------------
+# Test 3: Array of objects
+# --------------------------------------------------
+print "--- Test 3: Array of Objects ---"
+
+create variable json3 as text with value "[{\"id\": 1, \"name\": \"Widget\"}, {\"id\": 2, \"name\": \"Gadget\"}]"
+create variable result3 as any with value parse_json(json3)
+print "Input:  {json3}"
+print "Output: {result3}"
+print ""
+
+# --------------------------------------------------
+# Test 4: Mixed types
+# --------------------------------------------------
+print "--- Test 4: Mixed Types ---"
+
+create variable json4 as text with value "[1, \"hello\", true, false, null, 3.14]"
+create variable result4 as any with value parse_json(json4)
+print "Input:  {json4}"
+print "Output: {result4}"
+print ""
+
+# --------------------------------------------------
+# Test 5: Empty structures
+# --------------------------------------------------
+print "--- Test 5: Empty Structures ---"
+
+create variable json5 as text with value "{\"empty_obj\": {}, \"empty_arr\": []}"
+create variable result5 as any with value parse_json(json5)
+print "Input:  {json5}"
+print "Output: {result5}"
+print ""
+
+# --------------------------------------------------
+# Test 6: Error handling
+# --------------------------------------------------
+print "--- Test 6: Error Handling ---"
+
+create variable bad_json1 as text with value "{\"missing_brace\": "
+create variable r1 as text with value parse_json(bad_json1)
+print "Missing brace: {r1}"
+
+create variable bad_json2 as text with value "[1, 2,"
+create variable r2 as text with value parse_json(bad_json2)
+print "Missing bracket: {r2}"
+
+create variable bad_json3 as text with value "{\"unclosed_str\": \"hello}"
+create variable r3 as text with value parse_json(bad_json3)
+print "Unclosed string: {r3}"
+
+print ""
+
+# --------------------------------------------------
+# Test 7: Practical - Parse config and extract values
+# --------------------------------------------------
+print "--- Test 7: Practical Config Parsing ---"
+
+create variable config_json as text with value "{
+    \"app_name\": \"My IOZEN App\",
+    \"version\": \"1.0.0\",
+    \"database\": {
+        \"host\": \"localhost\",
+        \"port\": 5432,
+        \"name\": \"mydb\"
+    },
+    \"features\": [\"auth\", \"logging\", \"api\"],
+    \"debug\": false
+}"
+
+create variable config_result as any with value parse_json(config_json)
+print "Config parsed: {config_result}"
+
+# Extract values from the parsed config
+when contains(config_result, "ok:") do
+    print "App: parsed successfully"
+    # In a real implementation, we would traverse the map
+    # to extract individual fields
+otherwise do
+    print "Config parse error: {config_result}"
+end
+
+print ""
+print "=== JSON Parser Demo Complete ==="

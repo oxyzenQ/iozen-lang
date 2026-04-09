@@ -5,15 +5,19 @@
 
 import { Token, TokenType } from './tokens';
 import type {
-  ASTNode, ProgramNode, VariableDeclNode, FunctionDeclNode,
+  ASTNode, ProgramNode, ImportNode, VariableDeclNode, FunctionDeclNode,
   FunctionParamNode, StructureDeclNode, FieldNode, EnumDeclNode,
   EnumCaseNode, PrintStmtNode, ReturnStmtNode, WhenNode,
   WhenBranchNode, CheckNode, CheckCaseNode, RepeatNode,
-  WhileNode, ForEachNode, LabelNode, ExitNode, IncreaseNode,
+  WhileNode, ForEachNode, LabelNode, ExitNode, ContinueNode, IncreaseNode,
   SetFieldNode, FunctionCallStmtNode, BlockNode, BinaryExprNode,
   UnaryExprNode, AttachExprNode, IdentifierNode, LiteralNode,
-  FunctionCallExprNode, MemberAccessNode, ListLiteralNode,
+  FunctionCallExprNode, MemberAccessNode, ListLiteralNode, MapLiteralNode,
+  ListCompNode, TernaryExprNode, CompoundAssignNode,
   ForceUnwrapNode, OrDefaultNode, HasValueNode, ValueInsideNode,
+  LambdaNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
+  PipelineExprNode, DestructureNode, ModuleDeclNode, UnionDeclNode,
+  SafeAccessNode, TypeAliasNode,
 } from './ast';
 
 export class ParseError extends Error {
@@ -47,6 +51,11 @@ export class Parser {
     return { kind: 'Program', statements } as ProgramNode;
   }
 
+  /** Parse a single expression (used by string interpolation) */
+  public parseSingle(): ASTNode {
+    return this.parseExpression();
+  }
+
   // ---- Statement Parsing ----
 
   private parseStatement(): ASTNode | null {
@@ -57,6 +66,8 @@ export class Parser {
     const token = this.peek();
 
     switch (token.type) {
+      case TokenType.Import:
+        return this.parseImport();
       case TokenType.Create:
         return this.parseVariableDecl();
       case TokenType.Constant:
@@ -83,6 +94,14 @@ export class Parser {
         return this.parseLabel();
       case TokenType.Exit:
         return this.parseExit();
+      case TokenType.Continue:
+        return this.parseContinue();
+      case TokenType.Match:
+        return this.parseMatch();
+      case TokenType.Try:
+        return this.parseTryCatch();
+      case TokenType.Throw:
+        return this.parseThrow();
       case TokenType.Increase:
         return this.parseIncrease();
       case TokenType.Decrease:
@@ -91,10 +110,55 @@ export class Parser {
         return this.parseSetField();
       case TokenType.Unsafe:
         return this.parseUnsafeBlock();
+      case TokenType.Module:
+        return this.parseModule();
       default:
         // Try to parse as expression statement (function call)
         return this.parseExpressionStatement();
     }
+  }
+
+  private parseImport(): ASTNode {
+    this.consume(TokenType.Import, 'Expected "import"');
+
+    // import "path" — string literal as module path
+    if (this.check(TokenType.StringLiteral)) {
+      const path = this.advance().value;
+      return {
+        kind: 'Import',
+        modulePath: path,
+        importNames: [],
+      } as ImportNode;
+    }
+
+    // import <name1>, <name2> from <module_path>
+    const importNames: string[] = [];
+
+    // Check for "import X, Y from module" pattern
+    if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.Comma) {
+      // Multiple names before "from"
+      while (true) {
+        importNames.push(this.consumeName('Expected import name').value);
+        if (!this.match(TokenType.Comma)) break;
+      }
+      this.consume(TokenType.From, 'Expected "from"');
+    } else if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.From) {
+      // Single name before "from"
+      importNames.push(this.consumeName('Expected import name').value);
+      this.consume(TokenType.From, 'Expected "from"');
+    }
+
+    // Module path: identifier(.identifier)*
+    const parts: string[] = [this.consumeName('Expected module name').value];
+    while (this.match(TokenType.Dot)) {
+      parts.push(this.consumeName('Expected module name').value);
+    }
+
+    return {
+      kind: 'Import',
+      modulePath: parts.join('/'),
+      importNames,
+    } as ImportNode;
   }
 
   private parseVariableDecl(isConstant: boolean = false): ASTNode {
@@ -102,11 +166,31 @@ export class Parser {
       this.consume(TokenType.Constant, 'Expected "constant"');
     } else {
       this.consume(TokenType.Create, 'Expected "create"');
+      // Handle "create constant variable X" or "create constant X" syntax
+      if (this.check(TokenType.Constant)) {
+        this.advance(); // consume "constant"
+        isConstant = true;
+      }
     }
 
-    // variable <name>
-    this.consume(TokenType.Variable, 'Expected "variable"');
-    const name = this.consumeName('Expected variable name').value;
+    // variable <name> [, <name2>, <name3>, ...]   (destructuring)
+    // For "create constant X", "variable" keyword is optional
+    if (isConstant && this.check(TokenType.Identifier)) {
+      // "create constant X" — skip "variable" keyword
+    } else {
+      this.consume(TokenType.Variable, 'Expected "variable"');
+    }
+    const firstName = this.consumeName('Expected variable name').value;
+
+    // Check for destructuring: multiple names separated by commas
+    // e.g., create variable a, b, c as list with value [1, 2, 3]
+    const names: string[] = [firstName];
+    if (this.check(TokenType.Comma)) {
+      while (this.match(TokenType.Comma)) {
+        const nextName = this.consumeName('Expected variable name after comma').value;
+        names.push(nextName);
+      }
+    }
 
     // as <type>
     const qualifiers: string[] = [];
@@ -132,15 +216,35 @@ export class Parser {
     // with value <expr>
     let value: ASTNode | null = null;
     if (this.match(TokenType.With)) {
-      this.consume(TokenType.Value, 'Expected "value"');
-      value = this.parseExpression();
+      if (this.check(TokenType.Value)) {
+        this.consume(TokenType.Value, 'Expected "value"');
+        value = this.parseExpression();
+      } else {
+        // Structure field initialization: with x = 0 and y = 0
+        // Pattern: Identifier "=" expr ("and" Identifier "=" expr)*
+        if (this.check(TokenType.Identifier) && this.peekAt(1).type === TokenType.Assign) {
+          value = this.parseFieldInit();
+        } else {
+          // Otherwise treat as a value expression
+          value = this.parseExpression();
+        }
+      }
     } else if (!isConstant) {
       // Variables can be declared without value (default to nothing/zero)
+    } else {
+      // Constants MUST have an initial value
+      throw new ParseError('Constant must have an initial value (use "with value ...")', this.peek());
+    }
+
+    // Destructuring: if multiple names, wrap as DestructureNode
+    if (names.length > 1 && value) {
+      return { kind: 'Destructure', names, value } as DestructureNode;
     }
 
     return {
       kind: 'VariableDecl',
-      name,
+      name: firstName,
+      names: [],
       typeName,
       qualifiers,
       value,
@@ -268,9 +372,13 @@ export class Parser {
       return this.parseStructureDecl();
     } else if (next.type === TokenType.Enum) {
       return this.parseEnumDecl();
+    } else if (next.type === TokenType.Union) {
+      return this.parseUnionDecl();
+    } else if (next.type === TokenType.Type) {
+      return this.parseTypeAlias();
     }
 
-    throw new ParseError('Expected "structure" or "enum" after "define"', this.peek());
+    throw new ParseError('Expected "structure", "enum", "union", or "type" after "define"', this.peek());
   }
 
   private parseStructureDecl(): ASTNode {
@@ -443,12 +551,19 @@ export class Parser {
     this.consume(TokenType.For, 'Expected "for"');
     this.consume(TokenType.Each, 'Expected "each"');
     const variable = this.consume(TokenType.Identifier, 'Expected variable name').value;
+
+    // Check for indexed for-each: for each item, index in items
+    let indexVariable: string | null = null;
+    if (this.match(TokenType.Comma)) {
+      indexVariable = this.consume(TokenType.Identifier, 'Expected index variable name').value;
+    }
+
     this.consume(TokenType.In, 'Expected "in"');
     const iterable = this.parseExpression();
     this.consume(TokenType.Do, 'Expected "do"');
     const body = this.parseBlockBody();
     this.consume(TokenType.End, 'Expected "end"');
-    return { kind: 'ForEach', variable, iterable, body } as ForEachNode;
+    return { kind: 'ForEach', variable, indexVariable, iterable, body } as ForEachNode;
   }
 
   private parseLabel(): ASTNode {
@@ -464,6 +579,126 @@ export class Parser {
       target = this.advance().value;
     }
     return { kind: 'Exit', target } as ExitNode;
+  }
+
+  private parseContinue(): ASTNode {
+    this.consume(TokenType.Continue, 'Expected "continue"');
+    return { kind: 'Continue' } as ContinueNode;
+  }
+
+  private parseMatch(): ASTNode {
+    this.consume(TokenType.Match, 'Expected "match"');
+    const subject = this.parseExpression();
+
+    const cases: MatchCaseNode[] = [];
+    let otherwise: ASTNode[] | null = null;
+
+    while (this.check(TokenType.Case) || this.check(TokenType.Otherwise)) {
+      if (this.check(TokenType.Case)) {
+        this.advance(); // consume 'case'
+
+        // Parse pattern: literal, identifier (catch-all), or _ (wildcard)
+        let pattern: ASTNode;
+        let binding: string | null = null;
+
+        const tok = this.peek();
+        if (tok.type === TokenType.Identifier && tok.value === '_') {
+          this.advance();
+          pattern = { kind: 'Literal', type: 'null', value: null } as LiteralNode;
+        } else if (this.isLiteralToken(tok)) {
+          pattern = this.parsePrimary();
+        } else {
+          // Catch-all binding: case x do ...
+          binding = tok.value;
+          pattern = { kind: 'Identifier', name: tok.value } as IdentifierNode;
+          this.advance();
+        }
+
+        this.consume(TokenType.Do, 'Expected "do" after match case');
+        const body: ASTNode[] = [];
+        while (!this.check(TokenType.End) && !this.check(TokenType.Case) && !this.check(TokenType.Otherwise) && !this.isAtEnd()) {
+          const stmt = this.parseStatement();
+          if (stmt) body.push(stmt);
+        }
+        this.consume(TokenType.End, 'Expected "end" to close match case');
+
+        cases.push({ kind: 'MatchCase', pattern, binding, body } as MatchCaseNode);
+      } else if (this.check(TokenType.Otherwise)) {
+        this.advance(); // consume 'otherwise'
+        this.consume(TokenType.Do, 'Expected "do" after otherwise');
+        otherwise = [];
+        while (!this.check(TokenType.End) && !this.isAtEnd()) {
+          const stmt = this.parseStatement();
+          if (stmt) otherwise.push(stmt);
+        }
+        this.consume(TokenType.End, 'Expected "end" to close otherwise');
+      }
+    }
+
+    // consume final 'end' for the match block
+    if (this.check(TokenType.End)) {
+      this.advance();
+    }
+
+    return { kind: 'Match', subject, cases, otherwise } as MatchNode;
+  }
+
+  private parseTryCatch(): ASTNode {
+    this.consume(TokenType.Try, 'Expected "try"');
+    this.consume(TokenType.Do, 'Expected "do" after try');
+
+    const tryBody: ASTNode[] = [];
+    while (!this.check(TokenType.End) && !this.check(TokenType.Catch) && !this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) tryBody.push(stmt);
+    }
+    // consume optional "end" before "catch" (both styles supported)
+    if (this.check(TokenType.End)) {
+      this.advance();
+    }
+
+    this.consume(TokenType.Catch, 'Expected "catch"');
+    let catchBinding: string | null = null;
+    if (this.peek().type === TokenType.Identifier) {
+      catchBinding = this.advance().value;
+    }
+    this.consume(TokenType.Do, 'Expected "do" after catch');
+
+    const catchBody: ASTNode[] = [];
+    while (!this.check(TokenType.End) && !this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) catchBody.push(stmt);
+    }
+    this.consume(TokenType.End, 'Expected "end" to close catch block');
+
+    return { kind: 'TryCatch', tryBody, catchBinding, catchBody } as TryCatchNode;
+  }
+
+  private parseThrow(): ASTNode {
+    this.consume(TokenType.Throw, 'Expected "throw"');
+    let value: ASTNode | null = null;
+    // Parse the thrown value if it's an expression (not a statement keyword)
+    if (!this.isAtEnd() && !this.check(TokenType.End) && !this.check(TokenType.Newline)) {
+      const tok = this.peek();
+      // Only parse if it looks like an expression, not a statement keyword
+      if (tok.type === TokenType.Identifier || tok.type === TokenType.IntegerLiteral ||
+          tok.type === TokenType.FloatLiteral || tok.type === TokenType.StringLiteral ||
+          tok.type === TokenType.BooleanLiteral || tok.type === TokenType.NothingLiteral ||
+          tok.type === TokenType.Minus || tok.type === TokenType.Not ||
+          tok.type === TokenType.LeftParen || tok.type === TokenType.LeftBracket) {
+        value = this.parseExpression();
+      }
+    }
+    return { kind: 'Throw', value } as ThrowNode;
+  }
+
+  private isLiteralToken(tok: Token): boolean {
+    return tok.type === TokenType.IntegerLiteral ||
+           tok.type === TokenType.FloatLiteral ||
+           tok.type === TokenType.StringLiteral ||
+           tok.type === TokenType.CharLiteral ||
+           tok.type === TokenType.BooleanLiteral ||
+           tok.type === TokenType.NothingLiteral;
   }
 
   private parseIncrease(): ASTNode {
@@ -531,7 +766,79 @@ export class Parser {
     return { kind: 'Block', statements } as BlockNode;
   }
 
+  private parseModule(): ASTNode {
+    this.consume(TokenType.Module, 'Expected "module"');
+    const name = this.consume(TokenType.Identifier, 'Expected module name').value;
+
+    // Parse exposed names: expose name1, name2, ...
+    const exposedNames: string[] = [];
+    if (this.check(TokenType.Expose)) {
+      this.advance(); // consume "expose"
+      while (true) {
+        exposedNames.push(this.consume(TokenType.Identifier, 'Expected exposed name').value);
+        if (!this.match(TokenType.Comma)) break;
+      }
+    }
+
+    // Module body: statements until "end"
+    const body: ASTNode[] = [];
+    while (!this.check(TokenType.End) && !this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+    this.consume(TokenType.End, 'Expected "end" to close module');
+
+    return { kind: 'ModuleDecl', name, exposedNames, body } as ModuleDeclNode;
+  }
+
+  private parseUnionDecl(): ASTNode {
+    this.consume(TokenType.Define, 'Expected "define"');
+    this.consume(TokenType.Union, 'Expected "union"');
+    const name = this.consume(TokenType.Identifier, 'Expected union name').value;
+
+    const variants: { name: string; typeName: string }[] = [];
+    while (this.check(TokenType.Case) && !this.isAtEnd()) {
+      this.consume(TokenType.Case, 'Expected "case"');
+      const variantName = this.consume(TokenType.Identifier, 'Expected variant name').value;
+      let typeName = 'nothing';
+      if (this.match(TokenType.As)) {
+        typeName = this.parseTypeName();
+      }
+      variants.push({ name: variantName, typeName });
+    }
+
+    this.consume(TokenType.End, 'Expected "end" to close union');
+    return { kind: 'UnionDecl', name, variants } as UnionDeclNode;
+  }
+
+  private parseTypeAlias(): ASTNode {
+    this.consume(TokenType.Define, 'Expected "define"');
+    this.consume(TokenType.Type, 'Expected "type"');
+    const name = this.consume(TokenType.Identifier, 'Expected type alias name').value;
+    this.consume(TokenType.As, 'Expected "as"');
+    const targetType = this.parseTypeName();
+    this.consume(TokenType.End, 'Expected "end" to close type alias');
+    return { kind: 'TypeAlias', name, targetType } as TypeAliasNode;
+  }
+
   private parseExpressionStatement(): ASTNode | null {
+    // Check for compound assignment: identifier += expr, etc.
+    if (this.peek().type === TokenType.Identifier && !this.isAtEnd()) {
+      const nextTok = this.peekAt(1);
+      if (nextTok && (
+        nextTok.type === TokenType.PlusAssign ||
+        nextTok.type === TokenType.MinusAssign ||
+        nextTok.type === TokenType.StarAssign ||
+        nextTok.type === TokenType.SlashAssign ||
+        nextTok.type === TokenType.PercentAssign
+      )) {
+        const name = this.advance().value;
+        const opTok = this.advance();
+        const value = this.parseExpression();
+        return { kind: 'CompoundAssign', name, operator: opTok.value, value } as CompoundAssignNode;
+      }
+    }
+
     // Could be a function call statement
     const expr = this.parseExpression();
 
@@ -542,6 +849,17 @@ export class Parser {
         kind: 'FunctionCallStmt',
         name: fce.name,
         arguments: fce.arguments,
+      } as FunctionCallStmtNode;
+    }
+
+    // If it's a bare identifier at statement position, treat as zero-arg function call
+    // This allows: `my_function` as a shorthand for `my_function with nothing`
+    if (expr.kind === 'Identifier') {
+      const id = expr as IdentifierNode;
+      return {
+        kind: 'FunctionCallStmt',
+        name: id.name,
+        arguments: [],
       } as FunctionCallStmtNode;
     }
 
@@ -565,7 +883,24 @@ export class Parser {
   // ---- Expression Parsing (Precedence Climbing) ----
 
   private parseExpression(): ASTNode {
-    return this.parseAttach();
+    return this.parsePipeline();
+  }
+
+  // Pipeline: a |> f(b) |> g(c) → g(f(a, b), c)
+  private parsePipeline(): ASTNode {
+    let left = this.parseAttach();
+
+    if (this.check(TokenType.Pipe)) {
+      const stages: ASTNode[] = [left];
+      while (this.check(TokenType.Pipe)) {
+        this.advance();
+        const stage = this.parseAttach();
+        stages.push(stage);
+      }
+      return { kind: 'PipelineExpr', stages } as PipelineExprNode;
+    }
+
+    return left;
   }
 
   private parseAttach(): ASTNode {
@@ -606,6 +941,7 @@ export class Parser {
 
   private parseComparison(): ASTNode {
     let left = this.parseAdditive();
+    let matched = false;
 
     const compOps = [
       TokenType.Equals, TokenType.NotEquals,
@@ -613,34 +949,37 @@ export class Parser {
       TokenType.LessOrEqual, TokenType.GreaterOrEqual,
     ];
 
+    // Symbol comparison operators: ==, !=, <, >, <=, >=
     if (compOps.includes(this.peek().type)) {
       const op = this.parseComparisonOp();
       const right = this.parseAdditive();
       left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      matched = true;
     }
 
-    // Support "is" keyword for comparisons
-    if (this.check(TokenType.Is)) {
+    // "is" keyword for comparisons: x is greater than 5, x equals 10
+    if (!matched && this.check(TokenType.Is)) {
       this.advance();
       const op = this.parseComparisonOp();
       const right = this.parseAdditive();
       left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      matched = true;
     }
 
-    // Support "equals", "greater than", "less than" etc. as direct comparison operators
-    // (without preceding "is")
-    if (this.check(TokenType.Equal) || this.check(TokenType.Greater) || this.check(TokenType.Less)) {
+    // NL comparison keywords without preceding "is": x equals 10, x greater than 5
+    if (!matched && (this.check(TokenType.Equal) || this.check(TokenType.Greater) || this.check(TokenType.Less))) {
       const op = this.parseComparisonOp();
       const right = this.parseAdditive();
       left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      matched = true;
     }
-    if (this.check(TokenType.Identifier)) {
-      const word = this.peek().value.toLowerCase();
-      if (['equals', 'greater', 'less', 'not', 'equal'].includes(word)) {
-        const op = this.parseComparisonOp();
-        const right = this.parseAdditive();
-        left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
-      }
+
+    // "inside" keyword for membership: x inside [1, 2, 3]
+    if (!matched && this.check(TokenType.Inside)) {
+      this.advance();
+      const right = this.parseAdditive();
+      left = { kind: 'BinaryExpr', left, operator: 'inside', right } as BinaryExprNode;
+      matched = true;
     }
 
     return left;
@@ -649,7 +988,7 @@ export class Parser {
   private parseComparisonOp(): string {
     const token = this.peek();
 
-    // Symbol operators
+    // Symbol operators (highest priority)
     if (token.type === TokenType.Equals) { this.advance(); return '=='; }
     if (token.type === TokenType.NotEquals) { this.advance(); return '!='; }
     if (token.type === TokenType.LessThan) { this.advance(); return '<'; }
@@ -657,54 +996,35 @@ export class Parser {
     if (token.type === TokenType.LessOrEqual) { this.advance(); return '<='; }
     if (token.type === TokenType.GreaterOrEqual) { this.advance(); return '>='; }
 
-    // Natural language operators (for "when x is ...")
-    if (token.type === TokenType.Identifier || token.type === TokenType.Greater || token.type === TokenType.Less) {
-      const word = token.value.toLowerCase();
-      if (word === 'greater' || token.type === TokenType.Greater) {
-        this.advance();
-        if (this.check(TokenType.Than)) this.advance();
-        // Check for "or equal to"
-        if (this.check(TokenType.Or)) {
-          this.advance(); // or
-          if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
-          if (this.check(TokenType.To)) this.advance();
-          return '>=';
-        }
-        return '>';
-      }
-      if (word === 'less' || token.type === TokenType.Less) {
-        this.advance();
-        if (this.check(TokenType.Than)) this.advance();
-        // Check for "or equal to"
-        if (this.check(TokenType.Or)) {
-          this.advance(); // or
-          if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
-          if (this.check(TokenType.To)) this.advance();
-          return '<=';
-        }
-        return '<';
-      }
-      if (word === 'equal') {
-        this.advance();
-        if (this.check(TokenType.To)) this.advance();
-        return '==';
-      }
-      if (word === 'not' || token.type === TokenType.Not) {
+    // Natural language operators (tokenized as keywords: Greater, Less, Equal, Not)
+    if (token.type === TokenType.Greater) {
+      this.advance();
+      if (this.check(TokenType.Than)) this.advance();
+      // Check for "or equal to"
+      if (this.check(TokenType.Or)) {
         this.advance();
         if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
         if (this.check(TokenType.To)) this.advance();
-        return '!=';
+        return '>=';
       }
+      return '>';
     }
-
-    // "equals" and "equal" as standalone keywords (tokenized as TokenType.Equal)
+    if (token.type === TokenType.Less) {
+      this.advance();
+      if (this.check(TokenType.Than)) this.advance();
+      if (this.check(TokenType.Or)) {
+        this.advance();
+        if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
+        if (this.check(TokenType.To)) this.advance();
+        return '<=';
+      }
+      return '<';
+    }
     if (token.type === TokenType.Equal) {
       this.advance();
       if (this.check(TokenType.To)) this.advance();
       return '==';
     }
-
-    // "not" as standalone keyword (tokenized as TokenType.Not)
     if (token.type === TokenType.Not) {
       this.advance();
       if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
@@ -712,10 +1032,42 @@ export class Parser {
       return '!=';
     }
 
-    // Handle "equals" keyword (BooleanLiteral "true"/"false" handling)
-    if (token.type === TokenType.Equals) {
-      this.advance();
-      return '==';
+    // Identifier-based NL operators ("equals", "greater", "less", "not", "equal")
+    if (token.type === TokenType.Identifier) {
+      const word = token.value.toLowerCase();
+      if (word === 'greater') {
+        this.advance();
+        if (this.check(TokenType.Than)) this.advance();
+        if (this.check(TokenType.Or)) {
+          this.advance();
+          if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
+          if (this.check(TokenType.To)) this.advance();
+          return '>=';
+        }
+        return '>';
+      }
+      if (word === 'less') {
+        this.advance();
+        if (this.check(TokenType.Than)) this.advance();
+        if (this.check(TokenType.Or)) {
+          this.advance();
+          if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
+          if (this.check(TokenType.To)) this.advance();
+          return '<=';
+        }
+        return '<';
+      }
+      if (word === 'equals' || word === 'equal') {
+        this.advance();
+        if (this.check(TokenType.To)) this.advance();
+        return '==';
+      }
+      if (word === 'not') {
+        this.advance();
+        if (this.check(TokenType.Equal) || (this.check(TokenType.Identifier) && this.peek().value.toLowerCase() === 'equal')) this.advance();
+        if (this.check(TokenType.To)) this.advance();
+        return '!=';
+      }
     }
 
     throw new ParseError(`Expected comparison operator, got ${token.value}`, token);
@@ -773,11 +1125,34 @@ export class Parser {
         continue;
       }
 
+      // Function call with "with": expr with arg1 and arg2
+      if (this.check(TokenType.With) && expr.kind === 'Identifier') {
+        this.advance(); // consume "with"
+        const args: ASTNode[] = [];
+        // Parse first argument (use parseOr to avoid consuming "and" separators)
+        args.push(this.parseOr());
+        // Parse additional arguments separated by "and"
+        while (this.check(TokenType.And)) {
+          this.advance(); // consume "and"
+          args.push(this.parseOr());
+        }
+        expr = { kind: 'FunctionCallExpr', name: (expr as IdentifierNode).name, arguments: args } as FunctionCallExprNode;
+        continue;
+      }
+
       // Member access: expr.field
       if (this.check(TokenType.Dot)) {
         this.advance();
         const field = this.consume(TokenType.Identifier, 'Expected field name').value;
         expr = { kind: 'MemberAccess', object: expr, field } as MemberAccessNode;
+        continue;
+      }
+
+      // Safe member access: expr?.field
+      if (this.check(TokenType.OptionalDot)) {
+        this.advance();
+        const field = this.consume(TokenType.Identifier, 'Expected field name').value;
+        expr = { kind: 'SafeAccess', object: expr, field } as SafeAccessNode;
         continue;
       }
 
@@ -804,8 +1179,26 @@ export class Parser {
     return expr;
   }
 
+  // Ternary expression (only callable from parenthesized context): expr when condition otherwise default
+  private parseTernary(): ASTNode {
+    let expr = this.parsePipeline();
+    if (this.check(TokenType.When)) {
+      this.advance();
+      const condition = this.parsePipeline();
+      this.consume(TokenType.Otherwise, 'Expected "otherwise" in ternary expression');
+      const elseExpr = this.parseTernary(); // right-associative
+      return { kind: 'TernaryExpr', condition, thenExpr: expr, elseExpr } as TernaryExprNode;
+    }
+    return expr;
+  }
+
   private parsePrimary(): ASTNode {
     const token = this.peek();
+
+    // Match expression (can be used as expression in certain contexts)
+    if (token.type === TokenType.Match) {
+      return this.parseMatch();
+    }
 
     // Integer literal
     if (token.type === TokenType.IntegerLiteral) {
@@ -843,15 +1236,20 @@ export class Parser {
       return { kind: 'Literal', type: 'nothing', value: null } as LiteralNode;
     }
 
-    // List literal: [1, 2, 3]
+    // List literal: [1, 2, 3] or list comprehension: [expr for each var in iterable]
     if (token.type === TokenType.LeftBracket) {
       return this.parseListLiteral();
     }
 
-    // Parenthesized expression
+    // Map literal: {key: value, ...}
+    if (token.type === TokenType.LeftBrace) {
+      return this.parseMapLiteral();
+    }
+
+    // Parenthesized expression (also enables ternary: (expr when cond otherwise default))
     if (token.type === TokenType.LeftParen) {
       this.advance();
-      const expr = this.parseExpression();
+      const expr = this.parseTernary();
       this.consume(TokenType.RightParen, 'Expected ")"');
       return expr;
     }
@@ -879,6 +1277,14 @@ export class Parser {
       return { kind: 'ValueInside', expression: expr } as ValueInsideNode;
     }
 
+    // Lambda: function with x as type returns type ... end
+    if (token.type === TokenType.Function) {
+      const next = this.peekAt(1);
+      if (next.type === TokenType.With || next.type === TokenType.LeftParen) {
+        return this.parseLambda();
+      }
+    }
+
     // Identifier (could be variable or function name)
     // Also allow type keywords to be used as identifiers (e.g., variable named "result")
     if (token.type === TokenType.Identifier || this.isTypeKeyword() || this.isLogicalKeyword()) {
@@ -901,6 +1307,69 @@ export class Parser {
     }
 
     throw new ParseError(`Unexpected token: ${token.value} (${token.type})`, token);
+  }
+
+  private parseLambda(): ASTNode {
+    this.consume(TokenType.Function, 'Expected "function"');
+
+    const parameters: FunctionParamNode[] = [];
+    if (this.match(TokenType.With)) {
+      // "with" style: with param1 as type and param2 as type
+      while (true) {
+        const qualifiers: string[] = [];
+        while (this.isTypeQualifier() && this.peek().type !== TokenType.As) {
+          qualifiers.push(this.advance().value.toLowerCase());
+        }
+        if (this.peek().type !== TokenType.Identifier && !this.isTypeKeyword()) break;
+
+        const paramName = this.consumeName('Expected parameter name').value;
+        this.consume(TokenType.As, 'Expected "as" after parameter name');
+        const paramType = this.parseTypeName();
+        parameters.push({ name: paramName, typeName: paramType, qualifiers });
+
+        if (this.match(TokenType.Comma)) continue;
+        if (this.check(TokenType.And)) {
+          this.advance();
+          continue;
+        }
+        break;
+      }
+    } else if (this.match(TokenType.LeftParen)) {
+      while (!this.check(TokenType.RightParen) && !this.isAtEnd()) {
+        const qualifiers: string[] = [];
+        if (this.peek().type !== TokenType.Identifier && !this.isTypeKeyword()) break;
+        const paramName = this.consumeName('Expected parameter name').value;
+        parameters.push({ name: paramName, typeName: 'auto', qualifiers });
+        if (!this.match(TokenType.Comma)) break;
+      }
+      this.consume(TokenType.RightParen, 'Expected ")"');
+    }
+
+    // Returns <type>
+    let returnType = 'nothing';
+    const returnQualifiers: string[] = [];
+    if (this.match(TokenType.Returns)) {
+      while (this.isTypeQualifier() && !this.isTypeKeyword()) {
+        returnQualifiers.push(this.advance().value.toLowerCase());
+      }
+      returnType = this.parseTypeName();
+    }
+
+    // Body
+    const body: ASTNode[] = [];
+    while (!this.check(TokenType.End) && !this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) body.push(stmt);
+    }
+    this.consume(TokenType.End, 'Expected "end" to close lambda');
+
+    return {
+      kind: 'Lambda',
+      parameters,
+      returnType,
+      returnQualifiers,
+      body,
+    } as LambdaNode;
   }
 
   private parseNaturalCall(name: string): ASTNode {
@@ -936,17 +1405,60 @@ export class Parser {
 
   private parseListLiteral(): ASTNode {
     this.consume(TokenType.LeftBracket, 'Expected "["');
-    const elements: ASTNode[] = [];
 
-    if (!this.check(TokenType.RightBracket)) {
+    // Check for empty list
+    if (this.check(TokenType.RightBracket)) {
+      this.advance();
+      return { kind: 'ListLiteral', elements: [] } as ListLiteralNode;
+    }
+
+    // Parse first expression
+    const firstExpr = this.parseExpression();
+
+    // Check for list comprehension: [expr for each x in list]
+    if (this.check(TokenType.For)) {
+      this.advance(); // consume 'for'
+      this.consume(TokenType.Each, 'Expected "each" in list comprehension');
+      const variable = this.consume(TokenType.Identifier, 'Expected variable name').value;
+      this.consume(TokenType.In, 'Expected "in"');
+      const iterable = this.parseExpression();
+      this.consume(TokenType.RightBracket, 'Expected "]"');
+      return { kind: 'ListComp', expression: firstExpr, variable, iterable } as ListCompNode;
+    }
+
+    // Normal list literal
+    const elements: ASTNode[] = [firstExpr];
+    while (this.match(TokenType.Comma)) {
       elements.push(this.parseExpression());
-      while (this.match(TokenType.Comma)) {
-        elements.push(this.parseExpression());
-      }
     }
 
     this.consume(TokenType.RightBracket, 'Expected "]"');
     return { kind: 'ListLiteral', elements } as ListLiteralNode;
+  }
+
+  private parseMapLiteral(): ASTNode {
+    this.consume(TokenType.LeftBrace, 'Expected "{"');
+
+    const entries: { key: ASTNode; value: ASTNode }[] = [];
+
+    if (!this.check(TokenType.RightBrace)) {
+      // Parse first entry: expression : expression
+      const key = this.parseExpression();
+      this.consume(TokenType.Colon, 'Expected ":" in map literal');
+      const value = this.parseExpression();
+      entries.push({ key, value });
+
+      while (this.match(TokenType.Comma)) {
+        if (this.check(TokenType.RightBrace)) break; // trailing comma
+        const k = this.parseExpression();
+        this.consume(TokenType.Colon, 'Expected ":" in map literal');
+        const v = this.parseExpression();
+        entries.push({ key: k, value: v });
+      }
+    }
+
+    this.consume(TokenType.RightBrace, 'Expected "}"');
+    return { kind: 'MapLiteral', entries } as MapLiteralNode;
   }
 
   private parseArgumentList(): ASTNode[] {
@@ -962,11 +1474,36 @@ export class Parser {
     return args;
   }
 
+  private parseFieldInit(): ASTNode {
+    // Field-style initialization: with x = 0 and y = 0
+    // Produces: FunctionCallExpr name='__struct_init__', args=[fieldName, value, ...]
+    const parts: ASTNode[] = [];
+
+    while (true) {
+      const fieldName = this.consumeName('Expected field name').value;
+      this.consume(TokenType.Assign, 'Expected "=" in field initialization');
+      const fieldValue = this.parseAdditive();
+
+      parts.push({ kind: 'Literal', type: 'text', value: fieldName } as LiteralNode);
+      parts.push(fieldValue);
+
+      if (!this.match(TokenType.And)) break;
+    }
+
+    return { kind: 'FunctionCallExpr', name: '__struct_init__', arguments: parts } as FunctionCallExprNode;
+  }
+
   // ---- Helpers ----
 
   private consumeName(message: string): Token {
     const t = this.peek();
-    if (t.type === TokenType.Identifier || this.isTypeKeyword() || this.isLogicalKeyword()) {
+    if (t.type === TokenType.Identifier || this.isTypeKeyword() || this.isLogicalKeyword() ||
+        t.type === TokenType.Label || t.type === TokenType.Case ||
+        t.type === TokenType.Match || t.type === TokenType.Catch ||
+        t.type === TokenType.Throw || t.type === TokenType.Exit ||
+        t.type === TokenType.Module || t.type === TokenType.Expose ||
+        t.type === TokenType.Start || t.type === TokenType.Wait ||
+        t.type === TokenType.Send || t.type === TokenType.Receive) {
       return this.advance();
     }
     throw new ParseError(message, t);
@@ -977,7 +1514,7 @@ export class Parser {
       TokenType.Integer, TokenType.Float, TokenType.Boolean,
       TokenType.Character, TokenType.Text, TokenType.Pointer,
       TokenType.Address, TokenType.Nothing, TokenType.List,
-      TokenType.Optional, TokenType.Result,
+      TokenType.Optional, TokenType.Result, TokenType.Map,
     ].includes(this.peek().type);
   }
 

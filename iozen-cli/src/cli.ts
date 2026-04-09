@@ -70,6 +70,13 @@ async function main() {
     case "ast":
       await cmdAst(args.slice(1));
       break;
+    case "repl":
+    case "shell":
+      await cmdRepl();
+      break;
+    case "eval":
+      await cmdEval(args.slice(1));
+      break;
     case "help":
     case "-h":
     case "--help":
@@ -123,6 +130,7 @@ async function cmdRun(args: string[]) {
     // Phase 3: Interpretation
     const t3 = performance.now();
     const interpreter = new Interpreter();
+    interpreter.setSourceFilePath(filePath);
     const result = interpreter.run(source);
     const execTime = (performance.now() - t3).toFixed(2);
     const totalTime = (performance.now() - t0).toFixed(2);
@@ -150,7 +158,19 @@ async function cmdRun(args: string[]) {
     }
   } catch (e) {
     if (e instanceof ParseError) {
+      const lines = source.split('\n');
+      const lineIdx = e.token.line - 1;
       error(`Parse error at line ${e.token.line}, column ${e.token.column}: ${e.message}`);
+      if (lineIdx >= 0 && lineIdx < lines.length) {
+        const lineContent = lines[lineIdx];
+        process.stderr.write(`${C.dim}  --> Line ${e.token.line}, Column ${e.token.column}${C.reset}\n`);
+        process.stderr.write(`${C.dim}    |${C.reset}\n`);
+        process.stderr.write(`${C.dim}${String(e.token.line).padStart(2)} | ${C.white}${lineContent}${C.reset}\n`);
+        if (e.token.column > 0) {
+          const pad = String(e.token.column).length + 5;
+          process.stderr.write(`${C.dim}${' '.repeat(pad)}|${' '.repeat(e.token.column - 1)}${C.red}^${C.reset}\n`);
+        }
+      }
     } else if (e instanceof Error) {
       error(`${e.name}: ${e.message}`);
     } else {
@@ -206,7 +226,7 @@ async function cmdBuild(args: string[]) {
     const cmd = `bun build "${runnerPath}" --compile --outfile "${outputPath}"`;
 
     log(`${C.gray}  ✓ Compiling to binary...${C.reset}`);
-    execSync(cmd, { stdio: "inherit", cwd: resolve("/home/z/my-project") });
+    execSync(cmd, { stdio: "inherit", cwd: process.cwd() });
 
     // Cleanup runner
     const { unlinkSync } = await import("node:fs");
@@ -393,15 +413,166 @@ for (const err of result.errors) {
 
 function getIOZENRuntimeCode(): string {
   // Returns the IOZEN runtime as inline code for standalone compilation
-  // In production, this would bundle all the language runtime files
   return `
 // === IOZEN Runtime (bundled) ===
-// This is a placeholder — in production, the full runtime would be inlined
-// For now, we dynamically import from the IOZEN module
-import { Lexer } from "${resolve("/home/z/my-project/src/lib/iozen/lexer")}";
-import { Parser } from "${resolve("/home/z/my-project/src/lib/iozen/parser")}";
-import { Interpreter } from "${resolve("/home/z/my-project/src/lib/iozen/interpreter")}";
+import { Lexer } from "../../src/lib/iozen/lexer";
+import { Parser } from "../../src/lib/iozen/parser";
+import { Interpreter } from "../../src/lib/iozen/interpreter";
 `;
+}
+
+function cmdEval(args: string[]): Promise<void> {
+  if (args.length === 0) {
+    error('Usage: iozen eval <code>');
+    process.exit(1);
+  }
+
+  const source = args.join(' ');
+
+  try {
+    const interpreter = new Interpreter();
+    const result = interpreter.run(source);
+
+    for (const line of result.output) {
+      console.log(line);
+    }
+
+    for (const err of result.errors) {
+      console.error(`${C.red}  ✗ ${err}${C.reset}`);
+    }
+
+    if (result.errors.length > 0) {
+      process.exit(1);
+    }
+  } catch (e) {
+    if (e instanceof ParseError) {
+      error(`Parse error: ${e.message}`);
+    } else if (e instanceof Error) {
+      error(`${e.name}: ${e.message}`);
+    } else {
+      error(String(e));
+    }
+    process.exit(1);
+  }
+}
+
+async function cmdRepl(): Promise<void> {
+  const { createInterface } = await import('node:readline');
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+
+  log('');
+  log(`${C.bold}${C.cyan}IOZEN Interactive Shell${C.reset} v${VERSION}`);
+  log(`${C.dim}Type IOZEN expressions or statements. Type :quit to exit.${C.reset}`);
+  log('');
+
+  let interpreter = new Interpreter();
+  let buffer = '';
+
+  const prompt = () => {
+    rl.question(`${C.green}iozen>${C.reset} `, (line) => {
+      const trimmed = line.trim();
+
+      if (trimmed === '' || trimmed.startsWith('#')) {
+        prompt();
+        return;
+      }
+
+      // REPL commands
+      if (trimmed === ':quit' || trimmed === ':q' || trimmed === ':exit') {
+        log(`${C.dim}Bye!${C.reset}`);
+        rl.close();
+        return;
+      }
+      if (trimmed === ':help') {
+        log(`  ${C.dim}:quit  — Exit REPL${C.reset}`);
+        log(`  ${C.dim}:help  — Show help${C.reset}`);
+        log(`  ${C.dim}:reset — Reset environment${C.reset}`);
+        log(`  ${C.dim}:tokens — Show tokens of current buffer${C.reset}`);
+        log(`  ${C.dim}:ast    — Show AST of current buffer${C.reset}`);
+        prompt();
+        return;
+      }
+      if (trimmed === ':reset') {
+        buffer = '';
+        interpreter = new Interpreter();
+        log(`${C.dim}Environment reset.${C.reset}`);
+        prompt();
+        return;
+      }
+      if (trimmed === ':tokens') {
+        if (buffer.trim()) {
+          const lexer = new Lexer(buffer);
+          const tokens = lexer.tokenize();
+          for (const t of tokens) {
+            log(`  ${C.gray}${String(t.line).padStart(3)}:${String(t.column).padStart(3)}${C.reset}  ${C.yellow}${t.type.padEnd(18)}${C.reset}  ${C.white}${t.value}${C.reset}`);
+          }
+        }
+        prompt();
+        return;
+      }
+      if (trimmed === ':ast') {
+        if (buffer.trim()) {
+          const lexer = new Lexer(buffer);
+          const tokens = lexer.tokenize();
+          const parser = new Parser(tokens);
+          const ast = parser.parse();
+          log(JSON.stringify(ast, null, 2).split('\n').map(l => `  ${C.dim}${l}${C.reset}`).join('\n'));
+        }
+        prompt();
+        return;
+      }
+
+      buffer += trimmed + '\n';
+
+      // Try to parse and execute the buffer
+      try {
+        const lexer = new Lexer(buffer);
+        const tokens = lexer.tokenize();
+        const parser = new Parser(tokens);
+        const ast = parser.parse();
+        const result = interpreter.run(buffer);
+
+        if (result.output.length > 0) {
+          for (const line of result.output) {
+            console.log(`  ${C.white}${line}${C.reset}`);
+          }
+        }
+
+        if (result.errors.length > 0) {
+          // If parse error, might be incomplete input — keep buffering
+          const isParseError = result.errors.some(e => e.includes('Parse error'));
+          if (isParseError && !buffer.trimEnd().endsWith('end')) {
+            // Keep buffering for multi-line input
+            rl.question(`${C.green}...>${C.reset} `, (cont) => {
+              buffer += cont + '\n';
+              prompt();
+            });
+            return;
+          }
+          for (const err of result.errors) {
+            console.error(`  ${C.red}${err}${C.reset}`);
+          }
+        }
+
+        // Clear buffer after successful execution
+        buffer = '';
+      } catch (e) {
+        // If parse error on incomplete statement, keep buffering
+        if (e instanceof ParseError) {
+          // Likely incomplete input, continue buffering
+          buffer = buffer.slice(0, -(trimmed.length + 1)); // remove last line
+          console.error(`  ${C.yellow}Parse error: ${e.message}${C.reset}`);
+          console.error(`  ${C.dim}(keeping previous buffer)${C.reset}`);
+        } else {
+          console.error(`  ${C.red}${e instanceof Error ? e.message : String(e)}${C.reset}`);
+        }
+      }
+
+      prompt();
+    });
+  };
+
+  prompt();
 }
 
 // ---- Helpers ----
@@ -419,7 +590,9 @@ function printBanner(): void {
 function printUsage(): void {
   log(`${C.bold}Usage:${C.reset}`);
   log(`  iozen run <file.iozen>        Execute a IOZEN program`);
+  log(`  iozen eval <code>            Execute inline IOZEN code`);
   log(`  iozen build <file.iozen>      Compile to standalone binary`);
+  log(`  iozen repl                    Interactive shell (REPL)`);
   log(`  iozen init <project>         Create new IOZEN project`);
   log(`  iozen tokens <file.iozen>     Show token output`);
   log(`  iozen ast <file.iozen>        Show AST output`);
@@ -427,6 +600,7 @@ function printUsage(): void {
   log(`  iozen help                   Show this help`);
   log("");
   log(`${C.bold}Examples:${C.reset}`);
+  log(`  ${C.dim}iozen repl${C.reset}`);
   log(`  ${C.dim}iozen init hello_world${C.reset}`);
   log(`  ${C.dim}cd hello_world${C.reset}`);
   log(`  ${C.dim}iozen run main.iozen${C.reset}`);

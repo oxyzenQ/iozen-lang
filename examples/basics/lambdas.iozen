@@ -1,0 +1,43 @@
+# IOZEN Lambdas — Anonymous functions as values
+# Demonstrates first-class functions and functional programming
+
+# Basic lambda
+create variable double with value function with x as integer returns integer
+    return x * 2
+end
+print "double(5) = " attach double with 5
+print "double(21) = " attach double with 21
+
+# Lambda with closure
+create variable base as integer with value 100
+create variable add_base with value function with n as integer returns integer
+    return n + base
+end
+print "add_base(50) = " attach add_base with 50
+print "add_base(200) = " attach add_base with 200
+
+# Using lambdas with map_list
+create variable numbers as list with value [1, 2, 3, 4, 5]
+create variable squared as list with value map_list(numbers, "double")
+print "squared: " attach squared
+
+# Lambda with filter_list
+create variable evens as list with value filter_list(numbers, function with n as integer returns boolean
+    return n % 2 equals 0
+end)
+print "evens: " attach evens
+
+# Lambda as a higher-order function
+create variable apply with value function with f as function and value as integer returns integer
+    return f with value
+end
+create variable triple with value function with n as integer returns integer
+    return n * 3
+end
+print "apply(triple, 7) = " attach apply with triple and 7
+
+# Compose: create a pipeline
+create variable pipeline as list with value map_list(filter_list(numbers, function with n as integer returns boolean
+    return n is greater than 2
+end), "double")
+print "pipeline (n>2, then double): " attach pipeline

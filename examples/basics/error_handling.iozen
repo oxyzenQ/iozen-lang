@@ -1,0 +1,240 @@
+# =============================================
+# Error Handling in IOZEN
+# =============================================
+# This example demonstrates IOZEN's approach to
+# error handling using try/catch and throw.
+#
+# Features shown:
+#   - Basic throw and catch
+#   - Catching runtime errors with panic
+#   - Error propagation through functions
+#   - Safe division (catch divide-by-zero)
+#   - File reading with missing-file handling
+# =============================================
+
+import "io"
+
+# --------------------------------------------------
+# 1. Basic throw and catch
+# --------------------------------------------------
+# throw raises an error with a message string.
+# catch receives the error in a named variable.
+
+print "--- Basic throw and catch ---"
+
+try do
+    print "About to throw an error..."
+    throw "Something went wrong!"
+    print "This line is never reached."
+catch err do
+    print "Caught error: {err}"
+end
+
+print "Execution continues after the catch."
+print ""
+
+# --------------------------------------------------
+# 2. Multiple error types via message matching
+# --------------------------------------------------
+# IOZEN's throw accepts any text. You can match on
+# the error message to distinguish error types.
+
+function risky_operation with input as integer returns text
+    when input < 0 do
+        throw "negative_input: value must be non-negative"
+    end
+    when input == 0 do
+        throw "zero_input: value must be greater than zero"
+    end
+    when input > 100 do
+        throw "overflow: value exceeds maximum of 100"
+    end
+    return "Result: {input * 2}"
+end
+
+print "--- Matched Error Types ---"
+
+create variable test_values as list with value [5, -1, 0, 200]
+for each val in test_values do
+    try do
+        create variable output as text with value risky_operation(val)
+        print "Input {val}: {output}"
+    catch err do
+        # Parse the error type from the message
+        create variable err_type as text with value split(err, ":")
+        match err_type
+            case "negative_input" do
+                print "Input {val}: Validation error - negative not allowed"
+            end
+            case "zero_input" do
+                print "Input {val}: Validation error - zero not allowed"
+            end
+            case "overflow" do
+                print "Input {val}: Validation error - value too large"
+            end
+            otherwise do
+                print "Input {val}: Unexpected error - {err}"
+            end
+        end
+    end
+end
+
+print ""
+
+# --------------------------------------------------
+# 3. Catching runtime errors (panic)
+# --------------------------------------------------
+# Some operations cause runtime panics (e.g., index
+# out of bounds). try/catch also catches these.
+
+print "--- Catching Runtime Panics ---"
+
+try do
+    create variable my_list as list with value [10, 20, 30]
+    # Accessing index 10 in a 3-element list will panic
+    print item(my_list, 10)
+catch err do
+    print "Caught runtime panic: {err}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 4. Error propagation through functions
+# --------------------------------------------------
+# A function can throw, and callers up the stack
+# can catch it. If uncaught, the program terminates.
+
+function inner_function with x as integer returns integer
+    print "  inner_function called with x={x}"
+    when x < 0 do
+        throw "inner_error: x cannot be negative"
+    end
+    return x * 10
+end
+
+function middle_function with y as integer returns integer
+    print " middle_function called with y={y}"
+    create variable result as integer with value inner_function(y)
+    return result + 5
+end
+
+function outer_function with z as integer returns text
+    print "outer_function called with z={z}"
+    try do
+        create variable val as integer with value middle_function(z)
+        return "Success: {val}"
+    catch err do
+        return "Propagated error in outer: {err}"
+    end
+end
+
+print "--- Error Propagation ---"
+print outer_function(5)
+print outer_function(-3)
+print ""
+
+# --------------------------------------------------
+# 5. Practical: Safe Division
+# --------------------------------------------------
+# A division function that never crashes. Instead of
+# panicking on divide-by-zero, it returns an error.
+
+function safe_divide with numerator as float and denominator as float returns text
+    try do
+        when denominator == 0.0 do
+            throw "division_by_zero: cannot divide by zero"
+        end
+        create variable quotient as float with value numerator / denominator
+        return "ok:{quotient}"
+    catch err do
+        return "error:{err}"
+    end
+end
+
+function print_division with a as float and b as float
+    create variable result as text with value safe_divide(a, b)
+    # The result is prefixed with "ok:" or "error:"
+    when contains(result, "ok:") do
+        # Extract the value after "ok:"
+        create variable parts as list with value split(result, ":")
+        print "{a} / {b} = {item(parts, 1)}"
+    otherwise do
+        create variable parts as list with value split(result, ":")
+        print "{a} / {b} => Error: {item(parts, 2)}"
+    end
+end
+
+print "--- Safe Division ---"
+print_division(10.0, 3.0)
+print_division(25.0, 5.0)
+print_division(42.0, 0.0)
+print_division(-7.0, 2.0)
+print ""
+
+# --------------------------------------------------
+# 6. Practical: File Reading with Error Handling
+# --------------------------------------------------
+# Try to read a file that may not exist.
+# Gracefully handle the case where it's missing.
+
+function read_file_safe with filepath as text returns text
+    try do
+        create variable content as text with value read_file(filepath)
+        return "ok:{content}"
+    catch err do
+        return "error:{err}"
+    end
+end
+
+print "--- File Reading with Error Handling ---"
+
+create variable paths_to_try as list with value [
+    "examples/data/sample.txt",
+    "nonexistent_file.txt",
+    "examples/data/config.json"
+]
+
+for each path in paths_to_try do
+    create variable file_result as text with value read_file_safe(path)
+    when contains(file_result, "error:") do
+        create variable parts as list with value split(file_result, ":")
+        print "File '{path}': Could not read - {item(parts, 2)}"
+    otherwise do
+        create variable parts as list with value split(file_result, ":", 2)
+        print "File '{path}': Read successfully ({length(item(parts, 1))} chars)"
+    end
+end
+
+print ""
+
+# --------------------------------------------------
+# 7. Cleanup with try/catch
+# --------------------------------------------------
+# Use try/catch to ensure cleanup logic runs even
+# when errors occur.
+
+function process_with_cleanup with data as list
+    create variable processed as integer with value 0
+    try do
+        print "Starting processing of {length(data)} items..."
+        for each item in data do
+            when item < 0 do
+                throw "invalid_item: found negative value {item}"
+            end
+            increase processed by 1
+        end
+        print "All {processed} items processed successfully."
+    catch err do
+        print "Processing failed after {processed} items: {err}"
+    end
+    # Cleanup always runs (code after try/catch block)
+    print "Cleanup: resources released."
+    print ""
+end
+
+print "--- Cleanup After Errors ---"
+process_with_cleanup([1, 2, 3, 4, 5])
+process_with_cleanup([10, 20, -1, 30, 40])
+
+print "=== Error Handling Examples Complete ==="

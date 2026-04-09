@@ -1,0 +1,540 @@
+# ============================================================
+# IOZEN SELF-HOSTING LEXER+PARSER DEMO
+# Demonstrates tokenizer and parser working together
+# Written entirely in IOZEN, processing IOZEN source code
+# Run: iozen run bootstrap/lexer_parser_demo.iozen
+# ============================================================
+
+# The source code we will tokenize and parse
+create variable source as text with value "print 42"
+
+print "=========================================================="
+print "  IOZEN SELF-HOSTING LEXER + PARSER DEMO"
+print "  Tokenizer feeds into Parser"
+print "=========================================================="
+print ""
+print "Input source:"
+print "  > " attach source
+print ""
+
+# ---- TOKENIZER STATE ----
+create variable pos as integer with value 0
+create variable src_len as integer with value length(source)
+create variable tokens as list with value []
+
+# Character classification helpers
+function is_alpha(ch) returns boolean
+    create variable c as integer with value ord(ch)
+    return (c >= 65 and c <= 90) or (c >= 97 and c <= 122) or c equals 95
+end
+
+function is_digit(ch) returns boolean
+    create variable c as integer with value ord(ch)
+    return c >= 48 and c <= 57
+end
+
+function is_alnum(ch) returns boolean
+    return is_alpha(ch) or is_digit(ch)
+end
+
+function is_keyword(word) returns boolean
+    when word equals "print" do return true end
+    when word equals "create" do return true end
+    when word equals "variable" do return true end
+    when word equals "as" do return true end
+    when word equals "with" do return true end
+    when word equals "value" do return true end
+    when word equals "integer" do return true end
+    when word equals "function" do return true end
+    when word equals "return" do return true end
+    when word equals "end" do return true end
+    when word equals "when" do return true end
+    when word equals "otherwise" do return true end
+    when word equals "do" do return true end
+    when word equals "while" do return true end
+    when word equals "for" do return true end
+    when word equals "each" do return true end
+    when word equals "in" do return true end
+    return false
+end
+
+# Read an identifier or keyword token
+function read_ident() returns list
+    create variable word as text with value ""
+    while pos < src_len and is_alnum(char_at(source, pos)) do
+        set word to word attach char_at(source, pos)
+        set pos to pos + 1
+    end
+    when is_keyword(word) do
+        return [word, word]
+    end
+    return ["IDENT", word]
+end
+
+# Read a number token
+function read_num() returns list
+    create variable num as text with value ""
+    while pos < src_len and is_digit(char_at(source, pos)) do
+        set num to num attach char_at(source, pos)
+        set pos to pos + 1
+    end
+    return ["INT", num]
+end
+
+# Read a string token (single-quoted)
+function read_str() returns list
+    set pos to pos + 1
+    create variable str as text with value ""
+    while pos < src_len do
+        create variable ch as text with value char_at(source, pos)
+        when ch equals "'" do
+            set pos to pos + 1
+            return ["STR", str]
+        end
+        set str to str attach ch
+        set pos to pos + 1
+    end
+    return ["STR", str]
+end
+
+# ---- MAIN TOKENIZER ----
+function tokenize() returns list
+    while pos < src_len do
+        # Skip whitespace
+        while pos < src_len and char_at(source, pos) equals " " do
+            set pos to pos + 1
+        end
+        when pos >= src_len do return tokens end
+
+        create variable ch as text with value char_at(source, pos)
+
+        # String literal
+        when ch equals "'" do
+            push(tokens, read_str())
+        # Number
+        otherwise when is_digit(ch) do
+            push(tokens, read_num())
+        # Identifier / keyword
+        otherwise when is_alpha(ch) do
+            push(tokens, read_ident())
+        # Plus
+        otherwise when ch equals "+" do
+            push(tokens, ["PLUS", "+"])
+            set pos to pos + 1
+        # Minus
+        otherwise when ch equals "-" do
+            push(tokens, ["MINUS", "-"])
+            set pos to pos + 1
+        # Star
+        otherwise when ch equals "*" do
+            push(tokens, ["STAR", "*"])
+            set pos to pos + 1
+        # Slash
+        otherwise when ch equals "/" do
+            push(tokens, ["SLASH", "/"])
+            set pos to pos + 1
+        # Equals / Assign
+        otherwise when ch equals "=" do
+            set pos to pos + 1
+            when pos < src_len and char_at(source, pos) equals "=" do
+                push(tokens, ["EQ", "=="])
+                set pos to pos + 1
+            otherwise do
+                push(tokens, ["ASSIGN", "="])
+            end
+        # Less than
+        otherwise when ch equals "<" do
+            push(tokens, ["LT", "<"])
+            set pos to pos + 1
+        # Greater than
+        otherwise when ch equals ">" do
+            push(tokens, ["GT", ">"])
+            set pos to pos + 1
+        # Comma
+        otherwise when ch equals "," do
+            push(tokens, ["COMMA", ","])
+            set pos to pos + 1
+        # Left paren
+        otherwise when ch equals "(" do
+            push(tokens, ["LPAREN", "("])
+            set pos to pos + 1
+        # Right paren
+        otherwise when ch equals ")" do
+            push(tokens, ["RPAREN", ")"])
+            set pos to pos + 1
+        # Left bracket
+        otherwise when ch equals "[" do
+            push(tokens, ["LBRACK", "["])
+            set pos to pos + 1
+        # Right bracket
+        otherwise when ch equals "]" do
+            push(tokens, ["RBRACK", "]"])
+            set pos to pos + 1
+        # Dot
+        otherwise when ch equals "." do
+            push(tokens, ["DOT", "."])
+            set pos to pos + 1
+        # Newline
+        otherwise when ch equals newline do
+            push(tokens, ["NL", newline])
+            set pos to pos + 1
+        otherwise do
+            # Unknown char, skip
+            set pos to pos + 1
+        end
+    end
+    return tokens
+end
+
+# ---- PARSER STATE ----
+create variable p_pos as integer with value 0
+
+function peek() returns list
+    when p_pos >= length(tokens) do
+        return ["EOF", "", 0, 0]
+    end
+    return tokens[p_pos]
+end
+
+function advance() returns list
+    create variable tok as list with value peek()
+    when p_pos < length(tokens) do
+        set p_pos to p_pos + 1
+    end
+    return tok
+end
+
+function tok_is with expected as text returns boolean
+    create variable t as list with value peek()
+    return t[0] equals expected or t[1] equals expected
+end
+
+function tok_expect with expected_type as text returns list
+    create variable t as list with value peek()
+    when t[0] equals expected_type or t[1] equals expected_type do
+        return advance()
+    end
+    return t
+end
+
+function tok_done() returns boolean
+    return peek()[0] equals "EOF"
+end
+
+# ---- PARSING EXPRESSIONS ----
+function parse_expression() returns map
+    return parse_additive()
+end
+
+function parse_additive() returns map
+    create variable left as map with value parse_multiplicative()
+    while tok_is with "PLUS" or tok_is with "MINUS" do
+        create variable op as list with value advance()
+        create variable right as map with value parse_multiplicative()
+        set left to map("kind", "BinaryExpr", "left", left, "operator", op[1], "right", right)
+    end
+    return left
+end
+
+function parse_multiplicative() returns map
+    create variable left as map with value parse_primary()
+    while tok_is with "STAR" or tok_is with "SLASH" do
+        create variable op as list with value advance()
+        create variable right as map with value parse_primary()
+        set left to map("kind", "BinaryExpr", "left", left, "operator", op[1], "right", right)
+    end
+    return left
+end
+
+function parse_primary() returns map
+    create variable tok as list with value peek()
+
+    # Integer literal
+    when tok[0] equals "INT" do
+        advance()
+        return map("kind", "Literal", "type", "integer", "value", to_integer(tok[1]))
+    end
+
+    # String literal
+    when tok[0] equals "STR" do
+        advance()
+        return map("kind", "Literal", "type", "text", "value", tok[1])
+    end
+
+    # Identifier or keyword used as expression (for function calls)
+    when tok[0] equals "IDENT" or tok[1] equals "print" do
+        advance()
+        return map("kind", "Identifier", "name", tok[1])
+    end
+
+    # Parenthesized expression
+    when tok_is with "LPAREN" do
+        advance()
+        create variable expr as map with value parse_expression()
+        tok_expect with "RPAREN"
+        return expr
+    end
+
+    advance()
+    return map("kind", "Error", "message", "Unexpected token")
+end
+
+# ---- PARSING STATEMENTS ----
+function parse_statement() returns map
+    when tok_done() do
+        return map("kind", "EOF")
+    end
+
+    create variable tok as list with value peek()
+
+    # Print statement
+    when tok[1] equals "print" do
+        advance()
+        create variable exprs as list with value []
+        push(exprs, parse_expression())
+        return map("kind", "PrintStmt", "expressions", exprs)
+    end
+
+    # Variable declaration
+    when tok[1] equals "create" do
+        advance()
+        tok_expect with "variable"
+        create variable name as list with value tok_expect with "IDENT"
+        tok_expect with "as"
+        create variable type_tok as list with value peek()
+        advance()
+        create variable val as map with value map("kind", "Literal", "type", "nothing", "value", null)
+        when tok_is with "with" do
+            advance()
+            tok_expect with "value"
+            set val to parse_expression()
+        end
+        return map("kind", "VariableDecl", "name", name[1], "typeName", type_tok[1], "value", val)
+    end
+
+    # Function declaration
+    when tok[1] equals "function" do
+        advance()
+        create variable name as list with value tok_expect with "IDENT"
+        create variable params as list with value []
+        when tok_is with "with" do
+            advance()
+            create variable parsing as boolean with value true
+            while parsing do
+                create variable pn as list with value tok_expect with "IDENT"
+                tok_expect with "as"
+                create variable pt as list with value peek()
+                advance()
+                push(params, map("name", pn[1], "typeName", pt[1]))
+                when tok_is with "and" do
+                    advance()
+                    continue
+                end
+                set parsing to false
+            end
+        end
+        create variable ret_type as text with value "nothing"
+        when tok_is with "returns" do
+            advance()
+            create variable rt as list with value peek()
+            advance()
+            set ret_type to rt[1]
+        end
+        create variable body as list with value []
+        while not tok_is with "end" and not tok_done() do
+            push(body, parse_statement())
+        end
+        tok_expect with "end"
+        return map("kind", "FunctionDecl", "name", name[1], "parameters", params, "returnType", ret_type, "body", body)
+    end
+
+    # While loop
+    when tok[1] equals "while" do
+        advance()
+        create variable cond as map with value parse_expression()
+        tok_expect with "do"
+        create variable body as list with value []
+        while not tok_is with "end" and not tok_done() do
+            push(body, parse_statement())
+        end
+        tok_expect with "end"
+        return map("kind", "While", "condition", cond, "body", body)
+    end
+
+    # When/otherwise
+    when tok[1] equals "when" do
+        advance()
+        create variable cond as map with value parse_expression()
+        tok_expect with "do"
+        create variable branches as list with value []
+        create variable wbody as list with value []
+        while not tok_is with "end" and not tok_is with "otherwise" and not tok_done() do
+            push(wbody, parse_statement())
+        end
+        push(branches, map("condition", cond, "body", wbody))
+        create variable obody as list with value []
+        when tok_is with "otherwise" do
+            advance()
+            tok_expect with "do"
+            while not tok_is with "end" and not tok_done() do
+                push(obody, parse_statement())
+            end
+        end
+        tok_expect with "end"
+        return map("kind", "When", "branches", branches, "otherwise", obody)
+    end
+
+    # Return statement
+    when tok[1] equals "return" do
+        advance()
+        create variable val as map with value map("kind", "Literal", "type", "nothing", "value", null)
+        when not tok_is with "end" and not tok_is with "otherwise" and not tok_done() do
+            set val to parse_expression()
+        end
+        return map("kind", "ReturnStmt", "value", val)
+    end
+
+    # Skip newlines
+    when tok[0] equals "NL" do
+        advance()
+        return parse_statement()
+    end
+
+    # Expression statement (fallback)
+    create variable expr as map with value parse_expression()
+    return map("kind", "ExprStmt", "expression", expr)
+end
+
+# ---- PARSE FULL PROGRAM ----
+function parse_program() returns map
+    create variable stmts as list with value []
+    while not tok_done() do
+        create variable s as map with value parse_statement()
+        when get_key(s, "kind") equals "EOF" do
+            return map("kind", "Program", "statements", stmts)
+        end
+        push(stmts, s)
+    end
+    return map("kind", "Program", "statements", stmts)
+end
+
+# ---- PRETTY-PRINT AST ----
+function print_ast with node as map and indent as integer returns nothing
+    create variable pad as text with value ""
+    create variable j as integer with value 0
+    while j < indent do
+        set pad to pad attach "  "
+        increase j by 1
+    end
+
+    create variable kind as text with value get_key(node, "kind")
+
+    when kind equals "Program" do
+        print pad attach "Program (" attach length(get_key(node, "statements")) attach " statements)"
+        create variable stmts as list with value get_key(node, "statements")
+        create variable k as integer with value 0
+        while k < length(stmts) do
+            print_ast with stmts[k] and indent + 1
+            increase k by 1
+        end
+    otherwise when kind equals "PrintStmt" do
+        print pad attach "PrintStmt"
+        create variable exprs as list with value get_key(node, "expressions")
+        create variable k as integer with value 0
+        while k < length(exprs) do
+            print_ast with exprs[k] and indent + 1
+            increase k by 1
+        end
+    otherwise when kind equals "VariableDecl" do
+        print pad attach "VariableDecl: " attach get_key(node, "name") attach " as " attach get_key(node, "typeName")
+        print pad attach "  value:"
+        print_ast with get_key(node, "value") and indent + 2
+    otherwise when kind equals "Literal" do
+        print pad attach "Literal(" attach get_key(node, "type") attach "): " attach get_key(node, "value")
+    otherwise when kind equals "BinaryExpr" do
+        print pad attach "BinaryExpr(" attach get_key(node, "operator") attach ")"
+        print_ast with get_key(node, "left") and indent + 1
+        print_ast with get_key(node, "right") and indent + 1
+    otherwise when kind equals "Identifier" do
+        print pad attach "Identifier: " attach get_key(node, "name")
+    otherwise when kind equals "FunctionDecl" do
+        print pad attach "FunctionDecl: " attach get_key(node, "name") attach " -> " attach get_key(node, "returnType")
+        print pad attach "  params: " attach length(get_key(node, "parameters"))
+        print pad attach "  body:"
+        create variable body as list with value get_key(node, "body")
+        create variable k as integer with value 0
+        while k < length(body) do
+            print_ast with body[k] and indent + 2
+            increase k by 1
+        end
+    otherwise when kind equals "While" do
+        print pad attach "While"
+        print pad attach "  condition:"
+        print_ast with get_key(node, "condition") and indent + 2
+        print pad attach "  body:"
+        create variable body as list with value get_key(node, "body")
+        create variable k as integer with value 0
+        while k < length(body) do
+            print_ast with body[k] and indent + 2
+            increase k by 1
+        end
+    otherwise when kind equals "When" do
+        print pad attach "When"
+        print pad attach "  condition:"
+        print_ast with get_key(node, "condition") and indent + 2
+        print pad attach "  body:"
+        create variable branches as list with value get_key(node, "branches")
+        create variable bbody as list with value get_key(branches[0], "body")
+        create variable k as integer with value 0
+        while k < length(bbody) do
+            print_ast with bbody[k] and indent + 2
+            increase k by 1
+        end
+    otherwise when kind equals "ReturnStmt" do
+        print pad attach "ReturnStmt"
+        print_ast with get_key(node, "value") and indent + 1
+    otherwise when kind equals "ExprStmt" do
+        print pad attach "ExprStmt"
+        print_ast with get_key(node, "expression") and indent + 1
+    otherwise do
+        print pad attach kind
+    end
+end
+
+# ============================================================
+# RUN THE DEMO
+# ============================================================
+
+# Step 1: Tokenize
+create variable tok_result as list with value tokenize()
+
+print "Step 1: Tokenization"
+print "  Produced " attach length(tok_result) attach " tokens:"
+create variable ti as integer with value 0
+while ti < length(tok_result) do
+    create variable t as list with value tok_result[ti]
+    print "    [" attach ti attach "] " attach t[0] attach " = " attach t[1]
+    increase ti by 1
+end
+print ""
+
+# Step 2: Parse tokens into AST
+print "Step 2: Parsing tokens into AST"
+set p_pos to 0
+create variable ast as map with value parse_program()
+print "  AST generated successfully!"
+print ""
+
+# Step 3: Pretty-print the AST
+print "Step 3: Resulting AST"
+print_ast with ast and 0
+
+print ""
+print "=========================================================="
+print "  DEMO COMPLETE"
+print ""
+print "  Proof of concept: IOZEN code (lexer+parser) written in"
+print "  IOZEN successfully tokenized and parsed IOZEN source."
+print ""
+print "  Pipeline: Source -> [Lexer] -> Tokens -> [Parser] -> AST"
+print "=========================================================="

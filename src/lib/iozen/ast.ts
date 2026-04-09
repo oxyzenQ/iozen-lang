@@ -5,6 +5,7 @@
 
 export type ASTNode =
   | ProgramNode
+  | ImportNode
   | VariableDeclNode
   | FunctionDeclNode
   | StructureDeclNode
@@ -18,6 +19,7 @@ export type ASTNode =
   | ForEachNode
   | LabelNode
   | ExitNode
+  | ContinueNode
   | IncreaseNode
   | SetFieldNode
   | AssignVarNode
@@ -32,10 +34,25 @@ export type ASTNode =
   | MemberAccessNode
   | IndexAccessNode
   | ListLiteralNode
+  | MapLiteralNode
+  | ListCompNode
+  | TernaryExprNode
+  | CompoundAssignNode
   | ForceUnwrapNode
   | OrDefaultNode
   | HasValueNode
-  | ValueInsideNode;
+  | ValueInsideNode
+  | LambdaNode
+  | MatchNode
+  | MatchCaseNode
+  | TryCatchNode
+  | ThrowNode
+  | PipelineExprNode
+  | DestructureNode
+  | ModuleDeclNode
+  | UnionDeclNode
+  | SafeAccessNode
+  | TypeAliasNode;
 
 // ---- Program ----
 export interface ProgramNode {
@@ -43,10 +60,18 @@ export interface ProgramNode {
   statements: ASTNode[];
 }
 
+// ---- Import ----
+export interface ImportNode {
+  kind: 'Import';
+  modulePath: string;
+  importNames: string[];  // empty = import all
+}
+
 // ---- Declarations ----
 export interface VariableDeclNode {
   kind: 'VariableDecl';
   name: string;
+  names: string[];         // for destructuring: [a, b, c]
   typeName: string;
   qualifiers: string[];
   value: ASTNode | null;
@@ -142,6 +167,7 @@ export interface WhileNode {
 export interface ForEachNode {
   kind: 'ForEach';
   variable: string;
+  indexVariable: string | null;
   iterable: ASTNode;
   body: ASTNode[];
 }
@@ -154,6 +180,10 @@ export interface LabelNode {
 export interface ExitNode {
   kind: 'Exit';
   target: string | null;
+}
+
+export interface ContinueNode {
+  kind: 'Continue';
 }
 
 export interface IncreaseNode {
@@ -239,6 +269,32 @@ export interface ListLiteralNode {
   elements: ASTNode[];
 }
 
+export interface MapLiteralNode {
+  kind: 'MapLiteral';
+  entries: { key: ASTNode; value: ASTNode }[];
+}
+
+export interface ListCompNode {
+  kind: 'ListComp';
+  expression: ASTNode;
+  variable: string;
+  iterable: ASTNode;
+}
+
+export interface TernaryExprNode {
+  kind: 'TernaryExpr';
+  condition: ASTNode;
+  thenExpr: ASTNode;
+  elseExpr: ASTNode;
+}
+
+export interface CompoundAssignNode {
+  kind: 'CompoundAssign';
+  name: string;
+  operator: string;
+  value: ASTNode;
+}
+
 export interface ForceUnwrapNode {
   kind: 'ForceUnwrap';
   expression: ASTNode;
@@ -258,4 +314,83 @@ export interface HasValueNode {
 export interface ValueInsideNode {
   kind: 'ValueInside';
   expression: ASTNode;
+}
+
+// ---- Module Declaration ----
+export interface ModuleDeclNode {
+  kind: 'ModuleDecl';
+  name: string;
+  exposedNames: string[];
+  body: ASTNode[];
+}
+
+// ---- Union Type ----
+export interface UnionDeclNode {
+  kind: 'UnionDecl';
+  name: string;
+  variants: { name: string; typeName: string }[];
+}
+
+// ---- Safe Access (Optional Chaining) ----
+export interface SafeAccessNode {
+  kind: 'SafeAccess';
+  object: ASTNode;
+  field: string;
+}
+
+// ---- Type Alias ----
+export interface TypeAliasNode {
+  kind: 'TypeAlias';
+  name: string;
+  targetType: string;
+}
+
+// ---- Destructuring ----
+export interface DestructureNode {
+  kind: 'Destructure';
+  names: string[];
+  value: ASTNode;
+}
+
+// ---- Match Expression ----
+export interface MatchCaseNode {
+  kind: 'MatchCase';
+  pattern: ASTNode;
+  binding: string | null;
+  body: ASTNode[];
+}
+
+export interface MatchNode {
+  kind: 'Match';
+  subject: ASTNode;
+  cases: MatchCaseNode[];
+  otherwise: ASTNode[] | null;
+}
+
+// ---- Try/Catch ----
+export interface TryCatchNode {
+  kind: 'TryCatch';
+  tryBody: ASTNode[];
+  catchBinding: string | null;
+  catchBody: ASTNode[];
+}
+
+export interface ThrowNode {
+  kind: 'Throw';
+  value: ASTNode | null;
+}
+
+// ---- Pipeline Expression ----
+export interface PipelineExprNode {
+  kind: 'PipelineExpr';
+  stages: ASTNode[];
+}
+
+// ---- Lambda (Anonymous Function) ----
+export interface LambdaNode {
+  kind: 'Lambda';
+  parameters: FunctionParamNode[];
+  returnType: string;
+  returnQualifiers: string[];
+  body: ASTNode[];
 }

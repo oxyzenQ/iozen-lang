@@ -1,0 +1,68 @@
+# ============================================
+# Import Demo - Main Program
+# Demonstrates the IOZEN module import system.
+# Imports helper functions from helpers.iozen.
+# ============================================
+
+# Import the helpers module (loads helpers.iozen from same directory)
+import helpers
+
+# --- Greeting ---
+print "=== IOZEN Import System Demo ==="
+print ""
+print "--- Greeting ---"
+create variable message as string with value greet("IOZEN Developer")
+print message
+
+# --- Factorial ---
+print ""
+print "--- Factorials ---"
+create variable numbers as list with value [1, 2, 5, 7, 10]
+for each num in numbers do
+    create variable fact as integer with value factorial(num)
+    print "  " attach pad_left(num, " ", 2) attach "! = " attach fact
+end
+
+# --- Fibonacci ---
+print ""
+print "--- Fibonacci Sequence (first 12 terms) ---"
+create variable fib_seq as list with value fibonacci_sequence(12)
+print fib_seq
+
+# --- Prime Number Check ---
+print ""
+print "--- Prime Numbers (1 to 30) ---"
+create variable primes as list with value []
+create variable i as integer with value 1
+
+while i <= 30 do
+    when is_prime(i) do
+        push(primes, i)
+    end
+    increase i by 1
+end
+
+print "Primes: " attach primes
+print "Count : " attach length(primes)
+
+# --- Combining Helpers: Fibonacci Primes ---
+print ""
+print "--- Fibonacci Primes (Fibonacci numbers that are also prime) ---"
+create variable fib_primes as list with value []
+create variable j as integer with value 2
+
+while j <= 20 do
+    create variable fib_val as integer with value fibonacci(j)
+    when is_prime(fib_val) do
+        push(fib_primes, fib_val)
+    end
+    increase j by 1
+end
+
+for each fp in fib_primes do
+    print "  " attach fp
+end
+
+print ""
+print "=== Demo Complete ==="
+print "All functions were imported from helpers.iozen!"

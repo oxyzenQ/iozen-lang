@@ -1,0 +1,329 @@
+# =============================================
+# Word Counter in IOZEN
+# =============================================
+# A text processing example that reads text, splits
+# it into words, counts frequencies, and displays
+# the most common words.
+#
+# Features shown:
+#   - String processing (split, trim, lower, replace)
+#   - Map operations for frequency counting
+#   - Sorting maps by value
+#   - List pipelines with map_list, filter, sort
+#   - File I/O with error handling
+#   - Formatted output
+# =============================================
+
+import "io"
+import "strings"
+import "lists"
+
+# --------------------------------------------------
+# 1. Sample text corpus
+# --------------------------------------------------
+# In a real application, this would come from a file.
+# Here we use a hardcoded sample for demonstration.
+
+create variable sample_text as text with value "The quick brown fox jumps over the lazy dog. The dog barked at the fox while the fox ran through the forest. A brown fox is quick and the lazy dog is slow. The forest is green and the sky is blue. The dog chased the fox through the green forest. Quick as lightning, the fox escaped the dog and disappeared into the forest. The brown dog stopped and the fox was never seen again."
+
+# --------------------------------------------------
+# 2. Normalize text: lowercase, remove punctuation
+# --------------------------------------------------
+
+function normalize_text with text as text returns text
+    # Convert to lowercase
+    create variable result as text with value lower(text)
+
+    # Replace common punctuation with spaces
+    set result with value replace(result, ".", " ")
+    set result with value replace(result, ",", " ")
+    set result with value replace(result, "!", " ")
+    set result with value replace(result, "?", " ")
+    set result with value replace(result, ";", " ")
+    set result with value replace(result, ":", " ")
+    set result with value replace(result, "\"", " ")
+    set result with value replace(result, "'", " ")
+    set result with value replace(result, "(", " ")
+    set result with value replace(result, ")", " ")
+    set result with value replace(result, "-", " ")
+    set result with value replace(result, "\n", " ")
+
+    return result
+end
+
+# --------------------------------------------------
+# 3. Split text into words
+# --------------------------------------------------
+
+function extract_words with text as text returns list
+    create variable normalized as text with value normalize_text(text)
+    # Split on whitespace
+    create variable raw_words as list with value split(normalized, " ")
+    # Filter out empty strings and very short words
+    create variable words as list with value raw_words
+        |> filter(fn(w) -> length(w) > 0)
+        |> filter(fn(w) -> length(w) > 1)  # skip single-char words
+    return words
+end
+
+# --------------------------------------------------
+# 4. Count word frequencies using a map
+# --------------------------------------------------
+
+function count_frequencies with words as list returns map
+    create variable freq as map with value map()
+
+    for each word in words do
+        when has_key(freq, word) do
+            # Increment existing count
+            create variable current as integer with value get(freq, word)
+            set freq with value set_key(freq, word, current + 1)
+        otherwise do
+            # First occurrence
+            set freq with value set_key(freq, word, 1)
+        end
+    end
+
+    return freq
+end
+
+# --------------------------------------------------
+# 5. Sort frequency map by count (descending)
+# --------------------------------------------------
+
+function sort_by_frequency with freq as map returns list
+    # Convert map entries to list of maps, sort by count descending
+    create variable entries as list with value map_keys(freq)
+        |> map_list(fn(k) -> map("word", k, "count", get(freq, k)))
+        |> sort_by(fn(e) -> get(e, "count"))
+        |> reverse
+    return entries
+end
+
+# --------------------------------------------------
+# 6. Read text from a file (with error handling)
+# --------------------------------------------------
+
+function read_text_file with filepath as text returns text
+    try do
+        create variable content as text with value read_file(filepath)
+        return "ok:{content}"
+    catch err do
+        return "error:{err}"
+    end
+end
+
+print "========================================"
+print "       IOZEN Word Counter"
+print "========================================"
+print ""
+
+# --------------------------------------------------
+# 7. Process the sample text
+# --------------------------------------------------
+print "--- Processing Sample Text ---"
+print ""
+
+create variable words as list with value extract_words(sample_text)
+print "Total words extracted: {length(words)}"
+print "Unique words: {length(words |> unique)}"
+print ""
+
+# Count frequencies
+create variable frequencies as map with value count_frequencies(words)
+
+# Sort and display top words
+create variable sorted_freq as list with value sort_by_frequency(frequencies)
+
+print "Top 10 words by frequency:"
+print "-------------------------------------------"
+create variable rank as integer with value 0
+for each entry in sorted_freq do
+    set rank with value rank + 1
+    when rank > 10 do
+        exit
+    end
+    create variable word as text with value get(entry, "word")
+    create variable count as integer with value get(entry, "count")
+    print "  {rank}. {word:<15} {count}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 8. Text statistics
+# --------------------------------------------------
+
+print "--- Text Statistics ---"
+print ""
+
+# Average word length
+create variable total_chars as integer with value words
+    |> map_list(fn(w) -> length(w))
+    |> sum
+create variable avg_word_len as float with value float(total_chars) / float(length(words))
+print "Average word length: {avg_word_len} characters"
+
+# Longest word
+create variable longest as text with value words
+    |> sort_by(fn(w) -> length(w))
+    |> reverse
+    |> first
+print "Longest word: '{longest}' ({length(longest)} characters)"
+
+# Shortest word
+create variable shortest as text with value words
+    |> sort_by(fn(w) -> length(w))
+    |> first
+print "Shortest word: '{shortest}' ({length(shortest)} characters)"
+
+print ""
+
+# --------------------------------------------------
+# 9. Words of specific length
+# --------------------------------------------------
+
+print "--- Words by Length ---"
+print ""
+
+for each len in [3, 4, 5] do
+    create variable matches as list with value words
+        |> filter(fn(w) -> length(w) == len)
+        |> unique
+        |> sort
+    print "Words of length {len}: {matches}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 10. Try reading from a file
+# --------------------------------------------------
+
+print "--- File Reading ---"
+print ""
+
+create variable file_path as text with value "examples/data/sample.txt"
+create variable file_result as text with value read_text_file(file_path)
+
+when contains(file_result, "ok:") do
+    create variable file_content as text with value split(file_result, ":", 2)
+    create variable file_words as list with value extract_words(file_content)
+    create variable file_freq as map with value count_frequencies(file_words)
+    create variable file_sorted as list with value sort_by_frequency(file_freq)
+
+    print "File: {file_path}"
+    print "Total words: {length(file_words)}"
+    print "Unique words: {length(file_words |> unique)}"
+    print ""
+    print "Top 5 words:"
+    create variable file_rank as integer with value 0
+    for each entry in file_sorted do
+        set file_rank with value file_rank + 1
+        when file_rank > 5 do
+            exit
+        end
+        print "  {file_rank}. {get(entry, "word")}: {get(entry, "count")}"
+    end
+otherwise do
+    create variable error_msg as text with value split(file_result, ":", 2)
+    print "Could not read file '{file_path}': {error_msg}"
+    print "Using built-in sample text instead."
+    print ""
+
+    # Also try an alternate path
+    create variable alt_path as text with value "sample.txt"
+    create variable alt_result as text with value read_text_file(alt_path)
+    when contains(alt_result, "error:") do
+        print "Note: To process a real file, create one at 'examples/data/sample.txt'"
+    end
+end
+
+print ""
+
+# --------------------------------------------------
+# 11. Advanced: Word frequency comparison
+# --------------------------------------------------
+# Compare two texts by their word frequency profiles.
+
+print "--- Comparing Two Texts ---"
+print ""
+
+create variable text_a as text with value "The cat sat on the mat and the cat ate the rat"
+create variable text_b as text with value "The dog sat on the rug and the dog bit the bug"
+
+create variable words_a as list with value extract_words(text_a)
+create variable words_b as list with value extract_words(text_b)
+
+create variable freq_a as map with value count_frequencies(words_a)
+create variable freq_b as map with value count_frequencies(words_b)
+
+create variable unique_a as list with value words_a |> unique |> sort
+create variable unique_b as list with value words_b |> unique |> sort
+
+# Words unique to text A (not in B)
+create variable only_a as list with value unique_a
+    |> filter(fn(w) -> not has_key(freq_b, w))
+
+# Words unique to text B (not in A)
+create variable only_b as list with value unique_b
+    |> filter(fn(w) -> not has_key(freq_a, w))
+
+# Common words
+create variable common as list with value unique_a
+    |> filter(fn(w) -> has_key(freq_b, w))
+
+print "Text A: '{text_a}'"
+print "Text B: '{text_b}'"
+print ""
+print "Words only in A: {only_a}"
+print "Words only in B: {only_b}"
+print "Common words:    {common}"
+print ""
+
+# --------------------------------------------------
+# 12. Word cloud data (frequency categories)
+# --------------------------------------------------
+
+print "--- Word Cloud Categories ---"
+print ""
+
+function categorize_word with entry as map returns text
+    create variable count as integer with value get(entry, "count")
+    match true
+        case (count >= 8) do return "VERY HIGH" end
+        case (count >= 5) do return "HIGH" end
+        case (count >= 3) do return "MEDIUM" end
+        otherwise do return "LOW" end
+    end
+end
+
+# Use the sample text frequencies
+create variable all_sorted as list with value sort_by_frequency(frequencies)
+
+# Group words by frequency category
+create variable very_high as list with value []
+create variable high as list with value []
+create variable medium as list with value []
+create variable low as list with value []
+
+for each entry in all_sorted do
+    create variable category as text with value categorize_word(entry)
+    create variable word_label as text with value "{get(entry, "word")}({get(entry, "count")})"
+    match category
+        case "VERY HIGH" do set very_high with value append(very_high, word_label) end
+        case "HIGH" do set high with value append(high, word_label) end
+        case "MEDIUM" do set medium with value append(medium, word_label) end
+        case "LOW" do set low with value append(low, word_label) end
+    end
+end
+
+print "VERY HIGH frequency: {very_high}"
+print "HIGH frequency:      {high}"
+print "MEDIUM frequency:    {medium}"
+print "LOW frequency:       {low}"
+
+print ""
+print "========================================"
+print "     Word Counter Analysis Complete"
+print "========================================"

@@ -1,0 +1,253 @@
+# =============================================
+# Pipeline Operator in IOZEN
+# =============================================
+# This example demonstrates the pipeline operator (|>),
+# which passes the result of one expression as the first
+# argument to the next function call.
+#
+# Instead of:    sort(unique(reverse(my_list)))
+# You can write: my_list |> reverse |> unique |> sort
+#
+# Features shown:
+#   - Simple numeric pipeline
+#   - List pipeline with multiple stages
+#   - String pipeline
+#   - Chained operations for data processing
+#   - Pipeline with user-defined functions
+# =============================================
+
+import "math"
+import "lists"
+
+# --------------------------------------------------
+# 1. Simple numeric pipeline
+# --------------------------------------------------
+# Pass a number through a chain of math operations.
+# Each |> feeds the left side's result as the first
+# argument to the right side's function.
+
+print "--- Simple Numeric Pipeline ---"
+
+# Calculate: abs(sqrt(25)) = 5.0
+create variable result as float with value 25.0 |> sqrt |> abs
+print "25.0 |> sqrt |> abs = {result}"
+
+# Calculate: abs(sqrt(-144)) = 12.0
+create variable result2 as float with value -144.0 |> sqrt |> abs
+print "-144.0 |> sqrt |> abs = {result2}"
+
+# Round a computation chain
+create variable result3 as float with value 3.14159 |> sin |> abs |> round(2)
+print "3.14159 |> sin |> abs |> round(2) = {result3}"
+
+print ""
+
+# --------------------------------------------------
+# 2. List pipeline
+# --------------------------------------------------
+# Chain list transformations together. Each stage
+# receives the list from the previous stage.
+
+print "--- List Pipeline ---"
+
+# Start with a list, process it through multiple stages
+create variable numbers as list with value [3, 1, 4, 1, 5, 9, 2, 6, 5, 3, 5]
+
+# Sort, reverse, then get unique values
+create variable processed as list with value numbers |> sort |> reverse |> unique
+print "Original:  {numbers}"
+print "Sort|Rev|Unique: {processed}"
+
+# Filter: keep only even numbers, then sort ascending
+create variable evens as list with value numbers |> filter(fn(x) -> x % 2 == 0) |> sort
+print "Evens (sorted): {evens}"
+
+# Double each element, then sort
+create variable doubled as list with value numbers |> map_list(fn(x) -> x * 2) |> sort
+print "Doubled (sorted): {doubled}"
+
+# Sum all elements through reduction
+create variable total as integer with value numbers |> sum
+print "Sum: {total}"
+
+print ""
+
+# --------------------------------------------------
+# 3. String pipeline
+# --------------------------------------------------
+# Transform strings by piping through text operations.
+
+print "--- String Pipeline ---"
+
+# Clean up a messy string
+create variable messy as text with value "  Hello,  World!  "
+create variable clean as text with value messy |> trim |> lower
+print "Original: '{messy}'"
+print "Trim|Lower: '{clean}'"
+
+# Uppercase and extract first word
+create variable greeting as text with value "  hello wonderful world  "
+create variable first_word as text with value greeting |> trim |> upper
+print "Clean greeting: '{first_word}'"
+
+# Replace spaces, trim, and uppercase
+create variable raw_input as text with value "  user-name  "
+create variable normalized as text with value raw_input |> trim |> upper |> replace("-", "_")
+print "Normalize input: '{raw_input}' -> '{normalized}'"
+
+# Check properties in a pipeline
+create variable test_string as text with value "Hello IOZEN"
+create variable has_hello as boolean with value test_string |> contains("Hello")
+print "Does '{test_string}' contain 'Hello'? {has_hello}"
+
+print ""
+
+# --------------------------------------------------
+# 4. Practical: Data Processing Pipeline
+# --------------------------------------------------
+# Process a list of "records" (maps) representing
+# sales data through a transformation pipeline.
+
+print "--- Data Processing Pipeline ---"
+
+# Create a list of sales records as maps
+create variable sales as list with value [
+    map("product", "Widget", "price", 10, "qty", 5),
+    map("product", "Gadget", "price", 25, "qty", 3),
+    map("product", "Doohickey", "price", 7, "qty", 12),
+    map("product", "Thingamajig", "price", 15, "qty", 8),
+    map("product", "Whatchamacallit", "price", 30, "qty", 2)
+]
+
+# Pipeline: extract prices, filter above threshold, sort, sum
+create variable expensive_total as float with value sales
+    |> map_list(fn(r) -> get(r, "price"))
+    |> filter(fn(p) -> p > 10)
+    |> sort
+    |> sum
+
+print "Total of prices above $10: ${expensive_total}"
+
+# Pipeline: extract quantities, sort descending, sum
+create variable total_qty as integer with value sales
+    |> map_list(fn(r) -> get(r, "qty"))
+    |> sort
+    |> reverse
+    |> sum
+
+print "Total quantity sold: {total_qty}"
+
+print ""
+
+# --------------------------------------------------
+# 5. Pipeline with user-defined functions
+# --------------------------------------------------
+# You can use your own functions in pipelines too.
+
+function add_tax with price as float and rate as float returns float
+    return price + (price * rate)
+end
+
+function format_currency with amount as float returns text
+    return "${amount}"
+end
+
+function apply_discount with price as float and discount_pct as float returns float
+    create variable discount as float with value price * (discount_pct / 100.0)
+    return price - discount
+end
+
+print "--- Pipeline with Custom Functions ---"
+
+# Price pipeline: apply discount, add tax, format
+create variable base_price as float with value 100.0
+create variable final_price as text with value base_price
+    |> apply_discount(10.0)
+    |> add_tax(0.08)
+    |> format_currency
+
+print "Base: ${base_price}"
+print "After 10% discount + 8% tax: {final_price}"
+
+# Process a list of prices through the pipeline
+create variable prices as list with value [49.99, 29.99, 99.99, 14.99, 199.99]
+
+# Discount all prices by 15%, add 8% tax
+create variable taxed_prices as list with value prices
+    |> map_list(fn(p) -> apply_discount(p, 15.0))
+    |> map_list(fn(p) -> add_tax(p, 0.08))
+    |> sort
+
+print "Prices after 15% discount + 8% tax:"
+for each price in taxed_prices do
+    print "  {format_currency(price)}"
+end
+
+print ""
+
+# --------------------------------------------------
+# 6. Multi-stage text analysis pipeline
+# --------------------------------------------------
+# Analyze a block of text through chained operations.
+
+print "--- Text Analysis Pipeline ---"
+
+create variable paragraph as text with value "The quick brown fox jumps over the lazy dog. The dog barked at the fox."
+
+# Word count pipeline: trim, split by spaces, get length
+create variable words as list with value paragraph |> trim |> split(" ")
+create variable word_count as integer with value words |> length
+print "Text: '{paragraph}'"
+print "Word count: {word_count}"
+
+# Unique words pipeline: split, map to lower, unique, sort
+create variable unique_words as list with value words
+    |> map_list(fn(w) -> lower(w))
+    |> unique
+    |> sort
+
+print "Unique words ({length(unique_words)}): {unique_words}"
+
+# Sentence count: split by period
+create variable sentences as list with value paragraph |> split(".")
+create variable sentence_count as integer with value sentences
+    |> map_list(fn(s) -> trim(s))
+    |> filter(fn(s) -> length(s) > 0)
+    |> length
+
+print "Sentence count: {sentence_count}"
+
+print ""
+
+# --------------------------------------------------
+# 7. Nested pipeline expressions
+# --------------------------------------------------
+# Pipelines can contain complex sub-expressions.
+
+print "--- Nested Pipelines ---"
+
+# Process two lists in parallel then combine
+create variable list_a as list with value [1, 2, 3, 4, 5]
+create variable list_b as list with value [10, 20, 30, 40, 50]
+
+create variable combined as list with value list_a
+    |> map_list(fn(x) -> x * 2)
+    |> reverse
+
+create variable scaled as list with value list_b
+    |> map_list(fn(x) -> x / 10)
+    |> sort
+
+print "List A doubled & reversed: {combined}"
+print "List B scaled & sorted: {scaled}"
+
+# Pipeline that produces a summary statistic
+create variable data as list with value [23, 45, 12, 67, 34, 89, 56, 78, 90, 11]
+create variable max_val as integer with value data |> sort |> last
+create variable min_val as integer with value data |> sort |> first
+create variable average as float with value (data |> sum |> float) / (data |> length |> float)
+print "Data: {data}"
+print "Min: {min_val}, Max: {max_val}, Avg: {average}"
+
+print ""
+print "=== Pipeline Examples Complete ==="

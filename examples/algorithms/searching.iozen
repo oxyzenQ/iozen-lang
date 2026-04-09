@@ -1,0 +1,127 @@
+# ============================================
+# Searching Algorithms Example
+# Implements linear search and binary search
+# to demonstrate algorithmic patterns in IOZEN.
+# ============================================
+
+# ============================================
+# LINEAR SEARCH
+# Scans every element one by one.
+# Works on any list (sorted or not). O(n).
+# Returns the index, or -1 if not found.
+# ============================================
+
+function linear_search with arr as list and target as integer returns integer
+    create variable i as integer with value 0
+    create variable n as integer with value length(arr)
+
+    while i < n do
+        when arr[i] == target do
+            return i
+        end
+        increase i by 1
+    end
+
+    return -1
+end
+
+# ============================================
+# BINARY SEARCH
+# Requires a sorted list. Repeatedly halves
+# the search space. O(log n).
+# Returns the index, or -1 if not found.
+# ============================================
+
+function binary_search with arr as list and target as integer returns integer
+    create variable low as integer with value 0
+    create variable high as integer with value length(arr) - 1
+
+    while low <= high do
+        create variable mid as integer with value floor((low + high) / 2)
+
+        when arr[mid] == target do
+            return mid
+        end
+
+        when arr[mid] < target do
+            set low to mid + 1
+        otherwise do
+            set high to mid - 1
+        end
+    end
+
+    return -1
+end
+
+# ============================================
+# Helper: Format a search result
+# ============================================
+
+function show_result with name as string and index as integer and target as integer
+    print name attach ": searching for " attach target attach " ..."
+    when index != -1 do
+        print "  -> Found at index " attach index
+    otherwise do
+        print "  -> Not found"
+    end
+end
+
+# ============================================
+# Main: Test Both Algorithms
+# ============================================
+
+# --- Prepare a sorted list for testing ---
+create variable data as list with value [3, 7, 11, 15, 22, 34, 45, 56, 67, 78, 89, 95]
+print "Data: " attach data
+print ""
+
+# --- Test Linear Search ---
+print "--- Linear Search ---"
+create variable idx1 as integer with value linear_search(data, 22)
+show_result("Linear", idx1, 22)
+
+create variable idx2 as integer with value linear_search(data, 99)
+show_result("Linear", idx2, 99)
+
+create variable idx3 as integer with value linear_search(data, 3)
+show_result("Linear", idx3, 3)
+
+print ""
+
+# --- Test Binary Search ---
+print "--- Binary Search ---"
+create variable idx4 as integer with value binary_search(data, 45)
+show_result("Binary", idx4, 45)
+
+create variable idx5 as integer with value binary_search(data, 99)
+show_result("Binary", idx5, 99)
+
+create variable idx6 as integer with value binary_search(data, 95)
+show_result("Binary", idx6, 95)
+
+create variable idx7 as integer with value binary_search(data, 1)
+show_result("Binary", idx7, 1)
+
+print ""
+
+# --- Comparison: Linear on unsorted vs sorted ---
+print "--- Linear Search on Unsorted List ---"
+create variable unsorted as list with value [42, 17, 88, 3, 55, 21]
+print "Unsorted data : " attach unsorted
+create variable idx8 as integer with value linear_search(unsorted, 55)
+show_result("Linear", idx8, 55)
+
+print ""
+print "--- Note: Binary search requires sorted input! ---"
+create variable sorted_copy as list with value sort(unsorted)
+print "Sorted copy   : " attach sorted_copy
+create variable idx9 as integer with value binary_search(sorted_copy, 55)
+show_result("Binary", idx9, 55)
+
+# --- Search for all elements (sweep) ---
+print ""
+print "--- Sweep: Find every element ---"
+for each item in data do
+    create variable pos as integer with value binary_search(data, item)
+    print "binary_search(" attach item attach ") = " attach pos
+end
