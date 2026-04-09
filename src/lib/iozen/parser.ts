@@ -1098,7 +1098,7 @@ export class Parser {
   }
 
   private parseUnary(): ASTNode {
-    if (this.check(TokenType.Minus) || this.check(TokenType.Not)) {
+    if (this.check(TokenType.Minus) || this.check(TokenType.Not) || this.check(TokenType.Borrow)) {
       const op = this.advance().value;
       const operand = this.parseUnary();
       return { kind: 'UnaryExpr', operator: op, operand } as UnaryExprNode;

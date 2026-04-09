@@ -1102,6 +1102,7 @@ export class Interpreter {
     switch (op) {
       case '-': return -this.toNumber(operand);
       case 'not': return !this.isTruthy(operand);
+      case 'borrow': return operand;
       default:
         throw new RuntimeError(`Unknown unary operator: ${op}`, ...this.findNodeLine(op));
     }

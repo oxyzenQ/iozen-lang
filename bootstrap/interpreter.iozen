@@ -108,6 +108,9 @@ function evaluate with node as map returns map
         when op equals "-" do
             return map("kind", "Literal", "type", get_key(operand, "type"), "value", 0 - val)
         end
+        when op equals "borrow" do
+            return operand
+        end
     end
 
     when kind equals "FunctionCallExpr" do

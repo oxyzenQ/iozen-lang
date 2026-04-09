@@ -76,6 +76,7 @@ function is_keyword(word) returns boolean
     when word equals "to" do return true end
     when word equals "of" do return true end
     when word equals "attach" do return true end
+    when word equals "borrow" do return true end
     return false
 end
 

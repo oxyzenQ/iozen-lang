@@ -52,3 +52,19 @@ Added 5 new statement parsers to bootstrap/parser.iozen:
 - Type checking system / AST validation
 - Language engine stabilizations
 - Ownership/borrowing implementation
+
+## Session 7: Phase 4 & 5 — Typechecker, Ownership & C Codegen
+**Date**: 2026-04-09
+**Status**: Completed
+
+### Achievements
+- **Phase 4 milestone reached**: Semantic AST validation & Typechecker (`bootstrap/typechecker.iozen`).
+- **Phase 4 Part 2**: Built the IOZEN Borrow Checker.
+  - Implemented the `borrow` unary operator natively in the Lexer & Parser.
+  - Typechecker tracks variable ownership and safely prevents reads of `moved_vars`.
+- **Phase 5 milestone reached**: Native C Compiler Generation (`bootstrap/codegen_c.iozen`).
+  - Implemented an IOZEN-to-C99 transpiler parsing `Literal`, `FunctionDecl`, `While`, `When`, etc.
+  - Dynamically packages valid C code structures around an `int main()` block.
+
+### Next Steps (Phase 6)
+- Combine Lexer, Parser, Typechecker, and Codegen into a Single Compiler Pipeline `iozenc.iozen`.

@@ -5,6 +5,7 @@
 
 create variable type_env_stack as list with value [map()]
 create variable func_env as map with value map()
+create variable moved_vars as map with value map()
 create variable expected_return_type as text with value "nothing"
 create variable has_type_errors as boolean with value false
 
@@ -36,6 +37,11 @@ function typecheck with node as map returns text
 
     when kind equals "Identifier" do
         create variable name as text with value get_key(node, "name")
+        when has_key(moved_vars, name) do
+            print "Borrow Error: Use of moved value '" attach name attach "'"
+            set has_type_errors to true
+            return "error"
+        end
         return get_type(name)
     end
 
@@ -116,6 +122,9 @@ function typecheck with node as map returns text
             end
             return operand_type
         end
+        when op equals "borrow" do
+            return "borrowed " attach operand_type
+        end
     end
 
     when kind equals "FunctionCallExpr" do
@@ -165,7 +174,15 @@ function check_stmt with stmt as map returns nothing
     when kind equals "VariableDecl" do
         create variable name as text with value get_key(stmt, "name")
         create variable decl_type as text with value get_key(stmt, "typeName")
-        create variable val_type as text with value typecheck(get_key(stmt, "value"))
+        create variable raw_val as map with value get_key(stmt, "value")
+        create variable val_type as text with value typecheck(raw_val)
+        
+        when get_key(raw_val, "kind") equals "Identifier" do
+            create variable id_name as text with value get_key(raw_val, "name")
+            when val_type equals "list" or val_type equals "map" or val_type equals "text" do
+                set_key(moved_vars, id_name, true)
+            end
+        end
         
         when val_type equals "error" do return nothing end
         
@@ -185,7 +202,15 @@ function check_stmt with stmt as map returns nothing
 
     when kind equals "AssignVar" do
         create variable name as text with value get_key(stmt, "name")
-        create variable val_type as text with value typecheck(get_key(stmt, "value"))
+        create variable raw_val as map with value get_key(stmt, "value")
+        create variable val_type as text with value typecheck(raw_val)
+        
+        when get_key(raw_val, "kind") equals "Identifier" do
+            create variable id_name as text with value get_key(raw_val, "name")
+            when val_type equals "list" or val_type equals "map" or val_type equals "text" do
+                set_key(moved_vars, id_name, true)
+            end
+        end
         
         when val_type equals "error" do return nothing end
         
@@ -320,16 +345,15 @@ end
 create variable test_ast as map with value map(
     "kind", "Program",
     "statements", [
-        map("kind", "FunctionDecl", "name", "adder", "parameters", [map("name", "base", "typeName", "integer"), map("name", "delta", "typeName", "integer")], "returnType", "integer", "body", [
-            map("kind", "ReturnStmt", "value", map("kind", "BinaryExpr", "operator", "+", "left", map("kind", "Identifier", "name", "base"), "right", map("kind", "Identifier", "name", "delta")))
-        ]),
-        map("kind", "FunctionDecl", "name", "bad_func", "parameters", [], "returnType", "text", "body", [
-            map("kind", "ReturnStmt", "value", map("kind", "Literal", "type", "integer", "value", 99))
-        ]),
-        map("kind", "VariableDecl", "name", "result", "typeName", "integer", "isConstant", false, "value", map("kind", "FunctionCallExpr", "name", "adder", "arguments", [
-            map("kind", "Literal", "type", "integer", "value", 10),
-            map("kind", "Literal", "type", "text", "value", "wrong arg")
-        ]))
+        # OWNERSHIP TEST PAYLOAD
+        map("kind", "VariableDecl", "name", "original_data", "typeName", "text", "isConstant", false, "value", map("kind", "Literal", "type", "text", "value", "heap data")),
+        # Move occurs here
+        map("kind", "VariableDecl", "name", "moved_data", "typeName", "text", "isConstant", false, "value", map("kind", "Identifier", "name", "original_data")),
+        # Borrow Error should trigger 
+        map("kind", "PrintStmt", "expressions", [map("kind", "Identifier", "name", "original_data")]),
+        
+        # Borrow syntax test
+        map("kind", "VariableDecl", "name", "view_data", "typeName", "borrowed text", "isConstant", false, "value", map("kind", "UnaryExpr", "operator", "borrow", "operand", map("kind", "Identifier", "name", "moved_data")))
     ]
 )
 

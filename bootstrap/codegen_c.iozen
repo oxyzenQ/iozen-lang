@@ -1,0 +1,248 @@
+# ============================================================
+# IOZEN SELF-HOSTING C CODE GENERATOR v0.1
+# Translates IOZEN AST to C99 native source code
+# Run: iozen run bootstrap/codegen_c.iozen
+# ============================================================
+
+print "=========================================="
+print "  IOZEN C CODE GENERATOR MVP"
+print "  Generating native C99 execution target"
+print "=========================================="
+print ""
+
+function map_type_to_c(iozen_type) returns text
+    when iozen_type equals "integer" do return "long long" end
+    when iozen_type equals "float" do return "double" end
+    when iozen_type equals "boolean" do return "bool" end
+    when iozen_type equals "text" do return "char*" end
+    when iozen_type equals "character" do return "char" end
+    when iozen_type equals "nothing" do return "void" end
+    return iozen_type
+end
+
+function gen_indent(level) returns text
+    create variable out as text with value ""
+    create variable i as integer with value 0
+    while i < level do
+        set out to out attach "    "
+        increase i by 1
+    end
+    return out
+end
+
+function generate_expr(node) returns text
+    create variable kind as text with value get_key(node, "kind")
+    
+    when kind equals "Literal" do
+        create variable lit_type as text with value get_key(node, "type")
+        create variable lit_val as anything with value get_key(node, "value")
+        when lit_type equals "text" do
+            return "\"" attach lit_val attach "\""
+        end
+        when lit_type equals "boolean" do
+            when lit_val equals true do return "true" end
+            return "false"
+        end
+        return to_text(lit_val)
+    end
+    
+    when kind equals "Identifier" do
+        return get_key(node, "name")
+    end
+    
+    when kind equals "BinaryExpr" do
+        create variable left as text with value generate_expr(get_key(node, "left"))
+        create variable right as text with value generate_expr(get_key(node, "right"))
+        create variable op as text with value get_key(node, "operator")
+        when op equals "and" do set op to "&&" end
+        when op equals "or" do set op to "||" end
+        return "(" attach left attach " " attach op attach " " attach right attach ")"
+    end
+
+    when kind equals "UnaryExpr" do
+        create variable op as text with value get_key(node, "operator")
+        create variable operand as text with value generate_expr(get_key(node, "operand"))
+        when op equals "not" do set op to "!" end
+        when op equals "borrow" do return operand end
+        return "(" attach op attach operand attach ")"
+    end
+
+    when kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(node, "name")
+        create variable args as list with value get_key(node, "arguments")
+        create variable out as text with value func_name attach "("
+        create variable i as integer with value 0
+        while i < length(args) do
+            set out to out attach generate_expr(args[i])
+            when i < length(args) - 1 do
+                set out to out attach ", "
+            end
+            increase i by 1
+        end
+        set out to out attach ")"
+        return out
+    end
+    
+    return "/* Unknown Expr: " attach kind attach " */"
+end
+
+function generate_stmt(stmt, indent) returns text
+    create variable kind as text with value get_key(stmt, "kind")
+    create variable ind_str as text with value gen_indent(indent)
+    
+    when kind equals "VariableDecl" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable c_type as text with value map_type_to_c(get_key(stmt, "typeName"))
+        create variable val as map with value get_key(stmt, "value")
+        
+        when val != nothing do
+            return ind_str attach c_type attach " " attach name attach " = " attach generate_expr(val) attach ";\n"
+        end
+        return ind_str attach c_type attach " " attach name attach ";\n"
+    end
+    
+    when kind equals "AssignVar" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable val as text with value generate_expr(get_key(stmt, "value"))
+        return ind_str attach name attach " = " attach val attach ";\n"
+    end
+
+    when kind equals "PrintStmt" do
+        create variable expr_node as map with value get_key(stmt, "expressions")[0]
+        create variable expr as text with value generate_expr(expr_node)
+        return ind_str attach "printf(\"%lld\\n\", " attach expr attach ");\n"
+    end
+
+    when kind equals "ReturnStmt" do
+        create variable val as map with value get_key(stmt, "value")
+        when val equals nothing do
+            return ind_str attach "return;\n"
+        end
+        return ind_str attach "return " attach generate_expr(val) attach ";\n"
+    end
+    
+    when kind equals "While" do
+        create variable cond as text with value generate_expr(get_key(stmt, "condition"))
+        create variable out as text with value ind_str attach "while (" attach cond attach ") {\n"
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach generate_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        return out attach ind_str attach "}\n"
+    end
+    
+    when kind equals "When" do
+        create variable branches as list with value get_key(stmt, "branches")
+        create variable out as text with value ""
+        
+        create variable first as map with value branches[0]
+        create variable cond as text with value generate_expr(get_key(first, "condition"))
+        set out to out attach ind_str attach "if (" attach cond attach ") {\n"
+        
+        create variable body as list with value get_key(first, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach generate_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        set out to out attach ind_str attach "}"
+        
+        # otherwise branch
+        create variable otherwise_blk as anything with value get_key(stmt, "otherwise")
+        when otherwise_blk != nothing and length(otherwise_blk) > 0 do
+            set out to out attach " else {\n"
+            set i to 0
+            while i < length(otherwise_blk) do
+                set out to out attach generate_stmt(otherwise_blk[i], indent + 1)
+                increase i by 1
+            end
+            set out to out attach ind_str attach "}"
+        end
+        return out attach "\n"
+    end
+
+    when kind equals "FunctionDecl" do
+        create variable func_name as text with value get_key(stmt, "name")
+        create variable c_ret_type as text with value map_type_to_c(get_key(stmt, "returnType"))
+        create variable params as list with value get_key(stmt, "parameters")
+        
+        create variable param_str as text with value ""
+        create variable i as integer with value 0
+        while i < length(params) do
+            create variable p as map with value params[i]
+            set param_str to param_str attach map_type_to_c(get_key(p, "typeName")) attach " " attach get_key(p, "name")
+            when i < length(params) - 1 do
+                set param_str to param_str attach ", "
+            end
+            increase i by 1
+        end
+        
+        when length(params) equals 0 do
+            set param_str to "void"
+        end
+
+        create variable out as text with value ind_str attach c_ret_type attach " " attach func_name attach "(" attach param_str attach ") {\n"
+        
+        create variable body as list with value get_key(stmt, "body")
+        set i to 0
+        while i < length(body) do
+            set out to out attach generate_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        
+        return out attach ind_str attach "}\n\n"
+    end
+
+    return ind_str attach "/* Unknown Stmt: " attach kind attach " */\n"
+end
+
+function generate_c(ast) returns text
+    create variable out as text with value "/* AUTO-GENERATED NATIVE C CODE BY IOZEN */\n\n"
+    set out to out attach "#include <stdio.h>\n"
+    set out to out attach "#include <stdbool.h>\n\n"
+    
+    create variable stmts as list with value get_key(ast, "statements")
+    create variable i as integer with value 0
+    
+    create variable global_funcs as text with value ""
+    create variable main_body as text with value ""
+    
+    while i < length(stmts) do
+        create variable stmt as map with value stmts[i]
+        when get_key(stmt, "kind") equals "FunctionDecl" do
+            set global_funcs to global_funcs attach generate_stmt(stmt, 0)
+        otherwise do
+            set main_body to main_body attach generate_stmt(stmt, 1)
+        end
+        increase i by 1
+    end
+    
+    set out to out attach global_funcs
+    
+    set out to out attach "int main() {\n"
+    set out to out attach main_body
+    set out to out attach "    return 0;\n"
+    set out to out attach "}\n"
+    
+    return out
+end
+
+# AST Payload for Testing Code Generation
+create variable test_ast as map with value map(
+    "kind", "Program",
+    "statements", [
+        map("kind", "FunctionDecl", "name", "adder", "parameters", [map("name", "base", "typeName", "integer"), map("name", "delta", "typeName", "integer")], "returnType", "integer", "body", [
+            map("kind", "ReturnStmt", "value", map("kind", "BinaryExpr", "operator", "+", "left", map("kind", "Identifier", "name", "base"), "right", map("kind", "Identifier", "name", "delta")))
+        ]),
+        map("kind", "VariableDecl", "name", "max_val", "typeName", "integer", "isConstant", false, "value", map("kind", "Literal", "type", "integer", "value", 100)),
+        map("kind", "VariableDecl", "name", "i", "typeName", "integer", "isConstant", false, "value", map("kind", "Literal", "type", "integer", "value", 0)),
+        map("kind", "While", "condition", map("kind", "BinaryExpr", "operator", "<", "left", map("kind", "Identifier", "name", "i"), "right", map("kind", "Identifier", "name", "max_val")), "body", [
+            map("kind", "AssignVar", "name", "i", "value", map("kind", "FunctionCallExpr", "name", "adder", "arguments", [map("kind", "Identifier", "name", "i"), map("kind", "Literal", "type", "integer", "value", 10)])),
+            map("kind", "PrintStmt", "expressions", [map("kind", "Identifier", "name", "i")])
+        ])
+    ]
+)
+
+print generate_c(test_ast)

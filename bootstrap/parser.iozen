@@ -121,6 +121,11 @@ function parse_unary() returns map
         create variable operand as map with value parse_unary()
         return map("kind", "UnaryExpr", "operator", "not", "operand", operand)
     end
+    when tok_is with "borrow" or tok_is with "Borrow" do
+        advance()
+        create variable operand as map with value parse_unary()
+        return map("kind", "UnaryExpr", "operator", "borrow", "operand", operand)
+    end
     return parse_postfix()
 end
 
