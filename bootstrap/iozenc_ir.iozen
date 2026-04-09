@@ -1039,6 +1039,42 @@ function fold_ir_expr with ir_expr as map returns map
             end
         end
 
+        # Algebraic simplification rules (Phase 9.6)
+        # These are safe because they don't change semantics for any operand type
+        create variable op as text with value get_key(ir_expr, "op")
+
+        # x + 0 → x, 0 + x → x
+        when op equals "+" do
+            create variable left_is_zero as boolean with value left_type equals "IRLiteral" and get_key(left_folded, "literal_type") equals "integer" and get_key(left_folded, "value") equals 0
+            create variable right_is_zero as boolean with value right_type equals "IRLiteral" and get_key(right_folded, "literal_type") equals "integer" and get_key(right_folded, "value") equals 0
+            when left_is_zero do return right_folded end
+            when right_is_zero do return left_folded end
+        end
+
+        # x - 0 → x
+        when op equals "-" do
+            create variable right_is_zero as boolean with value right_type equals "IRLiteral" and get_key(right_folded, "literal_type") equals "integer" and get_key(right_folded, "value") equals 0
+            when right_is_zero do return left_folded end
+        end
+
+        # x * 1 → x, 1 * x → x
+        when op equals "*" do
+            create variable left_is_one as boolean with value left_type equals "IRLiteral" and get_key(left_folded, "literal_type") equals "integer" and get_key(left_folded, "value") equals 1
+            create variable right_is_one as boolean with value right_type equals "IRLiteral" and get_key(right_folded, "literal_type") equals "integer" and get_key(right_folded, "value") equals 1
+            when left_is_one do return right_folded end
+            when right_is_one do return left_folded end
+        end
+
+        # x * 0 → 0, 0 * x → 0 (only if x has no side effects)
+        # Since we only fold literals and variables (no function calls in this IR),
+        # this is safe
+        when op equals "*" do
+            create variable left_is_zero as boolean with value left_type equals "IRLiteral" and get_key(left_folded, "literal_type") equals "integer" and get_key(left_folded, "value") equals 0
+            create variable right_is_zero as boolean with value right_type equals "IRLiteral" and get_key(right_folded, "literal_type") equals "integer" and get_key(right_folded, "value") equals 0
+            when left_is_zero do return left_folded end
+            when right_is_zero do return right_folded end
+        end
+
         # Return with folded operands (even if we couldn't fold the whole expression)
         return map("type", "IRBinaryOp", "op", get_key(ir_expr, "op"), "left", left_folded, "right", right_folded)
     end

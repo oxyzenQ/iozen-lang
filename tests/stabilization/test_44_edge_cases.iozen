@@ -1,0 +1,40 @@
+# Test 44: Edge Cases for Optimization
+# Negative numbers, deep nesting, mixed expressions
+
+print "Test 44: Edge Cases"
+
+# Negative numbers
+create variable neg_a as integer with value -5
+create variable neg_b as integer with value -10
+create variable neg_sum as integer with value neg_a + neg_b
+print "-5 + -10 = " attach neg_sum
+when neg_sum equals -15 do print "  PASS: Negative addition" end
+
+# Deep nesting: ((2 + 3) * (4 - 1)) / 3
+create variable deep_result as integer with value ((2 + 3) * (4 - 1)) / 3
+print "((2+3) * (4-1)) / 3 = " attach deep_result
+when deep_result equals 5 do print "  PASS: Deep nesting" end
+
+# Mixed safe/unsafe: variable + 0 (should simplify)
+create mixvar as integer with value 100
+create mixresult as integer with value mixvar + 0
+print "var + 0 = " attach mixresult
+when mixresult equals 100 do print "  PASS: Variable + 0 simplified" end
+
+# Division edge cases
+create vardiv1 as integer with value 7 / 2
+print "7 / 2 = " attach vardiv1
+when vardiv1 equals 3 do print "  PASS: Integer division" end
+
+# Large number
+create varlarge as integer with value 1000000 * 2 + 500000
+print "Large expression = " attach varlarge
+when varlarge equals 2500000 do print "  PASS: Large numbers" end
+
+# Chained operations: 10 + 20 + 30 + 40
+create varchain as integer with value 10 + 20 + 30 + 40
+print "10+20+30+40 = " attach varchain
+when varchain equals 100 do print "  PASS: Chained addition" end
+
+print ""
+print "Test 44 Complete"

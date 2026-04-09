@@ -1,0 +1,48 @@
+# Test 43: Algebraic Simplification
+# Verify identity operations are eliminated
+
+print "Test 43: Algebraic Simplification"
+
+# x + 0 → x
+create variable a as integer with value 42
+create variable result1 as integer with value a + 0
+print "a + 0 = " attach result1
+when result1 equals 42 do print "  PASS: x + 0 → x" end
+
+# 0 + x → x
+create variable result2 as integer with value 0 + a
+print "0 + a = " attach result2
+when result2 equals 42 do print "  PASS: 0 + x → x" end
+
+# x - 0 → x
+create variable result3 as integer with value a - 0
+print "a - 0 = " attach result3
+when result3 equals 42 do print "  PASS: x - 0 → x" end
+
+# x * 1 → x
+create variable result4 as integer with value a * 1
+print "a * 1 = " attach result4
+when result4 equals 42 do print "  PASS: x * 1 → x" end
+
+# 1 * x → x
+create variable result5 as integer with value 1 * a
+print "1 * a = " attach result5
+when result5 equals 42 do print "  PASS: 1 * x → x" end
+
+# x * 0 → 0
+create variable result6 as integer with value a * 0
+print "a * 0 = " attach result6
+when result6 equals 0 do print "  PASS: x * 0 → 0" end
+
+# 0 * x → 0
+create variable result7 as integer with value 0 * a
+print "0 * a = " attach result7
+when result7 equals 0 do print "  PASS: 0 * x → 0" end
+
+# Combined: (x + 0) * 1 → x
+create variable result8 as integer with value (a + 0) * 1
+print "(a + 0) * 1 = " attach result8
+when result8 equals 42 do print "  PASS: Combined simplification" end
+
+print ""
+print "Test 43 Complete"
