@@ -25,3 +25,4 @@ iozen-cli/examples/fizzbuzz
 bun.lock
 package-lock.json
 yarn.lock
+target/
