@@ -1,0 +1,52 @@
+# Test 15: Type Boundaries — Medium Risk
+# Risk: Integer overflow, negative numbers, zero handling
+
+print "Test 15: Type boundaries"
+
+# Large positive integer
+create variable big_pos as integer with value 999999999
+print big_pos
+
+# Negative numbers
+create variable negative as integer with value -100
+print negative
+
+# Zero handling
+create variable zero as integer with value 0
+print zero
+
+# Arithmetic with negatives
+create variable neg_result as integer with value negative + 50
+print neg_result
+
+# Multiply by zero
+create variable zero_result as integer with value big_pos * 0
+print zero_result
+
+# Double precision
+create variable pi as float with value 3.14159265359
+print pi
+
+# Float arithmetic
+create variable float_result as float with value pi * 2.0
+print float_result
+
+# Mixed int/float
+create variable mixed as float with value 10 + 3.5
+print mixed
+
+# Division edge cases
+create variable div1 as integer with value 7 / 2
+print div1
+
+# Boolean edge
+create variable t as boolean with value true
+create variable f as boolean with value false
+when not t do
+    print "FAIL"
+end
+when not f do
+    print "PASS: Boolean NOT"
+end
+
+print "Test 15: PASS"

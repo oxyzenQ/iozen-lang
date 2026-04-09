@@ -1,0 +1,30 @@
+# Test 12: Variable Shadowing — Critical Bug Class
+# Risk: Wrong variable accessed, symbol resolution bug
+
+print "Test 12: Variable shadowing"
+
+# Global variable
+create variable x as integer with value 10
+print x
+
+# Nested scope with same name
+when x equals 10 do
+    create variable x as integer with value 20
+    print x
+    when x equals 20 do
+        create variable x as integer with value 30
+        print x
+    end
+    print x
+end
+print x
+
+# Function parameter shadowing global
+function shadow_test with x as integer returns integer
+    return x
+end
+
+print shadow_test with 100
+print x
+
+print "Test 12: PASS"

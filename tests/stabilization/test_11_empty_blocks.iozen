@@ -1,0 +1,33 @@
+# Test 11: Empty Blocks — Critical Bug Class
+# Risk: Parser infinite loop, codegen syntax error
+
+print "Test 11: Empty blocks"
+
+# Empty when branch
+when 1 equals 1 do
+end
+print "PASS: Empty when branch"
+
+# Empty otherwise branch
+when 1 equals 2 do
+    print "FAIL"
+otherwise do
+end
+print "PASS: Empty otherwise branch"
+
+# Empty while
+while 1 equals 2 do
+end
+print "PASS: Empty while (never enters)"
+
+# Empty repeat
+repeat 0 times do
+end
+print "PASS: Empty repeat (zero times)"
+
+# Function with empty body
+function empty_func returns nothing
+end
+print "PASS: Empty function"
+
+print "Test 11: PASS"

@@ -1,0 +1,47 @@
+# Test 13: Early Return — Medium Risk
+# Risk: Control flow merge bug, unreachable code
+
+print "Test 13: Early return"
+
+# Function with early return
+function find_max with a as integer and b as integer returns integer
+    when a is greater than b do
+        return a
+    end
+    return b
+end
+
+print find_max with 5 and 10
+print find_max with 20 and 3
+
+# Multiple returns with guards
+function sign with n as integer returns integer
+    when n is greater than 0 do
+        return 1
+    end
+    when n is less than 0 do
+        return -1
+    end
+    return 0
+end
+
+print sign with 42
+print sign with -7
+print sign with 0
+
+# Early return in nested when
+function nested_return with x as integer returns integer
+    when x is greater than 0 do
+        when x is greater than 10 do
+            return 100
+        end
+        return 50
+    end
+    return 0
+end
+
+print nested_return with 5
+print nested_return with 15
+print nested_return with -1
+
+print "Test 13: PASS"

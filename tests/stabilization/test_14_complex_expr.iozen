@@ -1,0 +1,57 @@
+# Test 14: Complex Expressions — Medium Risk
+# Risk: Operator precedence, associativity bug
+
+print "Test 14: Complex expressions"
+
+# Operator precedence: (a + b) * c
+# Should be: (2 + 3) * 4 = 20
+create variable a as integer with value 2
+create variable b as integer with value 3
+create variable c as integer with value 4
+
+create variable result1 as integer with value (a + b) * c
+print result1
+
+# Without parens: a + b * c = 2 + (3 * 4) = 14
+create variable result2 as integer with value a + b * c
+print result2
+
+# Complex chain: a + b * c - d / e
+create variable d as integer with value 10
+create variable e as integer with value 2
+create variable result3 as integer with value a + b * c - d / e
+print result3
+
+# Nested parentheses
+create variable result4 as integer with value ((a + b) * (c - 1)) / 2
+print result4
+
+# Function call in expression
+function double with n as integer returns integer
+    return n * 2
+end
+
+function triple with n as integer returns integer
+    return n * 3
+end
+
+create variable result5 as integer with value double with 5 + triple with 2
+print result5
+
+# Boolean expression complexity
+create variable x as boolean with value true
+create variable y as boolean with value false
+create variable z as boolean with value true
+
+when x and (y or z) do
+    print "PASS: Boolean precedence"
+end
+
+# Comparison chain (natural language style)
+create variable score as integer with value 75
+
+when score is greater than or equal to 60 and score is less than 90 do
+    print "PASS: Chained comparison"
+end
+
+print "Test 14: PASS"
