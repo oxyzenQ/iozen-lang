@@ -1,0 +1,223 @@
+# ============================================================
+# IOZEN SYMBOL TABLE v0.1 — Phase 9.3: Semantic Stabilization
+# Minimal but complete symbol system for self-hosting
+# ============================================================
+
+# Global symbol table state
+create variable next_symbol_id as integer with value 1
+create variable next_scope_id as integer with value 1
+create variable scopes as map with value map()      # scope_id → Scope
+create variable symbols as map with value map()     # symbol_id → Symbol
+create variable current_scope_id as integer with value 0
+
+# Scope 0 = global scope (created at init)
+set scopes[0] to map("id", 0, "parent_id", -1, "symbols", map(), "level", 0)
+
+# ============================================================
+# SCOPE OPERATIONS
+# ============================================================
+
+function push_scope() returns integer
+    create variable new_scope_id as integer with value next_scope_id
+    set next_scope_id to next_scope_id + 1
+    
+    create variable current_level as integer with value get_key(get_key(scopes[current_scope_id], "level"), 0) + 1
+    
+    create variable new_scope as map with value map(
+        "id", new_scope_id,
+        "parent_id", current_scope_id,
+        "symbols", map(),
+        "level", current_level
+    )
+    
+    set scopes[new_scope_id] to new_scope
+    set current_scope_id to new_scope_id
+    
+    return new_scope_id
+end
+
+function pop_scope() returns nothing
+    when current_scope_id equals 0 do
+        print "ERROR: Cannot pop global scope"
+        return
+    end
+    
+    create variable parent_id as integer with value get_key(scopes[current_scope_id], "parent_id")
+    set current_scope_id to parent_id
+end
+
+function get_current_scope() returns map
+    return scopes[current_scope_id]
+end
+
+# ============================================================
+# SYMBOL OPERATIONS
+# ============================================================
+
+# Lookup symbol by name - search up scope chain
+function lookup_symbol with name as text returns integer
+    create variable scope_id as integer with value current_scope_id
+    
+    while scope_id >= 0 do
+        create variable scope as map with value scopes[scope_id]
+        create variable scope_symbols as map with value get_key(scope, "symbols")
+        
+        when has_key(scope_symbols, name) do
+            return get_key(scope_symbols, name)
+        end
+        
+        set scope_id to get_key(scope, "parent_id")
+    end
+    
+    return -1  # Not found
+end
+
+# Declare new symbol - ERROR if duplicate in current scope
+function declare_symbol with name as text and sym_type as text and data_type as text returns integer
+    create variable current_scope as map with value scopes[current_scope_id]
+    create variable scope_symbols as map with value get_key(current_scope, "symbols")
+    
+    # Check for duplicate in CURRENT scope only
+    when has_key(scope_symbols, name) do
+        print "SYMBOL ERROR: Duplicate declaration of '" attach name attach "' in current scope"
+        return -1
+    end
+    
+    # Create new symbol
+    create variable symbol_id as integer with value next_symbol_id
+    set next_symbol_id to next_symbol_id + 1
+    
+    create variable symbol as map with value map(
+        "id", symbol_id,
+        "name", name,
+        "scope_id", current_scope_id,
+        "type", sym_type,        # "variable", "function", "parameter"
+        "data_type", data_type,   # "integer", "float", "text", "boolean", "nothing"
+        "is_initialized", false
+    )
+    
+    set symbols[symbol_id] to symbol
+    set_key(scope_symbols, name, symbol_id)
+    
+    return symbol_id
+end
+
+# Get symbol by ID
+function get_symbol with symbol_id as integer returns map
+    when has_key(symbols, symbol_id) do
+        return symbols[symbol_id]
+    end
+    return map()  # Empty = not found
+end
+
+# Mark symbol as initialized
+function mark_initialized with symbol_id as integer returns nothing
+    when has_key(symbols, symbol_id) do
+        create variable sym as map with value symbols[symbol_id]
+        set_key(sym, "is_initialized", true)
+        set symbols[symbol_id] to sym
+    end
+end
+
+# ============================================================
+# DEBUG & INTROSPECTION
+# ============================================================
+
+function dump_symbol_table() returns nothing
+    print "=== Symbol Table Dump ==="
+    print "Current scope: " attach current_scope_id
+    print "Total symbols: " attach (next_symbol_id - 1)
+    print "Total scopes: " attach next_scope_id
+    print ""
+    
+    print "--- Scopes ---"
+    create variable scope_ids as list with value keys(scopes)
+    create variable i as integer with value 0
+    while i < length(scope_ids) do
+        create variable sid as integer with value scope_ids[i]
+        create variable scope as map with value scopes[sid]
+        print "Scope " attach sid attach " (parent=" attach get_key(scope, "parent_id") attach ")"
+        create variable syms as map with value get_key(scope, "symbols")
+        create variable sym_names as list with value keys(syms)
+        create variable j as integer with value 0
+        while j < length(sym_names) do
+            print "  " attach sym_names[j] attach " → id " attach syms[sym_names[j]]
+            increase j by 1
+        end
+        increase i by 1
+    end
+    
+    print ""
+    print "--- Symbols ---"
+    create variable sym_ids as list with value keys(symbols)
+    set i to 0
+    while i < length(sym_ids) do
+        create variable sid as integer with value sym_ids[i]
+        create variable sym as map with value symbols[sid]
+        print "ID " attach sid attach ": " attach get_key(sym, "name") attach " (" attach get_key(sym, "type") attach ", " attach get_key(sym, "data_type") attach ")"
+        increase i by 1
+    end
+end
+
+# ============================================================
+# TESTING
+# ============================================================
+
+print "Symbol Table Test"
+print "================="
+print ""
+
+# Test 1: Declare global variable
+print "Test 1: Global declaration"
+create variable global_x_id as integer with value declare_symbol with "x" and "variable" and "integer"
+print "Declared x with id " attach global_x_id
+
+# Test 2: Lookup global
+print ""
+print "Test 2: Lookup global"
+create variable lookup_result as integer with value lookup_symbol with "x"
+print "Lookup x → id " attach lookup_result
+
+# Test 3: Push scope and declare local
+print ""
+print "Test 3: Local scope"
+create variable local_scope as integer with value push_scope()
+print "Pushed scope " attach local_scope
+
+create variable local_y_id as integer with value declare_symbol with "y" and "variable" and "integer"
+print "Declared local y with id " attach local_y_id
+
+# Test 4: Lookup from local scope (should find both)
+print ""
+print "Test 4: Lookup from local scope"
+print "Lookup x → " attach lookup_symbol with "x"
+print "Lookup y → " attach lookup_symbol with "y"
+
+# Test 5: Declare same name in local (shadowing allowed, duplicate not)
+print ""
+print "Test 5: Shadowing"
+create variable local_x_id as integer with value declare_symbol with "x" and "variable" and "integer"
+print "Declared local x with id " attach local_x_id
+print "Lookup x from local → " attach lookup_symbol with "x"
+
+# Test 6: Pop scope and check
+print ""
+print "Test 6: Scope pop"
+print "Current scope before pop: " attach current_scope_id
+pop_scope()
+print "Current scope after pop: " attach current_scope_id
+print "Lookup x after pop → " attach lookup_symbol with "x"
+print "Lookup y after pop → " attach lookup_symbol with "y"
+
+# Test 7: Duplicate detection
+print ""
+print "Test 7: Duplicate detection"
+create variable dup_result as integer with value declare_symbol with "x" and "variable" and "integer"
+print "Duplicate declaration result: " attach dup_result
+
+# Dump final state
+print ""
+dump_symbol_table()
+
+print ""
+print "Symbol table tests complete!"
