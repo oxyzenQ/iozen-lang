@@ -1,0 +1,29 @@
+# IOZEN Hello World - Simple test for iozenc compiler
+
+print "Hello, World!"
+print "IOZEN compilation test successful"
+
+# Simple arithmetic
+create variable a as integer with value 10
+create variable b as integer with value 20
+create variable sum as integer with value a + b
+
+print "Arithmetic test:"
+print sum
+
+# Function test
+function greet with name as text returns text
+    return "Hello, " attach name attach "!"
+end
+
+print greet with "IOZEN"
+
+# Loop test
+print "Counting to 5:"
+create variable i as integer with value 1
+repeat 5 times do
+    print i
+    increase i by 1
+end
+
+print "Done!"

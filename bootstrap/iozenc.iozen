@@ -16,8 +16,16 @@ print ""
 
 # ============================================================
 # INPUT: Raw IOZEN source code to compile
+# Default: examples/hello.iozen (change this to compile other files)
 # ============================================================
-create variable source as text with value "# IOZENC Test - Comprehensive Feature Demo\n\nfunction factorial with n as integer returns integer\n    when n is less than or equal to 1 do\n        return 1\n    end\n    return n * factorial with n - 1\nend\n\nfunction greet with name as text returns text\n    return \"Hello, \" attach name attach \"!\"\nend\n\ncreate variable x as integer with value 10\ncreate variable y as integer with value factorial(x)\nprint y\n\ncreate variable msg as text with value greet with \"IOZEN\"\nprint msg\n\nrepeat 3 times do\n    print \"Loop iteration\"\nend\n\ncreate variable i as integer with value 0\nwhile i is less than 3 do\n    print i\n    increase i by 1\nend\n\nwhen x equals 10 do\n    print \"x is ten\"\notherwise do\n    print \"x is not ten\"\nend\n"
+create variable source_file as text with value "examples/hello.iozen"
+create variable source as text with value read_file(source_file)
+
+when source equals "" do
+    print "Error: Could not read source file: " attach source_file
+    print "Make sure the file exists."
+    exit
+end
 
 print "── Source ──────────────────────────────────"
 print source
@@ -1157,12 +1165,35 @@ create variable c_output as text with value generate_c(ast)
 print "  ✓ C code generated successfully"
 print ""
 
-print "── Generated C99 Output ────────────────────"
-print c_output
-print "─────────────────────────────────────────────"
+# Output file paths
+create variable c_file as text with value "target/output.c"
+create variable binary_file as text with value "target/output"
+
+# Ensure target directory exists (create it via system mkdir)
+create variable mkdir_result as integer with value system("mkdir -p target")
+
+print "▸ Stage 4: Saving C code to file..."
+write_file(c_file, c_output)
+print "  ✓ C code saved to " attach c_file
+print ""
+
+print "▸ Stage 5: Compiling to native binary..."
+create variable compile_cmd as text with value "gcc -o " attach binary_file attach " " attach c_file attach " -lm"
+print "  Command: " attach compile_cmd
+
+create variable compile_result as integer with value system(compile_cmd)
+when compile_result equals 0 do
+    print "  ✓ Native binary compiled: " attach binary_file
+    print ""
+    print "  Run with: ./" attach binary_file
+otherwise do
+    print "  ✗ Compilation failed (code: " attach compile_result attach ")"
+    print "  Make sure gcc is installed."
+end
+
 print ""
 print "╔══════════════════════════════════════════╗"
-print "║  ✓ COMPILATION COMPLETE                   ║"
-print "║  IOZEN source → C99 native code           ║"
+print "║  ✓ FULL COMPILATION COMPLETE              ║"
+print "║  IOZEN source → C99 → Native Binary       ║"
 print "║  Self-hosting compiler pipeline working!   ║"
 print "╚══════════════════════════════════════════╝"

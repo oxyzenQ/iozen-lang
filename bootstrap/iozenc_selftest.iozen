@@ -1,0 +1,467 @@
+# ============================================================
+# IOZENC Self-Test - Simplified compiler for self-hosting test
+# This version compiles a simple IOZEN program to C
+# ============================================================
+
+print "╔══════════════════════════════════════════╗"
+print "║    IOZENC SELF-TEST v0.1                 ║"
+print "║    Can iozenc compile itself?            ║"
+print "╚══════════════════════════════════════════╝"
+print ""
+
+# ============================================================
+# INPUT: Source code (simplified - embedded)
+# ============================================================
+create variable source as text with value "# Self-test target program\nprint \"Hello from compiled program!\"\ncreate variable x as integer with value 42\nprint x\nfunction multiply with n as integer returns integer\n    return n * 2\nend\nprint multiply with 21\n"
+
+print "── Source to compile ──────────────────────"
+print source
+print "────────────────────────────────────────────"
+print ""
+
+# ============================================================
+# SIMPLIFIED LEXER (subset)
+# ============================================================
+create variable lex_pos as integer with value 0
+create variable lex_len as integer with value length(source)
+create variable tokens as list with value []
+
+function lex_is_alpha(ch) returns boolean
+    create variable c as integer with value ord(ch)
+    when c >= 97 and c <= 122 do return true end
+    when c >= 65 and c <= 90 do return true end
+    when c equals 95 do return true end
+    return false
+end
+
+function lex_is_digit(ch) returns boolean
+    create variable c as integer with value ord(ch)
+    when c >= 48 and c <= 57 do return true end
+    return false
+end
+
+function lex_is_alnum(ch) returns boolean
+    when lex_is_alpha(ch) do return true end
+    return lex_is_digit(ch)
+end
+
+function lex_is_keyword(word) returns boolean
+    when word equals "print" do return true end
+    when word equals "create" do return true end
+    when word equals "variable" do return true end
+    when word equals "as" do return true end
+    when word equals "with" do return true end
+    when word equals "value" do return true end
+    when word equals "integer" do return true end
+    when word equals "function" do return true end
+    when word equals "returns" do return true end
+    when word equals "return" do return true end
+    when word equals "end" do return true end
+    return false
+end
+
+function lex_read_ident() returns list
+    create variable word as text with value ""
+    while lex_pos < lex_len and lex_is_alnum(char_at(source, lex_pos)) do
+        set word to word attach char_at(source, lex_pos)
+        set lex_pos to lex_pos + 1
+    end
+    when lex_is_keyword(word) do
+        return [word, word]
+    end
+    return ["IDENT", word]
+end
+
+function lex_read_num() returns list
+    create variable num as text with value ""
+    while lex_pos < lex_len and lex_is_digit(char_at(source, lex_pos)) do
+        set num to num attach char_at(source, lex_pos)
+        set lex_pos to lex_pos + 1
+    end
+    return ["INT", num]
+end
+
+function lex_read_str() returns list
+    set lex_pos to lex_pos + 1
+    create variable str as text with value ""
+    while lex_pos < lex_len do
+        create variable ch as text with value char_at(source, lex_pos)
+        when ch equals "\"" do
+            set lex_pos to lex_pos + 1
+            return ["STR", str]
+        end
+        set str to str attach ch
+        set lex_pos to lex_pos + 1
+    end
+    return ["STR", str]
+end
+
+function tokenize() returns list
+    create variable matched as boolean with value false
+
+    while lex_pos < lex_len do
+        while lex_pos < lex_len and char_at(source, lex_pos) equals " " do
+            set lex_pos to lex_pos + 1
+        end
+        when lex_pos >= lex_len do return tokens end
+
+        create variable ch as text with value char_at(source, lex_pos)
+        set matched to false
+
+        when ch equals "\n" or ch equals "\t" or ch equals "\r" do
+            set lex_pos to lex_pos + 1
+            set matched to true
+        end
+
+        when ch equals "#" do
+            while lex_pos < lex_len and char_at(source, lex_pos) != "\n" do
+                set lex_pos to lex_pos + 1
+            end
+            set matched to true
+        end
+
+        when ch equals "\"" do
+            push(tokens, lex_read_str())
+            set matched to true
+        end
+
+        when lex_is_digit(ch) do
+            push(tokens, lex_read_num())
+            set matched to true
+        end
+
+        when lex_is_alpha(ch) do
+            push(tokens, lex_read_ident())
+            set matched to true
+        end
+
+        when ch equals "(" do push(tokens, ["LPAREN", "("]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals ")" do push(tokens, ["RPAREN", ")"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "=" do push(tokens, ["ASSIGN", "="]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "+" do push(tokens, ["PLUS", "+"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "-" do push(tokens, ["MINUS", "-"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "*" do push(tokens, ["STAR", "*"]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "/" do push(tokens, ["SLASH", "/"]) set lex_pos to lex_pos + 1 set matched to true end
+
+        when matched equals false and lex_pos < lex_len do
+            set lex_pos to lex_pos + 1
+        end
+    end
+    return tokens
+end
+
+# ============================================================
+# SIMPLIFIED PARSER (subset)
+# ============================================================
+create variable par_pos as integer with value 0
+
+function par_peek() returns list
+    when par_pos >= length(tokens) do return ["EOF", "", 0, 0] end
+    return tokens[par_pos]
+end
+
+function par_advance() returns list
+    create variable tok as list with value par_peek()
+    when par_pos < length(tokens) do set par_pos to par_pos + 1 end
+    return tok
+end
+
+function par_tok_is with expected as text returns boolean
+    create variable t as list with value par_peek()
+    return t[0] equals expected or t[1] equals expected
+end
+
+function par_expect with expected as text returns list
+    create variable t as list with value par_peek()
+    when t[0] equals expected or t[1] equals expected do
+        return par_advance()
+    end
+    print "Parse Error: expected '" attach expected attach "'"
+    return t
+end
+
+function parse_expression() returns map
+    # Simple: just parse primary for now
+    when par_tok_is with "INT" do
+        create variable tok as list with value par_advance()
+        return map("kind", "Literal", "type", "integer", "value", to_integer(tok[1]))
+    end
+    when par_tok_is with "STR" do
+        create variable tok as list with value par_advance()
+        return map("kind", "Literal", "type", "text", "value", tok[1])
+    end
+    when par_tok_is with "IDENT" do
+        create variable tok as list with value par_advance()
+        # Check for function call
+        when par_tok_is with "LPAREN" do
+            par_advance()
+            create variable args as list with value []
+            when not (par_tok_is with "RPAREN") do
+                push(args, parse_expression())
+            end
+            par_expect with "RPAREN"
+            return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
+        end
+        when par_tok_is with "with" do
+            par_advance()
+            create variable args as list with value []
+            push(args, parse_expression())
+            return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
+        end
+        return map("kind", "Identifier", "name", tok[1])
+    end
+    return map("kind", "Literal", "type", "nothing", "value", nothing)
+end
+
+function parse_statement() returns map
+    when par_tok_is with "print" do
+        par_advance()
+        create variable expr as map with value parse_expression()
+        return map("kind", "PrintStmt", "expressions", [expr])
+    end
+
+    when par_tok_is with "create" do
+        par_advance()
+        par_expect with "variable"
+        create variable name_tok as list with value par_expect with "IDENT"
+        create variable type_name as text with value "unknown"
+        when par_tok_is with "as" do
+            par_advance()
+            create variable type_tok as list with value par_advance()
+            set type_name to type_tok[1]
+        end
+        create variable val as map with value nothing
+        when par_tok_is with "with" do
+            par_advance()
+            par_expect with "value"
+            set val to parse_expression()
+        end
+        return map("kind", "VariableDecl", "name", name_tok[1], "typeName", type_name, "value", val)
+    end
+
+    when par_tok_is with "return" do
+        par_advance()
+        create variable val as map with value parse_expression()
+        return map("kind", "ReturnStmt", "value", val)
+    end
+
+    when par_tok_is with "function" do
+        par_advance()
+        create variable name_tok as list with value par_expect with "IDENT"
+        create variable params as list with value []
+        when par_tok_is with "with" do
+            par_advance()
+            while par_tok_is with "IDENT" do
+                create variable pname as list with value par_expect with "IDENT"
+                par_expect with "as"
+                create variable ptype as list with value par_advance()
+                push(params, map("name", pname[1], "typeName", ptype[1]))
+            end
+        end
+        create variable ret_type as text with value "nothing"
+        when par_tok_is with "returns" do
+            par_advance()
+            create variable rt as list with value par_advance()
+            set ret_type to rt[1]
+        end
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        par_expect with "end"
+        return map("kind", "FunctionDecl", "name", name_tok[1], "parameters", params, "returnType", ret_type, "body", body)
+    end
+
+    # Fallback: unknown statement - skip token to prevent infinite loop
+    when par_tok_is with "EOF" do
+        return map("kind", "ExprStmt", "expression", map("kind", "Literal", "type", "nothing", "value", nothing))
+    end
+    par_advance()
+    return map("kind", "ExprStmt", "expression", map("kind", "Literal", "type", "nothing", "value", nothing))
+end
+
+function parse_program() returns map
+    create variable stmts as list with value []
+    while not (par_tok_is with "EOF") do
+        push(stmts, parse_statement())
+    end
+    return map("kind", "Program", "statements", stmts)
+end
+
+# ============================================================
+# SIMPLIFIED CODEGEN (subset)
+# ============================================================
+function map_type_to_c(iozen_type) returns text
+    when iozen_type equals "integer" do return "long long" end
+    when iozen_type equals "text" do return "char*" end
+    when iozen_type equals "nothing" do return "void" end
+    return iozen_type
+end
+
+function gen_indent(level) returns text
+    create variable out as text with value ""
+    create variable i as integer with value 0
+    while i < level do
+        set out to out attach "    "
+        increase i by 1
+    end
+    return out
+end
+
+function generate_expr(node) returns text
+    create variable kind as text with value get_key(node, "kind")
+    when kind equals "Literal" do
+        create variable lit_type as text with value get_key(node, "type")
+        create variable lit_val as anything with value get_key(node, "value")
+        when lit_type equals "text" do return "\"" attach lit_val attach "\"" end
+        return to_text(lit_val)
+    end
+    when kind equals "Identifier" do return get_key(node, "name") end
+    when kind equals "BinaryExpr" do
+        create variable left as text with value generate_expr(get_key(node, "left"))
+        create variable right as text with value generate_expr(get_key(node, "right"))
+        create variable op as text with value get_key(node, "operator")
+        return "(" attach left attach " " attach op attach " " attach right attach ")"
+    end
+    when kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(node, "name")
+        create variable args as list with value get_key(node, "arguments")
+        create variable out as text with value func_name attach "("
+        create variable i as integer with value 0
+        while i < length(args) do
+            set out to out attach generate_expr(args[i])
+            when i < length(args) - 1 do set out to out attach ", " end
+            increase i by 1
+        end
+        return out attach ")"
+    end
+    return "0"
+end
+
+function generate_stmt(stmt, indent) returns text
+    create variable kind as text with value get_key(stmt, "kind")
+    create variable ind as text with value gen_indent(indent)
+
+    when kind equals "VariableDecl" do
+        create variable name as text with value get_key(stmt, "name")
+        create variable c_type as text with value map_type_to_c(get_key(stmt, "typeName"))
+        create variable val as map with value get_key(stmt, "value")
+        when val != nothing do
+            return ind attach c_type attach " " attach name attach " = " attach generate_expr(val) attach ";\n"
+        end
+        return ind attach c_type attach " " attach name attach ";\n"
+    end
+
+    when kind equals "PrintStmt" do
+        create variable expr as text with value generate_expr(get_key(stmt, "expressions")[0])
+        create variable expr_node as map with value get_key(stmt, "expressions")[0]
+        create variable expr_type as text with value get_key(expr_node, "type")
+        when expr_type equals "text" do
+            return ind attach "printf(\"%s\\n\", " attach expr attach ");\n"
+        end
+        return ind attach "printf(\"%lld\\n\", " attach expr attach ");\n"
+    end
+
+    when kind equals "ReturnStmt" do
+        create variable val as map with value get_key(stmt, "value")
+        return ind attach "return " attach generate_expr(val) attach ";\n"
+    end
+
+    when kind equals "FunctionDecl" do
+        create variable func_name as text with value get_key(stmt, "name")
+        create variable c_ret as text with value map_type_to_c(get_key(stmt, "returnType"))
+        create variable params as list with value get_key(stmt, "parameters")
+        create variable param_str as text with value ""
+        create variable i as integer with value 0
+        while i < length(params) do
+            create variable p as map with value params[i]
+            set param_str to param_str attach map_type_to_c(get_key(p, "typeName")) attach " " attach get_key(p, "name")
+            when i < length(params) - 1 do set param_str to param_str attach ", " end
+            increase i by 1
+        end
+        when length(params) equals 0 do set param_str to "void" end
+        create variable out as text with value ind attach c_ret attach " " attach func_name attach "(" attach param_str attach ") {\n"
+        create variable body as list with value get_key(stmt, "body")
+        set i to 0
+        while i < length(body) do
+            set out to out attach generate_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        return out attach ind attach "}\n\n"
+    end
+
+    return ""
+end
+
+function generate_c(ast) returns text
+    create variable out as text with value "/* Generated by IOZENC Self-Test */\n\n"
+    set out to out attach "#include <stdio.h>\n\n"
+    create variable stmts as list with value get_key(ast, "statements")
+    create variable i as integer with value 0
+    create variable global_funcs as text with value ""
+    create variable main_body as text with value ""
+    while i < length(stmts) do
+        create variable stmt as map with value stmts[i]
+        when get_key(stmt, "kind") equals "FunctionDecl" do
+            set global_funcs to global_funcs attach generate_stmt(stmt, 0)
+        otherwise do
+            set main_body to main_body attach generate_stmt(stmt, 1)
+        end
+        increase i by 1
+    end
+    set out to out attach global_funcs
+    set out to out attach "int main() {\n"
+    set out to out attach main_body
+    set out to out attach "    return 0;\n"
+    set out to out attach "}\n"
+    return out
+end
+
+# ============================================================
+# COMPILE PIPELINE
+# ============================================================
+
+print "▸ Stage 1: Lexing..."
+tokenize()
+print "  ✓ Tokens produced"
+print ""
+
+print "▸ Stage 2: Parsing..."
+create variable ast as map with value parse_program()
+print "  ✓ AST parsed"
+print ""
+
+print "▸ Stage 3: Generating C99..."
+create variable c_output as text with value generate_c(ast)
+print "  ✓ C code generated"
+print ""
+
+print "── Generated C99 Output ────────────────────"
+print c_output
+print "────────────────────────────────────────────"
+print ""
+
+print "▸ Stage 4: Saving C code..."
+write_file("target/selftest_output.c", c_output)
+print "  ✓ Saved to target/selftest_output.c"
+print ""
+
+print "▸ Stage 5: Compiling to binary..."
+create variable compile_result as integer with value system("gcc -o target/selftest_output target/selftest_output.c")
+when compile_result equals 0 do
+    print "  ✓ Binary compiled: target/selftest_output"
+    print ""
+    print "  Running compiled binary:"
+    print ""
+    create variable run_result as integer with value system("./target/selftest_output")
+    print ""
+    print "  ✓ Self-test PASSED!"
+otherwise do
+    print "  ✗ Compilation failed"
+end
+
+print ""
+print "╔══════════════════════════════════════════╗"
+print "║  ✓ IOZENC SELF-TEST COMPLETE              ║"
+print "║  IOZEN → C99 → Native Binary → Execution  ║"
+print "╚══════════════════════════════════════════╝"

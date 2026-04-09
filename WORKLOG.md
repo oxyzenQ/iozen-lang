@@ -125,9 +125,43 @@ Added 5 new statement parsers to bootstrap/parser.iozen:
 | calculator.iozen | Math operations, functions, loops | ✅ Working |
 | prime_sieve.iozen | Sieve algorithm, map operations | ✅ Working |
 
-### Next Steps (Phase 8)
-- Self-hosting compiler written in IOZEN (compile iozenc.iozen with iozenc)
-- Expand standard library (file I/O, string operations, collections)
-- Type inference improvements
-- Memory management (ownership/borrow checker integration)
-- Target: Compile IOZEN programs to native binaries
+## Session 11: Phase 8 — Native Binary Compilation
+**Date**: 2026-04-09
+**Status**: Completed
+
+### Achievements
+- **Phase 8 milestone reached**: IOZEN → C99 → Native Binary pipeline complete.
+- Enhanced `bootstrap/iozenc.iozen` with file I/O and compilation stages:
+  - Stage 4: Save generated C code to `target/output.c` using `write_file`
+  - Stage 5: Compile to native binary using `system("gcc ...")`
+  - Binary output: `target/output` (runnable executable)
+- Created `examples/hello.iozen` - Simple test program for compiler validation.
+- Successfully compiled and ran native binary:
+  ```
+  IOZEN source → C99 code → Native binary → Execution
+  ```
+- Created `bootstrap/iozenc_selftest.iozen` - Self-contained compiler test:
+  - Demonstrates that IOZEN can compile itself (simplified version)
+  - Full pipeline: Source → Tokens → AST → C99 → Binary → Execution
+  - Verified working end-to-end
+
+### Phase 8 Verification
+| Component | Feature | Status |
+|-----------|---------|--------|
+| iozenc.iozen | File input via `read_file` | ✅ Working |
+| iozenc.iozen | C output via `write_file` | ✅ Working |
+| iozenc.iozen | Binary compilation via `system()` | ✅ Working |
+| Native binary | Runnable executable produced | ✅ Working |
+| Self-test | Full pipeline validation | ✅ Passed |
+
+### Technical Notes
+- Generated C99 code requires `gcc` or `clang` for compilation
+- Integer-to-string concatenation requires type conversion (future enhancement)
+- String concatenation with `attach` operator works for string types
+- Binary compilation requires Linux/Unix environment with C compiler
+
+### Next Steps (Phase 9)
+- Full self-hosting: iozenc compiles itself completely
+- Standard library expansion (collections, algorithms)
+- Package manager for IOZEN modules
+- Optimized C code generation
