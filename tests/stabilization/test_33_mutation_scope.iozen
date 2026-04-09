@@ -1,0 +1,40 @@
+# Test 33: Mutation After Nested Scopes
+# Risk: Shadowing vs reference confusion
+
+print "Test 33: Mutation scope"
+
+# Global x
+create variable x as integer with value 10
+print x
+
+# Nested scope with same name
+when true equals true do
+    create variable x as integer with value 100
+    print x
+    # Modify the LOCAL x
+    set x to 200
+    print x
+end
+
+# Global x should still be 10
+print x
+
+# Function that reads global
+function read_global returns integer
+    return x
+end
+
+print read_global
+
+# Function that shadows and modifies
+function modify_shadow with x as integer returns integer
+    set x to x + 1
+    return x
+end
+
+print modify_shadow with 50
+
+# Global x should still be 10
+print x
+
+print "Test 33: PASS"

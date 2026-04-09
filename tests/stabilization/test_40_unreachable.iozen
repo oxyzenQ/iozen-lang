@@ -1,0 +1,13 @@
+# Test 40: Unreachable code after return (should WARN/ERROR)
+# Code after return statement
+
+print "Test 40: Unreachable Code"
+
+function unreachable with x as integer returns integer
+    return x
+    print "This is unreachable"
+    create variable y as integer with value 10
+    return y
+end
+
+print "Should fail compilation"

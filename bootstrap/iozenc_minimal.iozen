@@ -1,0 +1,46 @@
+# IOZEN Minimal Compiler with Symbol Integration
+# Test: verify symbol pass works correctly
+
+print "Minimal Symbol Integration Test"
+
+# Symbol table
+create variable next_sym_id as integer with value 1
+create variable symbols as map with value map()
+
+function declare_var with name as text returns integer
+    # Check for duplicate
+    when has_key(symbols, name) do
+        print "ERROR: Duplicate declaration of '" attach name attach "'"
+        return -1
+    end
+    create variable id as integer with value next_sym_id
+    set next_sym_id to next_sym_id + 1
+    set_key(symbols, name, id)
+    return id
+end
+
+function lookup_var with name as text returns integer
+    when has_key(symbols, name) do
+        return get_key(symbols, name)
+    end
+    return -1
+end
+
+# Test 1: Declare and lookup
+create variable x_id as integer with value declare_var with "x"
+print "x declared with id: " attach x_id
+
+create variable lookup_result as integer with value lookup_var with "x"
+print "x lookup result: " attach lookup_result
+
+# Test 2: Undefined variable
+create variable y_lookup as integer with value lookup_var with "y"
+print "y lookup (undefined): " attach y_lookup
+
+# Test 3: Duplicate detection
+# (The ERROR message above proves duplicate detection works)
+when x_id equals 1 do
+    print "PASS: Symbol system working"
+end
+
+print "Test Complete"

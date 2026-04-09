@@ -1,0 +1,33 @@
+# Test 31: Symbol Identity Across Boundaries
+# Risk: Global vs local confusion, wrong symbol resolution
+
+print "Test 31: Symbol identity"
+
+# Global x
+create variable x as integer with value 100
+print x
+
+# Function uses x (should use local, not global)
+function use_local returns integer
+    create variable x as integer with value 50
+    return x
+end
+
+# Function uses parameter named x
+function use_param with x as integer returns integer
+    return x
+end
+
+# Function with no local x (should this use global?)
+function use_global returns integer
+    return x
+end
+
+print use_local
+print use_param with 25
+print use_global
+
+# Verify global unchanged
+print x
+
+print "Test 31: PASS"

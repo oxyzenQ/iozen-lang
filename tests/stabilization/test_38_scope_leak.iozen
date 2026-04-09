@@ -1,0 +1,15 @@
+# Test 38: Variable used after scope ends (should ERROR)
+# Variable declared inside block used outside
+
+print "Test 38: Scope Leak"
+
+function scope_leak with x as integer returns integer
+    when x > 0 do
+        create variable inner as integer with value 10
+        return inner
+    end
+    # inner should NOT be accessible here
+    return inner
+end
+
+print "Should fail compilation"

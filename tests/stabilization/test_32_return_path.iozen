@@ -1,0 +1,34 @@
+# Test 32: Return Path Completeness
+# Risk: Missing return in branch, unreachable code
+
+print "Test 32: Return path"
+
+# All paths return - should work
+function complete_return with n as integer returns integer
+    when n is greater than 0 do
+        return n
+    end
+    when n is less than 0 do
+        return n * -1
+    end
+    return 0
+end
+
+# Missing return in one branch (semantic error if not caught)
+function incomplete_return with n as integer returns integer
+    when n is greater than 0 do
+        return n
+    end
+    # No return for n <= 0!
+end
+
+# Test valid function
+print complete_return with 5
+print complete_return with -3
+print complete_return with 0
+
+# Test incomplete (should this fail? Currently may return undefined)
+print incomplete_return with 5
+print incomplete_return with -5
+
+print "Test 32: PASS"

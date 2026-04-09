@@ -1,0 +1,13 @@
+# Test 36: Partial return path (should ERROR)
+# Function with conditional return only - missing else branch
+
+print "Test 36: Partial Return Path"
+
+function partial with x as integer returns integer
+    when x > 0 do
+        return 1
+    end
+    # Missing else branch with return
+end
+
+print "Should fail compilation"

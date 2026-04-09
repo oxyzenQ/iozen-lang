@@ -1,0 +1,15 @@
+# Test 41: Determinism Check
+# Compile twice, compare outputs must be identical
+
+print "Determinism test base program"
+
+create variable x as integer with value 42
+create variable y as integer with value x + 8
+
+function calc with a as integer and b as integer returns integer
+    create variable result as integer with value a + b
+    return result
+end
+
+print calc with x and y
+print "Test complete"

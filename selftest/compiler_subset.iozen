@@ -1,0 +1,75 @@
+# ============================================================
+# Self-Hosting Test: Compiler Subset
+# Attempt to compile a small part of the compiler itself
+# ============================================================
+
+# This is a simplified version of the compiler's symbol table
+# that we try to compile with iozen
+
+print "=== Compiler Subset Self-Test ==="
+
+# Symbol counter
+create variable next_id as integer with value 1
+
+# Simple symbol storage (using list instead of complex map for now)
+create variable symbol_names as list with value []
+create variable symbol_ids as list with value []
+
+function add_symbol with nm as text returns integer
+    push(symbol_names, nm)
+    push(symbol_ids, next_id)
+    create variable id as integer with value next_id
+    set next_id to next_id + 1
+    return id
+end
+
+function find_symbol with nm as text returns integer
+    create variable i as integer with value 0
+    while i < length(symbol_names) do
+        when symbol_names[i] equals nm do
+            return symbol_ids[i]
+        end
+        increase i by 1
+    end
+    return -1
+end
+
+# Test: Add symbols
+print ""
+print "Test 1: Adding symbols"
+create variable id_x as integer with value add_symbol with "x"
+create variable id_y as integer with value add_symbol with "y"
+print "  Added x with id: " attach id_x
+print "  Added y with id: " attach id_y
+
+# Test: Find symbols
+print ""
+print "Test 2: Finding symbols"
+create variable found_x as integer with value find_symbol with "x"
+create variable found_y as integer with value find_symbol with "y"
+create variable found_z as integer with value find_symbol with "z"
+print "  Found x: " attach found_x
+print "  Found y: " attach found_y
+print "  Found z (undefined): " attach found_z
+
+# Test: Symbol table state
+print ""
+print "Test 3: Symbol table state"
+print "  Next ID: " attach next_id
+print "  Symbol count: " attach length(symbol_names)
+
+# Verification
+print ""
+print "Verification:"
+when found_x equals id_x do
+    print "  PASS: x lookup correct"
+end
+when found_y equals id_y do
+    print "  PASS: y lookup correct"
+end
+when found_z equals -1 do
+    print "  PASS: undefined returns -1"
+end
+
+print ""
+print "=== Self-Hosting Test Complete ==="

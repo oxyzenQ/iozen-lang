@@ -1,0 +1,16 @@
+# Test 39: Parameter shadow conflict (should ERROR)
+# Parameter with same name as outer variable
+
+print "Test 39: Parameter Shadow Conflict"
+
+create variable global_x as integer with value 100
+
+function shadow_test with global_x as integer returns integer
+    # Parameter shadows global - should be detected as semantic warning
+    return global_x
+end
+
+print shadow_test with 50
+print global_x
+
+print "Test Complete"

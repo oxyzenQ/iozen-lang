@@ -1,0 +1,17 @@
+# Test 35: Unresolved Symbol Detection
+# Risk: Runtime error, undefined behavior
+
+print "Test 35: Unresolved symbols"
+
+# Use undefined variable (should error)
+print undefined_var
+
+# Use undefined function (should error)
+print undefined_func with 5
+
+# Reference before declaration (forward reference - if supported)
+print forward_ref
+
+create variable forward_ref as integer with value 42
+
+print "Test 35: PASS"

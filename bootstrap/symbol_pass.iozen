@@ -1,0 +1,516 @@
+# ============================================================
+# IOZEN SYMBOL PASS — Phase 9.3b: AST Resolution
+# 2-pass: (1) Declare, (2) Resolve
+# Transforms AST with string names → AST with symbol IDs
+# ============================================================
+
+# Include symbol table
+create variable source_file as text with value "bootstrap/symbol_table.iozen"
+create variable source as text with value read_file(source_file)
+
+# Load symbol table (eval would be needed, for now inline core)
+# We'll use the symbol table API from symbol_table.iozen
+
+# ============================================================
+# PASS 1: COLLECT DECLARATIONS
+# Traverse AST, push/pop scopes, declare all symbols
+# ============================================================
+
+function pass1_declare with ast_node as map returns nothing
+    create variable node_kind as text with value get_key(ast_node, "kind")
+    
+    # Variable declaration: declare the variable
+    when node_kind equals "VariableDecl" do
+        create variable var_name as text with value get_key(ast_node, "name")
+        create variable var_type as text with value get_key(ast_node, "typeName")
+        create variable symbol_id as integer with value declare_symbol with var_name and "variable" and var_type
+        
+        when symbol_id equals -1 do
+            print "ERROR at declaration: Duplicate '" attach var_name attach "'"
+        end
+        
+        # Recurse into initialization expression
+        create variable init as map with value get_key(ast_node, "value")
+        when not (init equals nothing) do
+            pass1_declare(init)
+        end
+        return
+    end
+    
+    # Function declaration: push scope, declare params, declare function
+    when node_kind equals "FunctionDecl" do
+        create variable func_name as text with value get_key(ast_node, "name")
+        create variable ret_type as text with value get_key(ast_node, "returnType")
+        
+        # Declare function symbol in CURRENT scope (before pushing function scope)
+        create variable func_id as integer with value declare_symbol with func_name and "function" and ret_type
+        
+        # Push function scope for parameters and body
+        push_scope()
+        
+        # Declare parameters in function scope
+        create variable params as list with value get_key(ast_node, "parameters")
+        create variable i as integer with value 0
+        while i < length(params) do
+            create variable p as map with value params[i]
+            create variable p_name as text with value get_key(p, "name")
+            create variable p_type as text with value get_key(p, "typeName")
+            declare_symbol with p_name and "parameter" and p_type
+            increase i by 1
+        end
+        
+        # Process function body
+        create variable body as list with value get_key(ast_node, "body")
+        set i to 0
+        while i < length(body) do
+            pass1_declare(body[i])
+            increase i by 1
+        end
+        
+        # Pop function scope
+        pop_scope()
+        return
+    end
+    
+    # When: push scope for body
+    when node_kind equals "When" do
+        # Process condition (in current scope)
+        create variable branches as list with value get_key(ast_node, "branches")
+        create variable i as integer with value 0
+        while i < length(branches) do
+            create variable branch as map with value branches[i]
+            pass1_declare(get_key(branch, "condition"))
+            
+            # Push scope for branch body
+            push_scope()
+            create var_body as list with value get_key(branch, "body")
+            create variable j as integer with value 0
+            while j < length(var_body) do
+                pass1_declare(var_body[j])
+                increase j by 1
+            end
+            pop_scope()
+            increase i by 1
+        end
+        
+        # Otherwise branch
+        create variable otherwise as list with value get_key(ast_node, "otherwise")
+        when length(otherwise) > 0 do
+            push_scope()
+            set i to 0
+            while i < length(otherwise) do
+                pass1_declare(otherwise[i])
+                increase i by 1
+            end
+            pop_scope()
+        end
+        return
+    end
+    
+    # While: push scope for body
+    when node_kind equals "While" do
+        # Condition in current scope
+        pass1_declare(get_key(ast_node, "condition"))
+        
+        # Body in new scope
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            pass1_declare(body[i])
+            increase i by 1
+        end
+        pop_scope()
+        return
+    end
+    
+    # Repeat: push scope for body
+    when node_kind equals "Repeat" do
+        # Count expression in current scope
+        pass1_declare(get_key(ast_node, "count"))
+        
+        # Body in new scope
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            pass1_declare(body[i])
+            increase i by 1
+        end
+        pop_scope()
+        return
+    end
+    
+    # BinaryExpr: recurse into children
+    when node_kind equals "BinaryExpr" do
+        pass1_declare(get_key(ast_node, "left"))
+        pass1_declare(get_key(ast_node, "right"))
+        return
+    end
+    
+    # UnaryExpr: recurse
+    when node_kind equals "UnaryExpr" do
+        pass1_declare(get_key(ast_node, "operand"))
+        return
+    end
+    
+    # FunctionCallExpr: recurse into arguments
+    when node_kind equals "FunctionCallExpr" do
+        create variable args as list with value get_key(ast_node, "arguments")
+        create variable i as integer with value 0
+        while i < length(args) do
+            pass1_declare(args[i])
+            increase i by 1
+        end
+        return
+    end
+    
+    # AssignVar: recurse into value
+    when node_kind equals "AssignVar" do
+        pass1_declare(get_key(ast_node, "value"))
+        return
+    end
+    
+    # ReturnStmt: recurse into value
+    when node_kind equals "ReturnStmt" do
+        create variable ret_val as map with value get_key(ast_node, "value")
+        when not (ret_val equals nothing) do
+            pass1_declare(ret_val)
+        end
+        return
+    end
+    
+    # PrintStmt: recurse into expressions
+    when node_kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(ast_node, "expressions")
+        create variable i as integer with value 0
+        while i < length(exprs) do
+            pass1_declare(exprs[i])
+            increase i by 1
+        end
+        return
+    end
+    
+    # Program: process all statements
+    when node_kind equals "Program" do
+        create variable stmts as list with value get_key(ast_node, "statements")
+        create variable i as integer with value 0
+        while i < length(stmts) do
+            pass1_declare(stmts[i])
+            increase i by 1
+        end
+        return
+    end
+    
+    # Default: nothing to declare for Literals, Identifiers, etc
+end
+
+# ============================================================
+# PASS 2: RESOLVE IDENTIFIERS
+# Replace Identifier nodes with SymbolRef nodes
+# ============================================================
+
+function pass2_resolve with ast_node as map returns map
+    create variable node_kind as text with value get_key(ast_node, "kind")
+    
+    # Identifier → SymbolRef
+    when node_kind equals "Identifier" do
+        create variable var_name as text with value get_key(ast_node, "name")
+        create variable symbol_id as integer with value lookup_symbol with var_name
+        
+        when symbol_id equals -1 do
+            print "ERROR: Undefined variable '" attach var_name attach "'"
+            # Return error node
+            return map("kind", "SymbolRef", "symbol_id", -1, "name", var_name, "error", true)
+        end
+        
+        return map("kind", "SymbolRef", "symbol_id", symbol_id, "name", var_name, "error", false)
+    end
+    
+    # BinaryExpr: resolve children
+    when node_kind equals "BinaryExpr" do
+        create variable left_resolved as map with value pass2_resolve(get_key(ast_node, "left"))
+        create variable right_resolved as map with value pass2_resolve(get_key(ast_node, "right"))
+        return map(
+            "kind", "BinaryExpr",
+            "operator", get_key(ast_node, "operator"),
+            "left", left_resolved,
+            "right", right_resolved
+        )
+    end
+    
+    # UnaryExpr: resolve operand
+    when node_kind equals "UnaryExpr" do
+        create variable operand_resolved as map with value pass2_resolve(get_key(ast_node, "operand"))
+        return map(
+            "kind", "UnaryExpr",
+            "operator", get_key(ast_node, "operator"),
+            "operand", operand_resolved
+        )
+    end
+    
+    # FunctionCallExpr: resolve function name and arguments
+    when node_kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(ast_node, "name")
+        create variable func_id as integer with value lookup_symbol with func_name
+        
+        when func_id equals -1 do
+            print "ERROR: Undefined function '" attach func_name attach "'"
+        end
+        
+        # Resolve arguments
+        create variable args as list with value get_key(ast_node, "arguments")
+        create variable resolved_args as list with value []
+        create variable i as integer with value 0
+        while i < length(args) do
+            push(resolved_args, pass2_resolve(args[i]))
+            increase i by 1
+        end
+        
+        return map(
+            "kind", "FunctionCallExpr",
+            "name", func_name,
+            "symbol_id", func_id,
+            "arguments", resolved_args
+        )
+    end
+    
+    # VariableDecl: resolve initialization expression
+    when node_kind equals "VariableDecl" do
+        create variable init as map with value get_key(ast_node, "value")
+        when not (init equals nothing) do
+            set init to pass2_resolve(init)
+        end
+        
+        # Also add symbol_id to the declaration node
+        create var_name as text with value get_key(ast_node, "name")
+        create variable sym_id as integer with value lookup_symbol with var_name
+        
+        return map(
+            "kind", "VariableDecl",
+            "name", var_name,
+            "symbol_id", sym_id,
+            "typeName", get_key(ast_node, "typeName"),
+            "value", init
+        )
+    end
+    
+    # AssignVar: resolve value, also check the target variable
+    when node_kind equals "AssignVar" do
+        create var_name as text with value get_key(ast_node, "name")
+        create variable sym_id as integer with value lookup_symbol with var_name
+        
+        when sym_id equals -1 do
+            print "ERROR: Assignment to undefined variable '" attach var_name attach "'"
+        end
+        
+        return map(
+            "kind", "AssignVar",
+            "name", var_name,
+            "symbol_id", sym_id,
+            "value", pass2_resolve(get_key(ast_node, "value"))
+        )
+    end
+    
+    # ReturnStmt: resolve value
+    when node_kind equals "ReturnStmt" do
+        create variable ret_val as map with value get_key(ast_node, "value")
+        when not (ret_val equals nothing) do
+            set ret_val to pass2_resolve(ret_val)
+        end
+        return map("kind", "ReturnStmt", "value", ret_val)
+    end
+    
+    # PrintStmt: resolve expressions
+    when node_kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(ast_node, "expressions")
+        create variable resolved_exprs as list with value []
+        create variable i as integer with value 0
+        while i < length(exprs) do
+            push(resolved_exprs, pass2_resolve(exprs[i]))
+            increase i by 1
+        end
+        return map("kind", "PrintStmt", "expressions", resolved_exprs)
+    end
+    
+    # FunctionDecl: resolve body with proper scope management
+    when node_kind equals "FunctionDecl" do
+        # Push function scope
+        push_scope()
+        
+        # Declare parameters in scope (they weren't declared in pass1 for this call)
+        create variable params as list with value get_key(ast_node, "parameters")
+        create variable i as integer with value 0
+        while i < length(params) do
+            create variable p as map with value params[i]
+            create variable p_name as text with value get_key(p, "name")
+            create variable p_type as text with value get_key(p, "typeName")
+            declare_symbol with p_name and "parameter" and p_type
+            increase i by 1
+        end
+        
+        # Resolve body
+        create variable body as list with value get_key(ast_node, "body")
+        create variable resolved_body as list with value []
+        set i to 0
+        while i < length(body) do
+            push(resolved_body, pass2_resolve(body[i]))
+            increase i by 1
+        end
+        
+        # Pop function scope
+        pop_scope()
+        
+        return map(
+            "kind", "FunctionDecl",
+            "name", get_key(ast_node, "name"),
+            "parameters", params,
+            "returnType", get_key(ast_node, "returnType"),
+            "body", resolved_body
+        )
+    end
+    
+    # When: resolve with scope management
+    when node_kind equals "When" do
+        create variable resolved_branches as list with value []
+        create variable branches as list with value get_key(ast_node, "branches")
+        create variable i as integer with value 0
+        while i < length(branches) do
+            create variable branch as map with value branches[i]
+            
+            # Resolve condition in current scope
+            create variable cond_resolved as map with value pass2_resolve(get_key(branch, "condition"))
+            
+            # Resolve body in new scope
+            push_scope()
+            create var_body as list with value get_key(branch, "body")
+            create variable resolved_branch_body as list with value []
+            create variable j as integer with value 0
+            while j < length(var_body) do
+                push(resolved_branch_body, pass2_resolve(var_body[j]))
+                increase j by 1
+            end
+            pop_scope()
+            
+            push(resolved_branches, map(
+                "kind", "WhenBranch",
+                "condition", cond_resolved,
+                "body", resolved_branch_body
+            ))
+            increase i by 1
+        end
+        
+        # Resolve otherwise
+        create variable resolved_otherwise as list with value []
+        create variable otherwise as list with value get_key(ast_node, "otherwise")
+        when length(otherwise) > 0 do
+            push_scope()
+            set i to 0
+            while i < length(otherwise) do
+                push(resolved_otherwise, pass2_resolve(otherwise[i]))
+                increase i by 1
+            end
+            pop_scope()
+        end
+        
+        return map(
+            "kind", "When",
+            "branches", resolved_branches,
+            "otherwise", resolved_otherwise
+        )
+    end
+    
+    # While: resolve with scope management
+    when node_kind equals "While" do
+        create variable cond_resolved as map with value pass2_resolve(get_key(ast_node, "condition"))
+        
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable resolved_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(resolved_body, pass2_resolve(body[i]))
+            increase i by 1
+        end
+        pop_scope()
+        
+        return map(
+            "kind", "While",
+            "condition", cond_resolved,
+            "body", resolved_body
+        )
+    end
+    
+    # Repeat: resolve with scope management
+    when node_kind equals "Repeat" do
+        create variable count_resolved as map with value pass2_resolve(get_key(ast_node, "count"))
+        
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable resolved_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(resolved_body, pass2_resolve(body[i]))
+            increase i by 1
+        end
+        pop_scope()
+        
+        return map(
+            "kind", "Repeat",
+            "count", count_resolved,
+            "body", resolved_body
+        )
+    end
+    
+    # Program: resolve all statements
+    when node_kind equals "Program" do
+        create variable stmts as list with value get_key(ast_node, "statements")
+        create variable resolved_stmts as list with value []
+        create variable i as integer with value 0
+        while i < length(stmts) do
+            push(resolved_stmts, pass2_resolve(stmts[i]))
+            increase i by 1
+        end
+        return map("kind", "Program", "statements", resolved_stmts)
+    end
+    
+    # Default: return as-is (Literals, etc)
+    return ast_node
+end
+
+# ============================================================
+# MAIN SYMBOL PASS API
+# ============================================================
+
+function run_symbol_pass with ast as map returns map
+    print "=== Symbol Pass ==="
+    print "Pass 1: Collecting declarations..."
+    
+    # Reset symbol table state
+    set next_symbol_id to 1
+    set next_scope_id to 1
+    set scopes to map()
+    set symbols to map()
+    set current_scope_id to 0
+    set scopes[0] to map("id", 0, "parent_id", -1, "symbols", map(), "level", 0)
+    
+    # Pass 1: Declare all symbols
+    pass1_declare(ast)
+    
+    print "Declarations collected."
+    print "Total symbols: " attach (next_symbol_id - 1)
+    print ""
+    print "Pass 2: Resolving identifiers..."
+    
+    # Reset scope to global for pass 2
+    set current_scope_id to 0
+    
+    # Pass 2: Resolve all identifiers
+    create variable resolved_ast as map with value pass2_resolve(ast)
+    
+    print "Resolution complete."
+    
+    return resolved_ast
+end
+
+print "Symbol Pass module loaded."

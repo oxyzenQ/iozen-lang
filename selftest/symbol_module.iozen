@@ -1,0 +1,136 @@
+# ============================================================
+# Self-Hosting Test: Symbol Table Module
+# Subset of compiler - extracted for self-compilation test
+# ============================================================
+
+# Symbol table core
+create variable next_symbol_id as integer with value 1
+create variable next_scope_id as integer with value 1
+create variable scopes as map with value map()
+create variable symbols as map with value map()
+create variable current_scope_id as integer with value 0
+
+# Scope 0 = global
+create variable global_scope as map with value map("id", 0, "parent_id", -1, "syms", map(), "level", 0)
+set_key(scopes, 0, global_scope)
+
+# Scope management
+function push_scope() returns integer
+    create variable new_scope_id as integer with value next_scope_id
+    set next_scope_id to next_scope_id + 1
+    create variable current_level as integer with value get_key(scopes[current_scope_id], "level")
+    when current_level equals nothing do set current_level to 0 end
+    set current_level to current_level + 1
+    create variable new_scope as map with value map("id", new_scope_id, "parent_id", current_scope_id, "syms", map(), "level", current_level)
+    set_key(scopes, new_scope_id, new_scope)
+    set current_scope_id to new_scope_id
+    return new_scope_id
+end
+
+function pop_scope() returns nothing
+    when current_scope_id equals 0 do return end
+    set current_scope_id to get_key(scopes[current_scope_id], "parent_id")
+end
+
+# Symbol operations
+function lookup_symbol with name as text returns integer
+    create variable scope_id as integer with value current_scope_id
+    while scope_id >= 0 do
+        create variable scope as map with value scopes[scope_id]
+        create variable scope_syms as map with value get_key(scope, "syms")
+        when has_key(scope_syms, name) do
+            return get_key(scope_syms, name)
+        end
+        set scope_id to get_key(scope, "parent_id")
+    end
+    return -1
+end
+
+function declare_symbol with name as text and sym_type as text and data_type as text returns integer
+    create variable current_scope as map with value scopes[current_scope_id]
+    create variable scope_syms as map with value get_key(current_scope, "syms")
+    when has_key(scope_syms, name) do
+        print "ERROR: Duplicate declaration of '" attach name attach "'"
+        return -1
+    end
+    create variable symbol_id as integer with value next_symbol_id
+    set next_symbol_id to next_symbol_id + 1
+    create variable sym as map with value map("id", symbol_id, "nm", name, "scope_id", current_scope_id, "tp", sym_type, "dt", data_type)
+    set_key(symbols, symbol_id, sym)
+    set_key(scope_syms, name, symbol_id)
+    return symbol_id
+end
+
+function get_symbol with symbol_id as integer returns map
+    when has_key(symbols, symbol_id) do return symbols[symbol_id] end
+    return map()
+end
+
+function symbol_id_to_name with symbol_id as integer returns text
+    create variable sym as map with value get_symbol(symbol_id)
+    create variable sym_nm as text with value get_key(sym, "nm")
+    when sym_nm equals nothing do return "unknown" end
+    return sym_nm
+end
+
+# ============================================================
+# Self-Test: Verify symbol table works correctly
+# ============================================================
+
+print "=== Symbol Table Self-Test ==="
+print ""
+
+# Test 1: Basic declaration
+print "Test 1: Basic declaration"
+create variable x_id as integer with value declare_symbol with "x" and "variable" and "integer"
+print "  x declared with id: " attach x_id
+when x_id > 0 do print "  PASS: Declaration successful" end
+
+# Test 2: Lookup
+print ""
+print "Test 2: Symbol lookup"
+create variable lookup_x as integer with value lookup_symbol with "x"
+print "  x lookup: " attach lookup_x
+when lookup_x equals x_id do print "  PASS: Lookup correct" end
+
+# Test 3: Hierarchical lookup (global scope)
+print ""
+print "Test 3: Global scope access"
+set current_scope_id to 0
+push_scope()
+create variable inner_lookup as integer with value lookup_symbol with "x"
+print "  x lookup from inner scope: " attach inner_lookup
+when inner_lookup equals x_id do print "  PASS: Hierarchical lookup works" end
+pop_scope()
+
+# Test 4: Duplicate detection
+print ""
+print "Test 4: Duplicate detection"
+create variable dup_id as integer with value declare_symbol with "x" and "variable" and "integer"
+when dup_id equals -1 do print "  PASS: Duplicate detected (returned -1)" end
+
+# Test 5: Undefined lookup
+print ""
+print "Test 5: Undefined symbol"
+create variable undef_lookup as integer with value lookup_symbol with "undefined_var"
+print "  undefined_var lookup: " attach undef_lookup
+when undef_lookup equals -1 do print "  PASS: Undefined returns -1" end
+
+# Test 6: Scope isolation
+print ""
+print "Test 6: Scope isolation"
+set current_scope_id to 0
+push_scope()
+create variable local_id as integer with value declare_symbol with "local" and "variable" and "integer"
+print "  local declared in inner scope with id: " attach local_id
+create variable local_lookup as integer with value lookup_symbol with "local"
+print "  local lookup from inner scope: " attach local_lookup
+pop_scope()
+create variable global_lookup as integer with value lookup_symbol with "local"
+print "  local lookup from global scope: " attach global_lookup
+when global_lookup equals -1 do print "  PASS: Scope isolation works (local not visible globally)" end
+
+print ""
+print "=== All Tests Complete ==="
+print "Symbol count: " attach (next_symbol_id - 1)
+print "Scope count: " attach next_scope_id

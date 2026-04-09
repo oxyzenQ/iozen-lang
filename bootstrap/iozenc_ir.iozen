@@ -45,6 +45,116 @@ print "Compiling: " attach source_file
 print ""
 
 # ============================================================
+# STAGE 0: SYMBOL TABLE CORE + ERROR SYSTEM (Phase 9.3b + 9.3c)
+# ============================================================
+create variable compiler_errors as integer with value 0
+create variable max_errors as integer with value 10
+
+function add_error with msg as text returns nothing
+    print "ERROR: " attach msg
+    set compiler_errors to compiler_errors + 1
+    when compiler_errors > max_errors do
+        print "FATAL: Too many errors, stopping compilation"
+        # In real implementation, this would exit
+    end
+end
+
+function has_errors() returns boolean
+    return compiler_errors > 0
+end
+
+function reset_errors() returns nothing
+    set compiler_errors to 0
+end
+
+create variable next_symbol_id as integer with value 1
+create variable next_scope_id as integer with value 1
+create variable scopes as map with value map()
+create variable symbols as map with value map()
+create variable current_scope_id as integer with value 0
+
+# Scope 0 = global
+create variable global_scope as map with value map("id", 0, "parent_id", -1, "syms", map(), "level", 0)
+set_key(scopes, 0, global_scope)
+
+function push_scope() returns integer
+    create variable new_scope_id as integer with value next_scope_id
+    set next_scope_id to next_scope_id + 1
+    create variable current_level as integer with value get_key(scopes[current_scope_id], "level")
+    when current_level equals nothing do set current_level to 0 end
+    set current_level to current_level + 1
+    create variable new_scope as map with value map("id", new_scope_id, "parent_id", current_scope_id, "syms", map(), "level", current_level)
+    set_key(scopes, new_scope_id, new_scope)
+    set current_scope_id to new_scope_id
+    return new_scope_id
+end
+
+function pop_scope() returns nothing
+    when current_scope_id equals 0 do return end
+    set current_scope_id to get_key(scopes[current_scope_id], "parent_id")
+end
+
+function lookup_symbol with name as text returns integer
+    create variable scope_id as integer with value current_scope_id
+    while scope_id >= 0 do
+        create variable scope as map with value scopes[scope_id]
+        create variable scope_syms as map with value get_key(scope, "syms")
+        when has_key(scope_syms, name) do
+            return get_key(scope_syms, name)
+        end
+        set scope_id to get_key(scope, "parent_id")
+    end
+    return -1
+end
+
+function declare_symbol with name as text and sym_type as text and data_type as text returns integer
+    create variable current_scope as map with value scopes[current_scope_id]
+    create variable scope_syms as map with value get_key(current_scope, "syms")
+    when has_key(scope_syms, name) do
+        add_error with "Duplicate declaration of '" attach name attach "'"
+        return -1
+    end
+    create variable symbol_id as integer with value next_symbol_id
+    set next_symbol_id to next_symbol_id + 1
+    create variable sym as map with value map("id", symbol_id, "nm", name, "scope_id", current_scope_id, "tp", sym_type, "dt", data_type)
+    set_key(symbols, symbol_id, sym)
+    set_key(scope_syms, name, symbol_id)
+    return symbol_id
+end
+
+function get_symbol with symbol_id as integer returns map
+    when has_key(symbols, symbol_id) do return symbols[symbol_id] end
+    return map()
+end
+
+function symbol_id_to_c_name with symbol_id as integer returns text
+    create variable sym as map with value get_symbol(symbol_id)
+    create variable sym_nm as text with value get_key(sym, "nm")
+    when sym_nm equals nothing do return "unknown" end
+    return sym_nm attach "_" attach symbol_id
+end
+
+function dump_symbol_table() returns text
+    create variable out as text with value "=== SYMBOL TABLE ===\n"
+    set out to out attach "Total symbols: " attach (next_symbol_id - 1) attach "\n"
+    set out to out attach "Total scopes: " attach next_scope_id attach "\n\n"
+
+    create variable i as integer with value 1
+    while i < next_symbol_id do
+        when has_key(symbols, i) do
+            create variable sym as map with value symbols[i]
+            set out to out attach "Symbol " attach i attach ":\n"
+            set out to out attach "  name: " attach get_key(sym, "nm") attach "\n"
+            set out to out attach "  type: " attach get_key(sym, "tp") attach "\n"
+            set out to out attach "  data_type: " attach get_key(sym, "dt") attach "\n"
+            set out to out attach "  scope_id: " attach get_key(sym, "scope_id") attach "\n\n"
+        end
+        increase i by 1
+    end
+    return out
+end
+
+# ============================================================
 # STAGE 1-2: LEXER + PARSER (reused from iozenc.iozen)
 # ============================================================
 create variable lex_pos as integer with value 0
@@ -536,6 +646,452 @@ end
 # IR Function: {name, params, ret_type, body}
 # IR Module: {functions, globals}
 
+# ============================================================
+# PASS 1: DECLARE SYMBOLS (collect all declarations)
+# ============================================================
+
+function pass1_declare(ast_node) returns nothing
+    create variable node_kind as text with value get_key(ast_node, "kind")
+
+    when node_kind equals "VariableDecl" do
+        create variable var_name as text with value get_key(ast_node, "name")
+        create variable var_type as text with value get_key(ast_node, "typeName")
+        declare_symbol with var_name and "variable" and var_type
+    end
+
+    when node_kind equals "FunctionDecl" do
+        create variable func_name as text with value get_key(ast_node, "name")
+        create variable ret_type as text with value get_key(ast_node, "returnType")
+        declare_symbol with func_name and "function" and ret_type
+        push_scope()
+        create variable params as list with value get_key(ast_node, "parameters")
+        create variable i as integer with value 0
+        while i < length(params) do
+            create variable p as map with value params[i]
+            declare_symbol with get_key(p, "name") and "parameter" and get_key(p, "typeName")
+            increase i by 1
+        end
+        create variable body as list with value get_key(ast_node, "body")
+        set i to 0
+        while i < length(body) do
+            pass1_declare(body[i])
+            increase i by 1
+        end
+        pop_scope()
+    end
+
+    when node_kind equals "When" do
+        create variable branches as list with value get_key(ast_node, "branches")
+        create variable i as integer with value 0
+        while i < length(branches) do
+            create variable branch as map with value branches[i]
+            push_scope()
+            create var_body as list with value get_key(branch, "body")
+            create variable j as integer with value 0
+            while j < length(var_body) do
+                pass1_declare(var_body[j])
+                increase j by 1
+            end
+            pop_scope()
+            increase i by 1
+        end
+        create variable else_branch as list with value get_key(ast_node, "otherwise")
+        when length(else_branch) > 0 do
+            push_scope()
+            set i to 0
+            while i < length(else_branch) do
+                pass1_declare(else_branch[i])
+                increase i by 1
+            end
+            pop_scope()
+        end
+    end
+
+    when node_kind equals "While" do
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            pass1_declare(body[i])
+            increase i by 1
+        end
+        pop_scope()
+    end
+
+    when node_kind equals "Repeat" do
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            pass1_declare(body[i])
+            increase i by 1
+        end
+        pop_scope()
+    end
+
+    when node_kind equals "BinaryExpr" do
+        pass1_declare(get_key(ast_node, "left"))
+        pass1_declare(get_key(ast_node, "right"))
+    end
+
+    when node_kind equals "UnaryExpr" do
+        pass1_declare(get_key(ast_node, "operand"))
+    end
+
+    when node_kind equals "FunctionCallExpr" do
+        create variable args as list with value get_key(ast_node, "arguments")
+        create variable i as integer with value 0
+        while i < length(args) do
+            pass1_declare(args[i])
+            increase i by 1
+        end
+    end
+
+    when node_kind equals "AssignVar" do
+        pass1_declare(get_key(ast_node, "value"))
+    end
+
+    when node_kind equals "ReturnStmt" do
+        create variable ret_val as map with value get_key(ast_node, "value")
+        when not (ret_val equals nothing) do pass1_declare(ret_val) end
+    end
+
+    when node_kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(ast_node, "expressions")
+        create variable i as integer with value 0
+        while i < length(exprs) do
+            pass1_declare(exprs[i])
+            increase i by 1
+        end
+    end
+
+    when node_kind equals "Program" do
+        create variable stmts as list with value get_key(ast_node, "statements")
+        create variable i as integer with value 0
+        while i < length(stmts) do
+            pass1_declare(stmts[i])
+            increase i by 1
+        end
+    end
+end
+
+# ============================================================
+# PASS 2: RESOLVE IDENTIFIERS TO SYMBOLREF
+# ============================================================
+
+function pass2_resolve(ast_node) returns map
+    create variable node_kind as text with value get_key(ast_node, "kind")
+
+    when node_kind equals "Identifier" do
+        create variable var_name as text with value get_key(ast_node, "name")
+        create variable symbol_id as integer with value lookup_symbol with var_name
+        when symbol_id equals -1 do
+            add_error with "Undefined variable '" attach var_name attach "'"
+            return map("kind", "SymbolRef", "symbol_id", -1, "nm", var_name, "err", true)
+        end
+        return map("kind", "SymbolRef", "symbol_id", symbol_id, "nm", var_name)
+    end
+
+    when node_kind equals "BinaryExpr" do
+        return map("kind", "BinaryExpr", "op", get_key(ast_node, "operator"), "left", pass2_resolve(get_key(ast_node, "left")), "right", pass2_resolve(get_key(ast_node, "right")))
+    end
+
+    when node_kind equals "UnaryExpr" do
+        return map("kind", "UnaryExpr", "op", get_key(ast_node, "operator"), "operand", pass2_resolve(get_key(ast_node, "operand")))
+    end
+
+    when node_kind equals "FunctionCallExpr" do
+        create variable func_name as text with value get_key(ast_node, "name")
+        create variable func_id as integer with value lookup_symbol with func_name
+        when func_id equals -1 do
+            add_error with "Undefined function '" attach func_name attach "'"
+        end
+        create variable args as list with value get_key(ast_node, "arguments")
+        create variable resolved_args as list with value []
+        create variable i as integer with value 0
+        while i < length(args) do
+            push(resolved_args, pass2_resolve(args[i]))
+            increase i by 1
+        end
+        return map("kind", "FunctionCallExpr", "nm", func_name, "sym_id", func_id, "args", resolved_args)
+    end
+
+    when node_kind equals "VariableDecl" do
+        create variable var_name as text with value get_key(ast_node, "name")
+        create variable sym_id as integer with value lookup_symbol with var_name
+        create variable init as map with value get_key(ast_node, "value")
+        when not (init equals nothing) do set init to pass2_resolve(init) end
+        return map("kind", "VariableDecl", "nm", var_name, "sym_id", sym_id, "tp", get_key(ast_node, "typeName"), "init", init)
+    end
+
+    when node_kind equals "AssignVar" do
+        create variable var_name as text with value get_key(ast_node, "name")
+        create variable sym_id as integer with value lookup_symbol with var_name
+        when sym_id equals -1 do
+            add_error with "Assignment to undefined variable '" attach var_name attach "'"
+        end
+        return map("kind", "AssignVar", "nm", var_name, "sym_id", sym_id, "val", pass2_resolve(get_key(ast_node, "value")))
+    end
+
+    when node_kind equals "ReturnStmt" do
+        create variable ret_val as map with value get_key(ast_node, "value")
+        when not (ret_val equals nothing) do set ret_val to pass2_resolve(ret_val) end
+        return map("kind", "ReturnStmt", "val", ret_val)
+    end
+
+    when node_kind equals "PrintStmt" do
+        create variable exprs as list with value get_key(ast_node, "expressions")
+        create variable resolved_exprs as list with value []
+        create variable i as integer with value 0
+        while i < length(exprs) do
+            push(resolved_exprs, pass2_resolve(exprs[i]))
+            increase i by 1
+        end
+        return map("kind", "PrintStmt", "exprs", resolved_exprs)
+    end
+
+    when node_kind equals "FunctionDecl" do
+        push_scope()
+        create variable params as list with value get_key(ast_node, "parameters")
+        create variable i as integer with value 0
+        while i < length(params) do
+            create variable p as map with value params[i]
+            declare_symbol with get_key(p, "name") and "parameter" and get_key(p, "typeName")
+            increase i by 1
+        end
+        create variable body as list with value get_key(ast_node, "body")
+        create variable resolved_body as list with value []
+        set i to 0
+        while i < length(body) do
+            push(resolved_body, pass2_resolve(body[i]))
+            increase i by 1
+        end
+        pop_scope()
+        return map("kind", "FunctionDecl", "nm", get_key(ast_node, "name"), "params", params, "ret", get_key(ast_node, "returnType"), "body", resolved_body)
+    end
+
+    when node_kind equals "When" do
+        create variable resolved_branches as list with value []
+        create variable branches as list with value get_key(ast_node, "branches")
+        create variable i as integer with value 0
+        while i < length(branches) do
+            create variable branch as map with value branches[i]
+            push_scope()
+            create var_body as list with value get_key(branch, "body")
+            create variable resolved_branch_body as list with value []
+            create variable j as integer with value 0
+            while j < length(var_body) do
+                push(resolved_branch_body, pass2_resolve(var_body[j]))
+                increase j by 1
+            end
+            pop_scope()
+            push(resolved_branches, map("kind", "WhenBranch", "cond", pass2_resolve(get_key(branch, "condition")), "body", resolved_branch_body))
+            increase i by 1
+        end
+        create variable resolved_else as list with value []
+        create variable else_branch as list with value get_key(ast_node, "otherwise")
+        when length(else_branch) > 0 do
+            push_scope()
+            set i to 0
+            while i < length(else_branch) do
+                push(resolved_else, pass2_resolve(else_branch[i]))
+                increase i by 1
+            end
+            pop_scope()
+        end
+        return map("kind", "When", "branches", resolved_branches, "else", resolved_else)
+    end
+
+    when node_kind equals "While" do
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable resolved_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(resolved_body, pass2_resolve(body[i]))
+            increase i by 1
+        end
+        pop_scope()
+        return map("kind", "While", "cond", pass2_resolve(get_key(ast_node, "condition")), "body", resolved_body)
+    end
+
+    when node_kind equals "Repeat" do
+        push_scope()
+        create variable body as list with value get_key(ast_node, "body")
+        create variable resolved_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(resolved_body, pass2_resolve(body[i]))
+            increase i by 1
+        end
+        pop_scope()
+        return map("kind", "Repeat", "cnt", pass2_resolve(get_key(ast_node, "count")), "body", resolved_body)
+    end
+
+    when node_kind equals "Program" do
+        create variable stmts as list with value get_key(ast_node, "statements")
+        create variable resolved_stmts as list with value []
+        create variable i as integer with value 0
+        while i < length(stmts) do
+            push(resolved_stmts, pass2_resolve(stmts[i]))
+            increase i by 1
+        end
+        return map("kind", "Program", "stmts", resolved_stmts)
+    end
+
+    return ast_node
+end
+
+# ============================================================
+# RETURN PATH COMPLETENESS CHECK (Phase 9.3c)
+# ============================================================
+
+function has_return_stmt with stmts as list returns boolean
+    create variable i as integer with value 0
+    while i < length(stmts) do
+        create variable stmt as map with value stmts[i]
+        create variable stmt_kind as text with value get_key(stmt, "kind")
+        when stmt_kind equals "ReturnStmt" do return true end
+        when stmt_kind equals "When" do
+            # Check all branches have return
+            create variable branches as list with value get_key(stmt, "branches")
+            create variable all_return as boolean with value true
+            create variable j as integer with value 0
+            while j < length(branches) do
+                create variable branch_body as list with value get_key(branches[j], "body")
+                when not (has_return_stmt with branch_body) do
+                    set all_return to false
+                end
+                increase j by 1
+            end
+            # Check else branch
+            create variable else_body as list with value get_key(stmt, "else")
+            when not (has_return_stmt with else_body) do
+                set all_return to false
+            end
+            when all_return equals true do return true end
+        end
+        increase i by 1
+    end
+    return false
+end
+
+function check_return_paths with ast_node as map returns nothing
+    create variable node_kind as text with value get_key(ast_node, "kind")
+    when node_kind equals "FunctionDecl" do
+        create variable ret_type as text with value get_key(ast_node, "ret")
+        when not (ret_type equals "nothing") do
+            create variable body as list with value get_key(ast_node, "body")
+            when not (has_return_stmt with body) do
+                add_error with "Function '" attach get_key(ast_node, "nm") attach "' missing return path"
+            end
+        end
+    end
+    when node_kind equals "Program" do
+        create variable stmts as list with value get_key(ast_node, "stmts")
+        create variable i as integer with value 0
+        while i < length(stmts) do
+            check_return_paths(stmts[i])
+            increase i by 1
+        end
+    end
+end
+
+# ============================================================
+# IR DEBUG UTILITIES (Phase 9.4)
+# ============================================================
+
+function dump_ir_expr with ir_expr as map and indent as text returns text
+    create variable etype as text with value get_key(ir_expr, "type")
+    create variable out as text with value indent
+    when etype equals "IRLiteral" do
+        set out to out attach "LITERAL[" attach get_key(ir_expr, "literal_type") attach "] = " attach get_key(ir_expr, "value")
+    end
+    when etype equals "IRVariable" do
+        set out to out attach "VAR[" attach get_key(ir_expr, "name") attach "]"
+    end
+    when etype equals "IRSymbolRef" do
+        set out to out attach "SYM[" attach get_key(ir_expr, "symbol_id") attach ":" attach get_key(ir_expr, "nm") attach "]"
+    end
+    when etype equals "IRBinaryOp" do
+        set out to out attach "BIN[" attach get_key(ir_expr, "op") attach "]\n"
+        set out to out attach dump_ir_expr(get_key(ir_expr, "left"), indent attach "  ") attach "\n"
+        set out to out attach dump_ir_expr(get_key(ir_expr, "right"), indent attach "  ")
+    end
+    return out
+end
+
+function dump_ir_stmt with ir_stmt as map and indent as text returns text
+    create variable stype as text with value get_key(ir_stmt, "type")
+    create variable out as text with value indent
+    when stype equals "IRVarDecl" do
+        set out to out attach "VAR_DECL[" attach get_key(ir_stmt, "symbol_id") attach " : " attach get_key(ir_stmt, "var_type") attach "]\n"
+        set out to out attach dump_ir_expr(get_key(ir_stmt, "init"), indent attach "  ")
+    end
+    when stype equals "IRAssign" do
+        set out to out attach "ASSIGN[" attach get_key(ir_stmt, "symbol_id") attach "] = \n"
+        set out to out attach dump_ir_expr(get_key(ir_stmt, "value"), indent attach "  ")
+    end
+    when stype equals "IRPrint" do
+        set out to out attach "PRINT\n"
+        set out to out attach dump_ir_expr(get_key(ir_stmt, "value"), indent attach "  ")
+    end
+    when stype equals "IRReturn" do
+        set out to out attach "RETURN\n"
+        set out to out attach dump_ir_expr(get_key(ir_stmt, "value"), indent attach "  ")
+    end
+    when stype equals "IRIf" do
+        set out to out attach "IF\n"
+        set out to out attach dump_ir_expr(get_key(ir_stmt, "cond"), indent attach "  ") attach "\n"
+        set out to out attach indent attach "THEN:\n"
+        create variable then_body as list with value get_key(ir_stmt, "then_body")
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            set out to out attach dump_ir_stmt(then_body[i], indent attach "    ") attach "\n"
+            increase i by 1
+        end
+        set out to out attach indent attach "ELSE:\n"
+        create variable else_body as list with value get_key(ir_stmt, "else_body")
+        set i to 0
+        while i < length(else_body) do
+            set out to out attach dump_ir_stmt(else_body[i], indent attach "    ") attach "\n"
+            increase i by 1
+        end
+    end
+    when stype equals "IRFunction" do
+        set out to out attach "FUNC[" attach get_key(ir_stmt, "name") attach " : " attach get_key(ir_stmt, "ret_type") attach "]\n"
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach dump_ir_stmt(body[i], indent attach "  ") attach "\n"
+            increase i by 1
+        end
+    end
+    return out
+end
+
+function dump_ir_module with ir_module as map returns text
+    create variable out as text with value "=== IR DUMP ===\n"
+    create variable functions as list with value get_key(ir_module, "functions")
+    create variable i as integer with value 0
+    while i < length(functions) do
+        set out to out attach dump_ir_stmt(functions[i], "") attach "\n"
+        increase i by 1
+    end
+    set out to out attach "=== GLOBALS ===\n"
+    create variable globals as list with value get_key(ir_module, "globals")
+    set i to 0
+    while i < length(globals) do
+        set out to out attach dump_ir_stmt(globals[i], "") attach "\n"
+        increase i by 1
+    end
+    return out
+end
+
+# ============================================================
+# IR CONVERSION (updated for SymbolRef)
+# ============================================================
+
 function ast_to_ir_expr(ast_node) returns map
     create variable kind as text with value get_key(ast_node, "kind")
     when kind equals "Literal" do
@@ -543,6 +1099,11 @@ function ast_to_ir_expr(ast_node) returns map
     end
     when kind equals "Identifier" do
         return map("type", "IRVariable", "name", get_key(ast_node, "name"))
+    end
+    when kind equals "SymbolRef" do
+        create variable sym_id as integer with value get_key(ast_node, "symbol_id")
+        create variable sym as map with value get_symbol(sym_id)
+        return map("type", "IRSymbolRef", "symbol_id", sym_id, "nm", get_key(sym, "nm"))
     end
     when kind equals "BinaryExpr" do
         create variable op as text with value get_key(ast_node, "operator")
@@ -585,9 +1146,9 @@ end
 function ast_to_ir_stmt(ast_stmt) returns map
     create variable kind as text with value get_key(ast_stmt, "kind")
     when kind equals "VariableDecl" do
-        create variable var_name as text with value get_key(ast_stmt, "name")
-        create variable var_type as text with value get_key(ast_stmt, "typeName")
-        create variable init_val as map with value get_key(ast_stmt, "value")
+        create variable var_name as text with value get_key(ast_stmt, "nm")
+        create variable var_type as text with value get_key(ast_stmt, "tp")
+        create variable init_val as map with value get_key(ast_stmt, "init")
         when init_val equals nothing do
             return map("type", "IRVarDecl", "name", var_name, "var_type", var_type, "init", map("type", "IRLiteral", "literal_type", "nothing", "value", nothing))
         end
@@ -595,9 +1156,10 @@ function ast_to_ir_stmt(ast_stmt) returns map
         return map("type", "IRVarDecl", "name", var_name, "var_type", var_type, "init", ir_init)
     end
     when kind equals "AssignVar" do
-        create variable var_name as text with value get_key(ast_stmt, "name")
-        create variable ir_val as map with value ast_to_ir_expr(get_key(ast_stmt, "value"))
-        return map("type", "IRAssign", "name", var_name, "value", ir_val)
+        create variable var_name as text with value get_key(ast_stmt, "nm")
+        create variable sym_id as integer with value get_key(ast_stmt, "sym_id")
+        create variable ir_val as map with value ast_to_ir_expr(get_key(ast_stmt, "val"))
+        return map("type", "IRAssign", "name", var_name, "symbol_id", sym_id, "value", ir_val)
     end
     when kind equals "PrintStmt" do
         create variable exprs as list with value get_key(ast_stmt, "expressions")
@@ -605,7 +1167,7 @@ function ast_to_ir_stmt(ast_stmt) returns map
         return map("type", "IRPrint", "value", ir_val)
     end
     when kind equals "ReturnStmt" do
-        create variable ret_val as map with value get_key(ast_stmt, "value")
+        create variable ret_val as map with value get_key(ast_stmt, "val")
         when ret_val equals nothing do
             return map("type", "IRReturn", "value", map("type", "IRLiteral", "literal_type", "nothing", "value", nothing))
         end
@@ -615,7 +1177,7 @@ function ast_to_ir_stmt(ast_stmt) returns map
     when kind equals "When" do
         create variable branches as list with value get_key(ast_stmt, "branches")
         create variable first_branch as map with value branches[0]
-        create variable ir_cond as map with value ast_to_ir_expr(get_key(first_branch, "condition"))
+        create variable ir_cond as map with value ast_to_ir_expr(get_key(first_branch, "cond"))
         create variable then_body as list with value []
         create variable ast_then as list with value get_key(first_branch, "body")
         create variable i as integer with value 0
@@ -635,7 +1197,7 @@ function ast_to_ir_stmt(ast_stmt) returns map
         return map("type", "IRIf", "cond", ir_cond, "then_body", then_body, "else_body", else_body)
     end
     when kind equals "While" do
-        create variable ir_cond as map with value ast_to_ir_expr(get_key(ast_stmt, "condition"))
+        create variable ir_cond as map with value ast_to_ir_expr(get_key(ast_stmt, "cond"))
         create variable body as list with value []
         create variable ast_body as list with value get_key(ast_stmt, "body")
         create variable i as integer with value 0
@@ -646,7 +1208,7 @@ function ast_to_ir_stmt(ast_stmt) returns map
         return map("type", "IRWhile", "cond", ir_cond, "body", body)
     end
     when kind equals "Repeat" do
-        create variable ir_count as map with value ast_to_ir_expr(get_key(ast_stmt, "count"))
+        create variable ir_count as map with value ast_to_ir_expr(get_key(ast_stmt, "cnt"))
         create variable body as list with value []
         create variable ast_body as list with value get_key(ast_stmt, "body")
         create variable i as integer with value 0
@@ -667,7 +1229,7 @@ function ast_to_ir_stmt(ast_stmt) returns map
         return map("type", "IRAssign", "name", var_name, "value", map("type", "IRBinaryOp", "op", "ADD", "left", map("type", "IRVariable", "name", var_name), "right", ir_amount))
     end
     when kind equals "FunctionDecl" do
-        create variable func_name as text with value get_key(ast_stmt, "name")
+        create variable func_name as text with value get_key(ast_stmt, "nm")
         create variable params as list with value []
         create variable ast_params as list with value get_key(ast_stmt, "parameters")
         create variable i as integer with value 0
@@ -751,6 +1313,10 @@ function ir_to_c_expr(ir_expr) returns text
     when etype equals "IRVariable" do
         return get_key(ir_expr, "name")
     end
+    when etype equals "IRSymRef" do
+        create variable sym_id as integer with value get_key(ir_expr, "symbol_id")
+        return symbol_id_to_c_name(sym_id)
+    end
     when etype equals "IRBinaryOp" do
         create variable left as text with value ir_to_c_expr(get_key(ir_expr, "left"))
         create variable right as text with value ir_to_c_expr(get_key(ir_expr, "right"))
@@ -795,15 +1361,17 @@ function ir_to_c_stmt(ir_stmt, indent) returns text
     create variable stype as text with value get_key(ir_stmt, "type")
     create variable ind as text with value gen_c_indent(indent)
     when stype equals "IRVarDecl" do
-        create variable name as text with value get_key(ir_stmt, "name")
+        create variable sym_id as integer with value get_key(ir_stmt, "symbol_id")
+        create variable c_name as text with value symbol_id_to_c_name(sym_id)
         create variable var_type as text with value ir_type_to_c(get_key(ir_stmt, "var_type"))
         create variable init as map with value get_key(ir_stmt, "init")
-        return ind attach var_type attach " " attach name attach " = " attach ir_to_c_expr(init) attach ";\n"
+        return ind attach var_type attach " " attach c_name attach " = " attach ir_to_c_expr(init) attach ";\n"
     end
     when stype equals "IRAssign" do
-        create variable var_name as text with value get_key(ir_stmt, "name")
+        create variable sym_id as integer with value get_key(ir_stmt, "symbol_id")
+        create variable c_name as text with value symbol_id_to_c_name(sym_id)
         create variable var_value as map with value get_key(ir_stmt, "value")
-        return ind attach var_name attach " = " attach ir_to_c_expr(var_value) attach ";\n"
+        return ind attach c_name attach " = " attach ir_to_c_expr(var_value) attach ";\n"
     end
     when stype equals "IRPrint" do
         create variable print_val as map with value get_key(ir_stmt, "value")
@@ -923,8 +1491,59 @@ create variable ast_stmts as list with value get_key(ast, "statements")
 print "  ✓ " attach length(ast_stmts) attach " AST statements"
 print ""
 
+print "▸ Stage 2.5: Symbol Pass (Pass 1 - Declaration)..."
+# Reset symbol table for fresh compilation
+set next_symbol_id to 1
+set next_scope_id to 1
+set scopes to map()
+set symbols to map()
+set current_scope_id to 0
+set_key(scopes, 0, map("id", 0, "parent_id", -1, "syms", map(), "level", 0))
+
+# Run Pass 1: collect all declarations
+reset_errors()
+pass1_declare(ast)
+print "  ✓ Symbols declared: " attach (next_symbol_id - 1)
+when has_errors() do
+    print "  ✗ Pass 1 failed with " attach compiler_errors attach " error(s)"
+    return ""
+end
+
+print ""
+
+print "▸ Stage 2.6: Symbol Pass (Pass 2 - Resolution)..."
+# Reset scope for Pass 2 (fresh resolution pass)
+set current_scope_id to 0
+reset_errors()
+create variable resolved_ast as map with value pass2_resolve(ast)
+print "  ✓ AST resolved to SymbolRef"
+when has_errors() do
+    print "  ✗ Pass 2 failed with " attach compiler_errors attach " error(s)"
+    return ""
+end
+
+# Check return path completeness
+print "▸ Stage 2.7: Return Path Check..."
+check_return_paths(resolved_ast)
+when has_errors() do
+    print "  ✗ Return path check failed with " attach compiler_errors attach " error(s)"
+    return ""
+end
+print "  ✓ Return paths OK"
+
+print ""
+
 print "▸ Stage 3: AST → IR Transformation..."
-create variable ir_module as map with value ast_to_ir_program(ast)
+create variable ir_module as map with value ast_to_ir_program(resolved_ast)
+print "  ✓ IR generated"
+
+# Optional: Debug IR dump (set debug_ir to true to enable)
+create variable debug_ir as boolean with value false
+when debug_ir equals true do
+    print ""
+    print dump_ir_module(ir_module)
+end
+
 create variable ir_funcs as list with value get_key(ir_module, "functions")
 create variable ir_globals as list with value get_key(ir_module, "globals")
 print "  ✓ IR Module: " attach length(ir_funcs) attach " functions, " attach length(ir_globals) attach " globals"

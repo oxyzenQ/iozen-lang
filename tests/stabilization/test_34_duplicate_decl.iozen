@@ -1,0 +1,28 @@
+# Test 34: Duplicate Declaration Detection
+# Risk: Silent override, unexpected behavior
+
+print "Test 34: Duplicate declaration"
+
+# Duplicate in same scope (should error)
+create variable x as integer with value 10
+create variable x as integer with value 20
+
+print x
+
+# Duplicate in nested scope (should be allowed - shadowing)
+create variable y as integer with value 5
+when true equals true do
+    create variable y as integer with value 50
+    print y
+end
+print y
+
+# Duplicate parameter and local
+function dup_test with z as integer returns integer
+    create variable z as integer with value 100
+    return z
+end
+
+print dup_test with 10
+
+print "Test 34: PASS"

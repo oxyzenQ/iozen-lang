@@ -1,0 +1,15 @@
+# Test 37: Inconsistent return type detection (should ERROR)
+# Returns different types in different branches
+
+print "Test 37: Inconsistent Return Type"
+
+function bad_return with flag as boolean returns integer
+    when flag do
+        return 42
+    otherwise do
+        # This would be string return - type mismatch
+        return "string"
+    end
+end
+
+print "Should fail compilation"

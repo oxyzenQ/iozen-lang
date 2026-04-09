@@ -1,0 +1,9 @@
+# Test 35a: Simple undefined variable detection
+# This should fail compilation with undefined variable error
+
+print "Testing undefined variable"
+
+# Undefined variable - should error
+create variable result as integer with value undefined_var
+
+print "Should not reach here"
