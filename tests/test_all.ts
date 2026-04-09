@@ -2814,6 +2814,572 @@ print freq["sat"]`);
 });
 
 // ============================================================
+// EDGE CASE & ROBUSTNESS TESTS (STRENGTHENING)
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mEdge Case: Math\x1b[0m');
+
+test('edge: abs(0) returns 0', () => {
+  const r = run('print abs(0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: abs of positive stays positive', () => {
+  const r = run('print abs(42)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '42');
+});
+
+test('edge: floor(-3.5) returns -4', () => {
+  const r = run('print floor(-3.5)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-4');
+});
+
+test('edge: ceil(-3.5) returns -3', () => {
+  const r = run('print ceil(-3.5)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-3');
+});
+
+test('edge: sqrt(0) returns 0', () => {
+  const r = run('print sqrt(0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: sqrt(1) returns 1', () => {
+  const r = run('print sqrt(1)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+});
+
+test('edge: power(2, 0) returns 1', () => {
+  const r = run('print power(2, 0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+});
+
+test('edge: power(0, 5) returns 0', () => {
+  const r = run('print power(0, 5)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: min with negative numbers', () => {
+  const r = run('print min(-5, -10)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-10');
+});
+
+test('edge: max with negative numbers', () => {
+  const r = run('print max(-5, -10)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-5');
+});
+
+test('edge: sign(0) returns 0', () => {
+  const r = run('print sign(0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: sign negative returns -1', () => {
+  const r = run('print sign(-42)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-1');
+});
+
+test('edge: sign positive returns 1', () => {
+  const r = run('print sign(42)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+});
+
+test('edge: trunc(3.99) returns 3', () => {
+  const r = run('print trunc(3.99)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('edge: trunc(-3.99) returns -3', () => {
+  const r = run('print trunc(-3.99)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '-3');
+});
+
+test('edge: gcd(12, 8) returns 4', () => {
+  const r = run('print gcd(12, 8)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '4');
+});
+
+test('edge: gcd(0, 5) returns 5', () => {
+  const r = run('print gcd(0, 5)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '5');
+});
+
+test('edge: lcm(4, 6) returns 12', () => {
+  const r = run('print lcm(4, 6)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '12');
+});
+
+test('edge: log10(100) returns 2', () => {
+  const r = run('print floor(log10(100) * 100)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '200');
+});
+
+test('edge: log2(8) returns 3', () => {
+  const r = run('print floor(log2(8) * 100)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '300');
+});
+
+test('edge: e() constant returns Euler number', () => {
+  const r = run('print floor(e() * 100)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '271');
+});
+
+test('edge: atan(1) returns pi/4', () => {
+  const r = run('print floor(atan(1) * 1000)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '785');
+});
+
+// ============================================================
+console.log('\n\x1b[1m\x1b[36mEdge Case: String\x1b[0m');
+
+test('edge: length of empty string', () => {
+  const r = run('print length("")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: substring from 0 to 0 is empty', () => {
+  const r = run('print substring("hello", 0, 0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '');
+});
+
+test('edge: trim empty string', () => {
+  const r = run('print trim("")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '');
+});
+
+test('edge: char_at first character', () => {
+  const r = run('print char_at("hello", 0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'h');
+});
+
+test('edge: ord of empty string returns 0', () => {
+  const r = run('print ord("")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: repeat_str 0 times returns empty', () => {
+  const r = run('print repeat_str("x", 0)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '');
+});
+
+test('edge: contains empty in empty returns true', () => {
+  const r = run('print contains("", "")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+});
+
+test('edge: starts_with empty in empty returns true', () => {
+  const r = run('print starts_with("", "")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+});
+
+test('edge: reverse_str empty string', () => {
+  const r = run('print reverse_str("")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '');
+});
+
+test('edge: count char occurrences in string', () => {
+  const r = run('print count("hello world", "l")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('edge: find_index in string', () => {
+  const r = run('print find_index("hello", "ll")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2');
+});
+
+test('edge: split empty string returns list with one empty element', () => {
+  const r = run('create variable parts as list with value split("", ",")\nprint length(parts)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+});
+
+test('edge: replace all occurrences', () => {
+  const r = run('print replace("aaa", "a", "b")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'bbb');
+});
+
+test('edge: to_integer empty string returns NaN', () => {
+  const r = run('create variable v with value to_integer("")\nprint v == v');
+  assertEqual(r.errors.length, 0);
+  // NaN == NaN is false
+  assertIncludes(r.output, 'false');
+});
+
+// ============================================================
+console.log('\n\x1b[1m\x1b[36mEdge Case: List\x1b[0m');
+
+test('edge: length of empty list', () => {
+  const r = run('create variable nums as list with value []\nprint length(nums)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: first of empty list returns null', () => {
+  const r = run('print first([])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'nothing');
+});
+
+test('edge: last of empty list returns null', () => {
+  const r = run('print last([])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'nothing');
+});
+
+test('edge: sort empty list returns empty', () => {
+  const r = run('create variable sorted as list with value sort([])\nprint length(sorted)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: flatten empty list returns empty', () => {
+  const r = run('create variable flat as list with value flatten([])\nprint length(flat)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: reverse empty list returns empty', () => {
+  const r = run('create variable rev as list with value reverse([])\nprint length(rev)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: range same start and end is empty', () => {
+  const r = run('create variable nums as list with value range(5, 5)\nprint length(nums)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: range 0 to 0 is empty', () => {
+  const r = run('create variable nums as list with value range(0, 0)\nprint length(nums)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: join empty list returns empty string', () => {
+  const r = run('print join([], ",")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '');
+});
+
+test('edge: sum of empty list returns 0', () => {
+  const r = run('print sum([])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: unique empty list returns empty', () => {
+  const r = run('create variable u as list with value unique([])\nprint length(u)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: take more than available returns all', () => {
+  const r = run('create variable result as list with value take([1, 2, 3], 10)\nprint length(result)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('edge: drop more than available returns empty', () => {
+  const r = run('create variable result as list with value drop([1, 2, 3], 10)\nprint length(result)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: chunk size 1', () => {
+  const r = run('create variable result as list with value chunk([1, 2, 3], 1)\nprint length(result)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('edge: compact removes nulls', () => {
+  const r = run('create variable result as list with value compact([1, nothing, 2, nothing, 3])\nprint length(result)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('edge: cycle repeats list', () => {
+  const r = run('create variable result as list with value cycle([1, 2], 3)\nprint length(result)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '6');
+});
+
+test('edge: is_empty checks list', () => {
+  const r = run('print is_empty([])\nprint is_empty([1])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+  assertIncludes(r.output, 'false');
+});
+
+test('edge: count in list', () => {
+  const r = run('print count([1, 2, 1, 3, 1], 1)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+});
+
+test('edge: contains_list checks membership', () => {
+  const r = run('print contains_list([1, 2, 3], 2)\nprint contains_list([1, 2, 3], 5)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+  assertIncludes(r.output, 'false');
+});
+
+test('edge: contains_any with match', () => {
+  const r = run('print contains_any([1, 2, 3], [2, 5])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+});
+
+test('edge: contains_any without match', () => {
+  const r = run('print contains_any([1, 2, 3], [5, 6])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'false');
+});
+
+test('edge: nth element', () => {
+  const r = run('print nth([10, 20, 30], 1)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '20');
+});
+
+test('edge: nth out of bounds returns null', () => {
+  const r = run('print nth([10, 20], 5)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'nothing');
+});
+
+// ============================================================
+console.log('\n\x1b[1m\x1b[36mEdge Case: Map\x1b[0m');
+
+test('edge: empty map has_key returns false', () => {
+  const r = run('print has_key(map(), "x")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'false');
+});
+
+test('edge: empty map size is 0', () => {
+  const r = run('print map_size(map())');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: get_key missing returns null', () => {
+  const r = run('print get_key(map("x", 10), "y")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'nothing');
+});
+
+test('edge: keys of empty map returns empty list', () => {
+  const r = run('create variable k as list with value keys(map())\nprint length(k)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: values of map', () => {
+  const r = run('create variable v as list with value values(map("a", 1, "b", 2))\nprint length(v)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '2');
+});
+
+test('edge: is_empty on empty map', () => {
+  const r = run('print is_empty(map())');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+});
+
+test('edge: map_set returns map', () => {
+  const r = run('create variable m as map with value map()\nset m to map_set(m, "x", 42)\nprint get_key(m, "x")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '42');
+});
+
+// ============================================================
+console.log('\n\x1b[1m\x1b[36mEdge Case: Type & Conversion\x1b[0m');
+
+test('edge: type_of nothing', () => {
+  const r = run('print type_of(nothing)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'nothing');
+});
+
+test('edge: type_of list', () => {
+  const r = run('print type_of([1, 2])');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'list');
+});
+
+test('edge: type_of map', () => {
+  const r = run('print type_of(map("x", 1))');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'map');
+});
+
+test('edge: type_of boolean', () => {
+  const r = run('print type_of(true)');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'boolean');
+});
+
+test('edge: to_integer valid string', () => {
+  const r = run('print to_integer("0")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: to_float valid string', () => {
+  const r = run('print to_float("0")');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+// ============================================================
+console.log('\n\x1b[1m\x1b[36mEdge Case: Control Flow\x1b[0m');
+
+test('edge: nested while loops', () => {
+  const r = run(`create variable count as integer with value 0
+create variable i as integer with value 0
+while i is less than 3 do
+    create variable j as integer with value 0
+    while j is less than 3 do
+        set count to count + 1
+        increase j by 1
+    end
+    increase i by 1
+end
+print count`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '9');
+});
+
+test('edge: function with no explicit return has side effect', () => {
+  const r = run(`function no_return
+    print "side effect"
+end
+no_return`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'side effect');
+});
+
+test('edge: multiple returns in function', () => {
+  const r = run(`function classify with x as integer returns text
+    when x is less than 0 do
+        return "negative"
+    end
+    when x equals 0 do
+        return "zero"
+    end
+    return "positive"
+end
+print classify with -5
+print classify with 0
+print classify with 5`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'negative');
+  assertIncludes(r.output, 'zero');
+  assertIncludes(r.output, 'positive');
+});
+
+test('edge: while loop with zero iterations', () => {
+  const r = run(`create variable sum as integer with value 0
+create variable i as integer with value 0
+while i is less than 0 do
+    set sum to sum + 1
+    increase i by 1
+end
+print sum`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: for each on empty list does nothing', () => {
+  const r = run(`create variable count as integer with value 0
+for each item in [] do
+    set count to count + 1
+end
+print count`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+test('edge: repeat 0 times does nothing', () => {
+  const r = run(`create variable count as integer with value 0
+repeat 0 times do
+    set count to count + 1
+end
+print count`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '0');
+});
+
+// ============================================================
+console.log('\n\x1b[1m\x1b[36mEdge Case: Expressions & Operators\x1b[0m');
+
+test('edge: string + number coercion', () => {
+  const r = run('print "num: " + 42');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'num:');
+});
+
+test('edge: chained comparison', () => {
+  const r = run('print 1 < 2\nprint 2 < 1');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+  assertIncludes(r.output, 'false');
+});
+
+test('edge: negative modulo', () => {
+  const r = run('print -7 % 3');
+  assertEqual(r.errors.length, 0);
+  assert(r.output[0].includes('-'));
+});
+
+test('edge: empty attach produces empty string', () => {
+  const r = run('print "" attach ""');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '');
+});
+
+test('edge: list index out of bounds returns null', () => {
+  const r = run('create variable nums as list with value [1, 2, 3]\nprint nums[10]');
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'nothing');
+});
+
+// ============================================================
 // SUMMARY
 // ============================================================
 
@@ -2821,7 +3387,7 @@ const total = passed + failed;
 console.log('\n\x1b[1m' + '='.repeat(50) + '\x1b[0m');
 console.log(`\x1b[1mResults: \x1b[32m${passed} passed\x1b[0m / \x1b[31m${failed} failed\x1b[0m / ${total} total`);
 if (failed > 0) {
-  console.log(`\n\x1b[31mFailures:\x1b[0m`);
+  console.log(`\x1b[31mFailures:\x1b[0m`);
   for (const f of failures) {
     console.error(`  \x1b[31m• ${f}\x1b[0m`);
   }
