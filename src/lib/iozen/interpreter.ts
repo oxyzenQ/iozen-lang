@@ -1800,6 +1800,10 @@ export class Interpreter {
       this.env.define('__last_result__', Math.abs(Math.floor(this.toNumber(args[0]))));
       return true;
     }
+    if (n === 'pi') {
+      this.env.define('__last_result__', Math.PI);
+      return true;
+    }
 
     // Time functions
     if (n === 'current_time' && args.length >= 0) {
@@ -1822,7 +1826,7 @@ export class Interpreter {
     if (n === 'values' && args.length >= 1) {
       const m = args[0];
       if (typeof m === 'object' && m !== null && !Array.isArray(m) && (m as IOZENMap).__iozen_type === 'map') {
-        const result = Object.values(m).filter((v) => typeof v !== 'string' || !v.startsWith('__') || !v.startsWith('__'));
+        const result = Object.keys(m).filter(k => !k.startsWith('__')).map(k => (m as Record<string, IOZENValue>)[k]);
         this.env.define('__last_result__', result);
       } else {
         this.env.define('__last_result__', []);
@@ -1881,105 +1885,13 @@ export class Interpreter {
       return true;
     }
 
-    // ---- New builtins: Math ----
-    if (n === 'abs' && args.length >= 1) {
-      this.env.define('__last_result__', Math.abs(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'pow' && args.length >= 2) {
-      this.env.define('__last_result__', Math.pow(this.toNumber(args[0]), this.toNumber(args[1])));
-      return true;
-    }
-    if (n === 'sqrt' && args.length >= 1) {
-      this.env.define('__last_result__', Math.sqrt(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'floor' && args.length >= 1) {
-      this.env.define('__last_result__', Math.floor(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'ceil' && args.length >= 1) {
-      this.env.define('__last_result__', Math.ceil(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'round' && args.length >= 1) {
-      this.env.define('__last_result__', Math.round(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'min' && args.length >= 2) {
-      this.env.define('__last_result__', Math.min(this.toNumber(args[0]), this.toNumber(args[1])));
-      return true;
-    }
-    if (n === 'max' && args.length >= 2) {
-      this.env.define('__last_result__', Math.max(this.toNumber(args[0]), this.toNumber(args[1])));
-      return true;
-    }
-    if (n === 'log' && args.length >= 1) {
-      this.env.define('__last_result__', Math.log(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'log10' && args.length >= 1) {
-      this.env.define('__last_result__', Math.log10(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'sin' && args.length >= 1) {
-      this.env.define('__last_result__', Math.sin(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'cos' && args.length >= 1) {
-      this.env.define('__last_result__', Math.cos(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'tan' && args.length >= 1) {
-      this.env.define('__last_result__', Math.tan(this.toNumber(args[0])));
-      return true;
-    }
-    if (n === 'pi') {
-      this.env.define('__last_result__', Math.PI);
-      return true;
-    }
-
-    // ---- New builtins: String ----
+    // ---- Aliases ----
     if (n === 'upper' && args.length >= 1) {
       this.env.define('__last_result__', String(args[0]).toUpperCase());
       return true;
     }
-    if (n === 'starts_with' && args.length >= 2) {
-      this.env.define('__last_result__', String(args[0]).startsWith(String(args[1])));
-      return true;
-    }
-    if (n === 'ends_with' && args.length >= 2) {
-      this.env.define('__last_result__', String(args[0]).endsWith(String(args[1])));
-      return true;
-    }
-    if (n === 'repeat_str' && args.length >= 2) {
-      this.env.define('__last_result__', String(args[0]).repeat(Math.floor(this.toNumber(args[1]))));
-      return true;
-    }
-    if (n === 'pad_left' && args.length >= 3) {
-      const s = String(args[0]);
-      const len = Math.floor(this.toNumber(args[1]));
-      const ch = String(args[2]).charAt(0) || ' ';
-      this.env.define('__last_result__', s.padStart(len, ch));
-      return true;
-    }
-    if (n === 'pad_right' && args.length >= 3) {
-      const s = String(args[0]);
-      const len = Math.floor(this.toNumber(args[1]));
-      const ch = String(args[2]).charAt(0) || ' ';
-      this.env.define('__last_result__', s.padEnd(len, ch));
-      return true;
-    }
-    if (n === 'strip' && args.length >= 1) {
-      this.env.define('__last_result__', String(args[0]).trim());
-      return true;
-    }
-    if (n === 'lines' && args.length >= 1) {
-      this.env.define('__last_result__', String(args[0]).split('\n'));
-      return true;
-    }
-    if (n === 'format_num' && args.length >= 1) {
-      this.env.define('__last_result__', String(args[0]));
+    if (n === 'pow' && args.length >= 2) {
+      this.env.define('__last_result__', Math.pow(this.toNumber(args[0]), this.toNumber(args[1])));
       return true;
     }
     if (n === 'reverse_str' && args.length >= 1) {
@@ -1987,7 +1899,7 @@ export class Interpreter {
       return true;
     }
 
-    // ---- New builtins: List ----
+    // ---- Higher-order builtins ----
     if (n === 'flat_map' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
       const func = this.resolveFunctionArg(args[1], env);
@@ -2095,32 +2007,16 @@ export class Interpreter {
       return true;
     }
 
-    // ---- New builtins: System ----
+    // ---- System aliases ----
     if (n === 'clock') {
       this.env.define('__last_result__', Date.now());
-      return true;
-    }
-    if (n === 'current_time') {
-      this.env.define('__last_result__', Date.now());
-      return true;
-    }
-    if (n === 'time_format' && args.length >= 1) {
-      this.env.define('__last_result__', new Date(this.toNumber(args[0])).toISOString());
-      return true;
-    }
-    if (n === 'env_get' && args.length >= 1) {
-      this.env.define('__last_result__', process.env[String(args[0])] || null);
-      return true;
-    }
-    if (n === 'env_set' && args.length >= 2) {
-      process.env[String(args[0])] = String(args[1]);
-      this.env.define('__last_result__', true);
       return true;
     }
     if (n === 'args' || n === 'arguments') {
       this.env.define('__last_result__', process.argv.slice(2));
       return true;
     }
+    // ---- System (remaining) ----
     if (n === 'system' && args.length >= 1) {
       const { execSync } = require('node:child_process');
       try {
@@ -2164,18 +2060,14 @@ export class Interpreter {
       const b = args[1] as IOZENValue[];
       const result: IOZENValue[] = [];
       const len = Math.min(a.length, b.length);
-      for (let i = 0; i < len; i++) {
-        result.push([a[i], b[i]]);
-      }
+      for (let i = 0; i < len; i++) result.push([a[i], b[i]]);
       this.env.define('__last_result__', result);
       return true;
     }
     if (n === 'enumerate' && args.length >= 1 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
       const result: IOZENValue[] = [];
-      for (let i = 0; i < arr.length; i++) {
-        result.push([i, arr[i]]);
-      }
+      for (let i = 0; i < arr.length; i++) result.push([i, arr[i]]);
       this.env.define('__last_result__', result);
       return true;
     }
@@ -2281,10 +2173,6 @@ export class Interpreter {
     }
 
     // ---- Additional math constants ----
-    if (n === 'pi' && args.length === 0) {
-      this.env.define('__last_result__', Math.PI);
-      return true;
-    }
     if (n === 'e' && args.length === 0) {
       this.env.define('__last_result__', Math.E);
       return true;
@@ -2415,24 +2303,6 @@ export class Interpreter {
       this.env.define('__last_result__', (args[0] as IOZENValue[]).filter(v => v !== null && v !== undefined));
       return true;
     }
-    if (n === 'zip' && args.length >= 2 && Array.isArray(args[0]) && Array.isArray(args[1])) {
-      const a = args[0] as IOZENValue[];
-      const b = args[1] as IOZENValue[];
-      const result: IOZENValue[] = [];
-      const len = Math.min(a.length, b.length);
-      for (let i = 0; i < len; i++) result.push([a[i], b[i]]);
-      this.env.define('__last_result__', result);
-      return true;
-    }
-    if (n === 'slice' && args.length >= 2) {
-      const arr = args[0];
-      const start = Math.floor(this.toNumber(args[1]));
-      const end = args.length >= 3 ? Math.floor(this.toNumber(args[2])) : undefined;
-      if (Array.isArray(arr)) { this.env.define('__last_result__', arr.slice(start, end)); return true; }
-      if (typeof arr === 'string') { this.env.define('__last_result__', String(arr).slice(start, end)); return true; }
-      this.env.define('__last_result__', null);
-      return true;
-    }
     if (n === 'has' && args.length >= 2) {
       const arr = args[0];
       const target = args[1];
@@ -2461,21 +2331,6 @@ export class Interpreter {
     }
     if (n === 'repeat' && args.length >= 2) {
       this.env.define('__last_result__', String(args[0]).repeat(Math.max(0, Math.floor(this.toNumber(args[1])))));
-      return true;
-    }
-    if (n === 'strip' && args.length >= 1) {
-      this.env.define('__last_result__', String(args[0]).trim());
-      return true;
-    }
-    if (n === 'to_map' && args.length >= 1 && Array.isArray(args[0])) {
-      const pairs = args[0] as IOZENValue[];
-      const m: IOZENValue = { __iozen_type: 'map' as const };
-      for (const pair of pairs) {
-        if (Array.isArray(pair) && pair.length >= 2) {
-          (m as Record<string, IOZENValue>)[String(pair[0])] = pair[1];
-        }
-      }
-      this.env.define('__last_result__', m);
       return true;
     }
 
@@ -2578,24 +2433,48 @@ export class Interpreter {
   // ---- Typo Suggestions ----
 
   private builtinNames: string[] = [
-    'print', 'println', 'abs', 'sqrt', 'floor', 'ceil', 'round',
-    'power', 'min', 'max', 'uppercase', 'lowercase', 'trim',
+    // Core
+    'print', 'println', 'inspect', 'assert', 'panic',
+    // Math
+    'abs', 'abs_int', 'sqrt', 'floor', 'ceil', 'round', 'trunc',
+    'power', 'pow', 'min', 'max', 'mod', 'sign',
+    'log', 'log2', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+    'gcd', 'lcm', 'pi', 'e',
+    'clamp', 'format_num',
+    // String
+    'uppercase', 'lowercase', 'upper', 'trim', 'strip',
     'substring', 'contains', 'replace', 'split', 'join', 'char_at',
-    'ord', 'chr', 'to_integer', 'int', 'to_float', 'to_text',
+    'ord', 'chr', 'to_text', 'to_integer', 'int', 'to_float',
+    'starts_with', 'ends_with', 'repeat_str', 'repeat', 'repeat_string',
+    'pad_left', 'pad_right', 'lines', 'words',
+    'reverse_str', 'reverse_string', 'index_of', 'find_index',
+    'format', 'count',
+    // Type
+    'type_of', 'typeof',
+    // List
     'push', 'pop', 'sort', 'reverse', 'length', 'range', 'sum',
+    'remove', 'remove_last', 'remove_key',
+    'index_of', 'find', 'contains_list', 'slice', 'insert',
+    'flatten', 'unique', 'compact',
+    'first', 'last', 'chunk', 'take', 'drop', 'nth', 'at', 'has',
+    'cycle', 'is_empty', 'not_empty', 'count_by',
+    'contains_any', 'interleave', 'zip', 'enumerate',
+    // Higher-order
+    'map_list', 'filter_list', 'for_each_list',
+    'flat_map', 'any', 'all', 'reduce',
+    'takewhile', 'dropwhile', 'join_map',
+    // Map
+    'map', 'has_key', 'get_key', 'set_key', 'keys', 'values',
+    'map_size', 'has_value', 'map_set', 'to_map',
+    // File I/O
     'read_line', 'read_file', 'write_file', 'append_file',
     'delete_file', 'file_exists',
-    'map', 'remove', 'remove_last', 'type_of',
-    'has_key', 'get_key', 'set_key', 'keys',
-    'assert', 'panic', 'inspect',
+    // Random
     'random_int', 'random_float', 'random_choice', 'shuffle',
-    'index_of', 'find', 'slice', 'insert', 'flatten', 'unique',
-    'map_list', 'filter_list', 'for_each_list',
-    'starts_with', 'ends_with', 'repeat_str', 'pad_left', 'pad_right',
-    'strip', 'lines', 'format_num',
-    'log', 'log10', 'sin', 'cos', 'tan',
-    'current_time', 'time_format', 'env_get',
-    'values', 'remove_key', 'map_size', 'has_value',
+    // Time
+    'current_time', 'clock', 'time_format',
+    // System
+    'env_get', 'env_set', 'args', 'arguments', 'system', 'sleep',
   ];
 
   private suggestSimilar(name: string): string | null {
