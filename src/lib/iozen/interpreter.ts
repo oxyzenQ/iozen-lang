@@ -907,7 +907,14 @@ export class Interpreter {
       case 'IndexAccess': {
         const i = node as IndexAccessNode;
         const obj = this.evaluate(i.object, env);
-        const idx = Math.floor(this.toNumber(this.evaluate(i.index, env)));
+        const idxVal = this.evaluate(i.index, env);
+        // Check for map (string-keyed object)
+        if (typeof obj === 'object' && obj !== null && !Array.isArray(obj) && (obj as IOZENMap).__iozen_type === 'map') {
+          const key = String(idxVal);
+          return (obj as Record<string, IOZENValue>)[key] ?? null;
+        }
+        // Array/string indexing
+        const idx = Math.floor(this.toNumber(idxVal));
         if (Array.isArray(obj)) {
           return obj[idx];
         }
@@ -1639,11 +1646,9 @@ export class Interpreter {
     if (n === 'map_list' && args.length >= 2 && Array.isArray(args[0])) {
       // map_list(arr, func_name) — apply function to each element
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       const result: IOZENValue[] = [];
       for (const item of arr) {
-        // Call function with the item as argument
-        const func = env.get(funcName) as IOZENFunction;
         if (func && func.__iozen_type === 'function') {
           const funcEnv = func.closure.child();
           funcEnv.define(func.parameters[0]?.name || 'arg', item);
@@ -1665,10 +1670,9 @@ export class Interpreter {
     if (n === 'filter_list' && args.length >= 2 && Array.isArray(args[0])) {
       // filter_list(arr, func_name) — keep elements where func returns true
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       const result: IOZENValue[] = [];
       for (const item of arr) {
-        const func = env.get(funcName) as IOZENFunction;
         if (func && func.__iozen_type === 'function') {
           const funcEnv = func.closure.child();
           funcEnv.define(func.parameters[0]?.name || 'arg', item);
@@ -1693,9 +1697,8 @@ export class Interpreter {
     if (n === 'for_each_list' && args.length >= 2 && Array.isArray(args[0])) {
       // for_each_list(arr, func_name) — call func for each element (returns arr)
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       for (const item of arr) {
-        const func = env.get(funcName) as IOZENFunction;
         if (func && func.__iozen_type === 'function') {
           const funcEnv = func.closure.child();
           funcEnv.define(func.parameters[0]?.name || 'arg', item);
@@ -1861,6 +1864,15 @@ export class Interpreter {
       return true;
     }
 
+    // map_set(map, key, value) — set a key in a map and return the map
+    if (n === 'map_set' && args.length >= 3 && typeof args[0] === 'object' && args[0] !== null) {
+      const m = args[0] as Record<string, IOZENValue>;
+      const key = String(args[1]);
+      m[key] = args[2];
+      this.env.define('__last_result__', args[0]);
+      return true;
+    }
+
     // Print / Debug helpers
     if (n === 'inspect' && args.length >= 1) {
       const val = args[0];
@@ -1978,9 +1990,8 @@ export class Interpreter {
     // ---- New builtins: List ----
     if (n === 'flat_map' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       const result: IOZENValue[] = [];
-      const func = env.get(funcName) as IOZENFunction;
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
           const funcEnv = func.closure.child();
@@ -2001,10 +2012,7 @@ export class Interpreter {
     }
     if (n === 'any' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const rawArg = args[1];
-      const func = (rawArg && typeof rawArg === 'object' && rawArg.__iozen_type === 'function')
-        ? rawArg as IOZENFunction
-        : env.get(String(rawArg)) as IOZENFunction;
+      const func = this.resolveFunctionArg(args[1], env);
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
           const funcEnv = func.closure.child();
@@ -2026,10 +2034,7 @@ export class Interpreter {
     }
     if (n === 'all' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const rawArg = args[1];
-      const func = (rawArg && typeof rawArg === 'object' && rawArg.__iozen_type === 'function')
-        ? rawArg as IOZENFunction
-        : env.get(String(rawArg)) as IOZENFunction;
+      const func = this.resolveFunctionArg(args[1], env);
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
           const funcEnv = func.closure.child();
@@ -2051,11 +2056,8 @@ export class Interpreter {
     }
     if (n === 'reduce' && args.length >= 3 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const rawArg = args[1];
       let acc = args[2];
-      const func = (rawArg && typeof rawArg === 'object' && rawArg.__iozen_type === 'function')
-        ? rawArg as IOZENFunction
-        : env.get(String(rawArg)) as IOZENFunction;
+      const func = this.resolveFunctionArg(args[1], env);
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
           const funcEnv = func.closure.child();
@@ -2179,9 +2181,8 @@ export class Interpreter {
     }
     if (n === 'takewhile' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       const result: IOZENValue[] = [];
-      const func = env.get(funcName) as IOZENFunction;
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
           const funcEnv = func.closure.child();
@@ -2195,10 +2196,9 @@ export class Interpreter {
     }
     if (n === 'dropwhile' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       const result: IOZENValue[] = [];
       let dropping = true;
-      const func = env.get(funcName) as IOZENFunction;
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
           if (dropping) {
@@ -2265,9 +2265,8 @@ export class Interpreter {
     }
     if (n === 'join_map' && args.length >= 2 && Array.isArray(args[0])) {
       const arr = args[0] as IOZENValue[];
-      const funcName = String(args[1]);
+      const func = this.resolveFunctionArg(args[1], env);
       const separator = args.length >= 3 ? String(args[2]) : '';
-      const func = env.get(funcName) as IOZENFunction;
       const parts: string[] = [];
       if (func && func.__iozen_type === 'function') {
         for (const item of arr) {
@@ -2484,6 +2483,20 @@ export class Interpreter {
   }
 
   // ---- Type Helpers ----
+
+  /** Resolve a value that may be a function object or a string name to an IOZENFunction. */
+  private resolveFunctionArg(rawArg: IOZENValue, env: Environment): IOZENFunction | null {
+    if (rawArg && typeof rawArg === 'object' && rawArg.__iozen_type === 'function') {
+      return rawArg as IOZENFunction;
+    }
+    if (typeof rawArg === 'string') {
+      const func = env.get(rawArg);
+      if (func && typeof func === 'object' && func.__iozen_type === 'function') {
+        return func as IOZENFunction;
+      }
+    }
+    return null;
+  }
 
   private isTruthy(value: IOZENValue): boolean {
     if (value === null || value === undefined) return false;

@@ -1638,6 +1638,105 @@ test('builtin: chunk', () => {
   assertIncludes(r.output, '3');
 });
 
+test('builtin: for_each_list', () => {
+  const r = run(`create variable total as integer with value 0
+function add_to_total with n as integer
+  set total to total + n
+end
+create variable nums as list with value [10, 20, 30]
+for_each_list(nums, add_to_total)
+print total`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '60');
+});
+
+test('builtin: for_each_list with string name', () => {
+  const r = run(`create variable result as text with value ""
+function collect with item as integer
+  set result to result attach "," attach item
+end
+create variable nums as list with value [1, 2, 3]
+for_each_list(nums, "collect")
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+  assertIncludes(r.output, '2');
+  assertIncludes(r.output, '3');
+});
+
+// ============================================================
+// HIGHER-ORDER FUNCTION CONSISTENCY TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mHigher-Order Function Consistency Tests\x1b[0m');
+
+test('hof: map_list with bare function reference', () => {
+  const r = run(`function triple with x as integer returns integer
+  return x * 3
+end
+create variable nums as list with value [1, 2, 3]
+create variable result as list with value map_list(nums, triple)
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3, 6, 9');
+});
+
+test('hof: filter_list with bare function reference', () => {
+  const r = run(`function is_odd with x as integer returns integer
+  return x % 2
+end
+create variable nums as list with value [1, 2, 3, 4, 5]
+create variable result as list with value filter_list(nums, is_odd)
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1');
+  assertIncludes(r.output, '3');
+  assertIncludes(r.output, '5');
+});
+
+test('hof: reduce with bare function reference', () => {
+  const r = run(`function multiply with acc as integer and item as integer returns integer
+  return acc * item
+end
+create variable result as integer with value reduce([2, 3, 4], multiply, 1)
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '24');
+});
+
+test('hof: any/all with bare function reference', () => {
+  const r = run(`function gt5 with x as integer returns integer
+  when x is greater than 5 do return 1 end
+  return 0
+end
+print any([1, 3, 7], gt5)
+print all([6, 8, 9], gt5)
+print all([1, 6, 9], gt5)`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'true');
+  assertIncludes(r.output, 'false');
+});
+
+test('hof: join_map with bare function reference', () => {
+  const r = run(`function show with x as integer returns text
+  return "[" attach x attach "]"
+end
+create variable result as text with value join_map([1, 2, 3], show, ", ")
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '[1], [2], [3]');
+});
+
+test('hof: flat_map with bare function reference', () => {
+  const r = run(`function duplicate with x as integer returns list
+  return [x, x]
+end
+create variable result as list with value flat_map([1, 2, 3], duplicate)
+print result`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1, 1, 2, 2, 3, 3');
+});
+
 // ============================================================
 // SYSTEM BUILTINS TESTS
 // ============================================================
@@ -2543,6 +2642,175 @@ print c`);
   assert(r.output[0].includes('10'));
   assert(r.output[1].includes('20'));
   assert(r.output[2].includes('30'));
+});
+
+// ============================================================
+// ERROR HANDLING & ROBUSTNESS TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mError Handling & Robustness Tests\x1b[0m');
+
+test('error: calling non-existent function', () => {
+  const r = run('nonexistent_func("arg")');
+  assert(r.errors.length > 0);
+});
+
+test('error: wrong number of arguments', () => {
+  const r = run(`function add with a as integer and b as integer returns integer
+  return a + b
+end
+print add with 1`);
+  assert(r.errors.length > 0);
+});
+
+test('error: access field on non-struct', () => {
+  const r = run('print 42.field');
+  assert(r.errors.length > 0);
+});
+
+test('error: arithmetic on non-numbers returns coerced result', () => {
+  // iozen coerces types in arithmetic — "hello" + 42 concatenates
+  const r = run('print "hello" + 42');
+  assertEqual(r.errors.length, 0);
+  // Should produce some result without crashing
+  assert(r.output.length > 0);
+});
+
+test('error: set undeclared variable', () => {
+  const r = run('set undeclared_var to 42');
+  assert(r.errors.length > 0);
+});
+
+test('error: return outside function', () => {
+  const r = run('return 42');
+  assert(r.errors.length > 0);
+});
+
+test('robustness: empty program runs without error', () => {
+  const r = run('');
+  assertEqual(r.errors.length, 0);
+});
+
+test('robustness: only comments runs without error', () => {
+  const r = run('# just a comment\n# another comment');
+  assertEqual(r.errors.length, 0);
+});
+
+test('robustness: deeply nested function calls', () => {
+  const r = run(`function id with x as integer returns integer
+  return x
+end
+print id with id with id with id with 5`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '5');
+});
+
+test('robustness: large list literal', () => {
+  const items = Array.from({length: 100}, (_, i) => i).join(', ');
+  const r = run(`create variable big as list with value [${items}]\nprint length(big)`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '100');
+});
+
+test('robustness: string with special characters', () => {
+  const r = run(`print "hello \\"world\\" \\\\n\\ttab"`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, 'hello "world"');
+});
+
+// ============================================================
+// COMPREHENSIVE INTEGRATION TESTS
+// ============================================================
+
+console.log('\n\x1b[1m\x1b[36mComprehensive Integration Tests\x1b[0m');
+
+test('integration: prime sieve', () => {
+  const r = run(`create variable limit as integer with value 20
+create variable is_prime as map with value map()
+create variable n as integer with value 0
+while n is less than limit do
+  set is_prime to map_set(is_prime, to_text(n), true)
+  set n to n + 1
+end
+set is_prime to map_set(is_prime, "0", false)
+set is_prime to map_set(is_prime, "1", false)
+create variable i as integer with value 2
+while i * i is less than limit do
+  when is_prime[to_text(i)] equals true do
+    create variable j as integer with value i * i
+    while j is less than limit do
+      set is_prime to map_set(is_prime, to_text(j), false)
+      set j to j + i
+    end
+  end
+  set i to i + 1
+end
+create variable primes as list with value []
+create variable k as integer with value 2
+while k is less than limit do
+  when is_prime[to_text(k)] equals true do
+    push(primes, k)
+  end
+  set k to k + 1
+end
+print length(primes)
+print primes[0]
+print primes[1]
+print primes[2]`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '8');
+  assertIncludes(r.output, '2');
+  assertIncludes(r.output, '3');
+  assertIncludes(r.output, '5');
+});
+
+test('integration: merge two sorted lists', () => {
+  const r = run(`function merge with a as list and b as list returns list
+  create variable result as list with value []
+  create variable i as integer with value 0
+  create variable j as integer with value 0
+  while i is less than length(a) and j is less than length(b) do
+    when a[i] is less than or equal to b[j] do
+      push(result, a[i])
+      set i to i + 1
+    otherwise do
+      push(result, b[j])
+      set j to j + 1
+    end
+  end
+  while i is less than length(a) do
+    push(result, a[i])
+    set i to i + 1
+  end
+  while j is less than length(b) do
+    push(result, b[j])
+    set j to j + 1
+  end
+  return result
+end
+create variable merged as list with value merge([1, 3, 5], [2, 4, 6, 8])
+print merged`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '1, 2, 3, 4, 5, 6, 8');
+});
+
+test('integration: word frequency counter', () => {
+  const r = run(`create variable words as list with value split("the cat sat on the mat the cat", " ")
+create variable freq as map with value map()
+for each word in words do
+  when has_key(freq, word) do
+    set freq to map_set(freq, word, freq[word] + 1)
+  otherwise do
+    set freq to map_set(freq, word, 1)
+  end
+end
+print freq["the"]
+print freq["cat"]
+print freq["sat"]`);
+  assertEqual(r.errors.length, 0);
+  assertIncludes(r.output, '3');
+  assertIncludes(r.output, '2');
+  assertIncludes(r.output, '1');
 });
 
 // ============================================================
