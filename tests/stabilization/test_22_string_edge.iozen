@@ -1,0 +1,26 @@
+# Test 22: String Edge Cases
+# Risk: Empty string, long string, special chars
+
+print "Test 22: String edge cases"
+
+# Empty string
+create variable empty as text with value ""
+print empty
+
+# String with spaces
+create variable spaced as text with value "  hello  world  "
+print spaced
+
+# Long string
+create variable long_str as text with value "abcdefghijklmnopqrstuvwxyz0123456789"
+print long_str
+
+# Attach with empty
+create variable result1 as text with value "start" attach empty attach "end"
+print result1
+
+# Multiple attach
+create variable result2 as text with value "a" attach "b" attach "c" attach "d"
+print result2
+
+print "Test 22: PASS"

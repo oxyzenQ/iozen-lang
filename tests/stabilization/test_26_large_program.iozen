@@ -1,0 +1,43 @@
+# Test 26: Large Program Structure
+# Risk: Parser scalability, memory usage
+
+print "Test 26: Large program"
+
+# Many variables
+create variable v1 as integer with value 1
+create variable v2 as integer with value 2
+create variable v3 as integer with value 3
+create variable v4 as integer with value 4
+create variable v5 as integer with value 5
+create variable v6 as integer with value 6
+create variable v7 as integer with value 7
+create variable v8 as integer with value 8
+create variable v9 as integer with value 9
+create variable v10 as integer with value 10
+
+print v1
+print v5
+print v10
+
+# Multiple function definitions
+function f1 with x as integer returns integer
+    return x + 1
+end
+
+function f2 with x as integer returns integer
+    return x * 2
+end
+
+function f3 with x as integer returns integer
+    return x - 1
+end
+
+print f1 with 5
+print f2 with 5
+print f3 with 5
+
+# Long chain of operations
+create variable result as integer with value v1 + v2 + v3 + v4 + v5 + v6 + v7 + v8 + v9 + v10
+print result
+
+print "Test 26: PASS"

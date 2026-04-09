@@ -1,0 +1,34 @@
+# Test 17: Nested Loop Inside Condition
+# Risk: Control flow merge, scope handling
+
+print "Test 17: Nested control"
+
+function process with n as integer returns integer
+    when n is greater than 0 do
+        create variable sum as integer with value 0
+        create variable i as integer with value 1
+        while i is less than or equal to n do
+            set sum to sum + i
+            increase i by 1
+        end
+        return sum
+    end
+    return 0
+end
+
+print process with 5
+print process with 3
+print process with 0
+
+# Nested repeat inside when
+when true equals true do
+    repeat 2 times do
+        when 1 equals 1 do
+            repeat 1 times do
+                print "nested repeat"
+            end
+        end
+    end
+end
+
+print "Test 17: PASS"

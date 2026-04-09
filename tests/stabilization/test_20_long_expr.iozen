@@ -1,0 +1,41 @@
+# Test 20: Long Expression Chain
+# Risk: Precedence, associativity, stack overflow
+
+print "Test 20: Long expression chain"
+
+create variable a as integer with value 1
+create variable b as integer with value 2
+create variable c as integer with value 3
+create variable d as integer with value 4
+create variable e as integer with value 5
+
+# Long chain: a+b-c*d+e/f-g
+# Expected: 1+2-3*4+5/4-1 = 1+2-12+1-1 = -9
+create variable result1 as integer with value a + b - c * d + e / d - a
+print result1
+
+# All same precedence left-to-right: a-b+c-d+e
+# Expected: 1-2+3-4+5 = 3
+create variable result2 as integer with value a - b + c - d + e
+print result2
+
+# Mixed with parentheses changing order
+# (a+b) * (c-d) + e
+# Expected: 3 * (-1) + 5 = 2
+create variable result3 as integer with value (a + b) * (c - d) + e
+print result3
+
+# Deeply nested expression tree
+create variable result4 as integer with value ((a + b) * (c + (d - e))) / (a + b)
+print result4
+
+# Boolean chain
+create variable x as boolean with value true
+create variable y as boolean with value false
+create variable z as boolean with value true
+
+when x and y or z and x do
+    print "PASS: Boolean chain"
+end
+
+print "Test 20: PASS"

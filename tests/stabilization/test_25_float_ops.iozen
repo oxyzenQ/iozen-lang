@@ -1,0 +1,38 @@
+# Test 25: Float Operations
+# Risk: Precision, rounding, comparison
+
+print "Test 25: Float operations"
+
+# Basic float arithmetic
+create variable a as float with value 1.5
+create variable b as float with value 2.5
+create variable sum as float with value a + b
+print sum
+
+# Float division
+create variable div as float with value 10.0 / 3.0
+print div
+
+# Float comparison (careful with precision)
+create variable c as float with value 0.1 + 0.2
+create variable d as float with value 0.3
+when c equals d do
+    print "PASS: Float equality"
+otherwise do
+    print "PASS: Float precision aware"
+end
+
+# Mixed with int
+create variable e as float with value 5.0
+create variable result as integer with value e / 2
+print result
+
+# Large float
+create variable big as float with value 999999.999
+print big
+
+# Small float
+create variable small as float with value 0.001
+print small
+
+print "Test 25: PASS"

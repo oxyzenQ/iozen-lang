@@ -1,0 +1,40 @@
+# Test 24: Boolean Operations
+# Risk: Short-circuit, precedence, edge cases
+
+print "Test 24: Boolean operations"
+
+# Basic AND/OR
+create variable t as boolean with value true
+create variable f as boolean with value false
+
+when t and t do
+    print "PASS: AND true"
+end
+
+when f or t do
+    print "PASS: OR true"
+end
+
+# NOT
+when not f do
+    print "PASS: NOT false"
+end
+
+# Complex boolean expression
+when t and (f or t) and not f do
+    print "PASS: Complex boolean"
+end
+
+# Boolean from comparison
+create variable b1 as boolean with value 5 is greater than 3
+create variable b2 as boolean with value 10 equals 10
+when b1 and b2 do
+    print "PASS: Boolean from compare"
+end
+
+# XOR pattern (exclusive or)
+when (t or f) and not (t and f) do
+    print "PASS: XOR pattern"
+end
+
+print "Test 24: PASS"

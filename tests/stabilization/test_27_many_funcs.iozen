@@ -1,0 +1,50 @@
+# Test 27: Many Functions
+# Risk: Symbol table overflow, call resolution
+
+print "Test 27: Many functions"
+
+function func1 with x as integer returns integer
+    return x + 1
+end
+
+function func2 with x as integer returns integer
+    return x + 2
+end
+
+function func3 with x as integer returns integer
+    return x + 3
+end
+
+function func4 with x as integer returns integer
+    return x + 4
+end
+
+function func5 with x as integer returns integer
+    return x + 5
+end
+
+function func6 with x as integer returns integer
+    return x + 6
+end
+
+function func7 with x as integer returns integer
+    return x + 7
+end
+
+function func8 with x as integer returns integer
+    return x + 8
+end
+
+function func9 with x as integer returns integer
+    return x + 9
+end
+
+function func10 with x as integer returns integer
+    return x + 10
+end
+
+print func1 with 0
+print func5 with 0
+print func10 with 0
+
+print "Test 27: PASS"

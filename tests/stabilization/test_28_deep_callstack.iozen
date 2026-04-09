@@ -1,0 +1,54 @@
+# Test 28: Deep Call Stack
+# Risk: Stack overflow, recursion depth
+
+print "Test 28: Deep call stack"
+
+# Chain of function calls
+create variable depth as integer with value 0
+
+function level1 with x as integer returns integer
+    set depth to depth + 1
+    when x is greater than 0 do
+        return level2 with x - 1
+    end
+    return depth
+end
+
+function level2 with x as integer returns integer
+    set depth to depth + 1
+    when x is greater than 0 do
+        return level3 with x - 1
+    end
+    return depth
+end
+
+function level3 with x as integer returns integer
+    set depth to depth + 1
+    when x is greater than 0 do
+        return level4 with x - 1
+    end
+    return depth
+end
+
+function level4 with x as integer returns integer
+    set depth to depth + 1
+    when x is greater than 0 do
+        return level5 with x - 1
+    end
+    return depth
+end
+
+function level5 with x as integer returns integer
+    set depth to depth + 1
+    return depth
+end
+
+# Call with depth 3
+set depth to 0
+print level1 with 3
+
+# Call with depth 5
+set depth to 0
+print level1 with 5
+
+print "Test 28: PASS"

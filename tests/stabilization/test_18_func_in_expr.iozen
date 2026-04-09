@@ -1,0 +1,37 @@
+# Test 18: Function Call Inside Expression
+# Risk: Parse precedence, evaluation order
+
+print "Test 18: Function in expression"
+
+function add with a as integer and b as integer returns integer
+    return a + b
+end
+
+function mul with a as integer and b as integer returns integer
+    return a * b
+end
+
+# Function call in binary expression
+create variable result1 as integer with value 10 + add with 5 and 3
+print result1
+
+# Function call in multiplication
+create variable result2 as integer with value mul with 2 and 3 + 4
+print result2
+
+# Nested function calls
+create variable result3 as integer with value add with mul with 2 and 3 and 5
+print result3
+
+# Function call in comparison
+when add with 2 and 3 equals 5 do
+    print "PASS: Call in comparison"
+end
+
+# Function call with expression args
+create variable x as integer with value 10
+create variable y as integer with value 20
+create variable result4 as integer with value add with x + 5 and y - 5
+print result4
+
+print "Test 18: PASS"

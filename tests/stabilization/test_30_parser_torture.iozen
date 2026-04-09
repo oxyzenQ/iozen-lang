@@ -1,0 +1,76 @@
+# Test 30: Parser Torture — Everything in one file
+# Risk: Interaction bugs between features
+
+print "Test 30: Parser torture"
+
+# All statement types in one function
+function torture with n as integer returns integer
+    # Variable decl
+    create variable x as integer with value n
+    
+    # If with loop inside
+    when x is greater than 0 do
+        repeat 2 times do
+            set x to x + 1
+        end
+    end
+    
+    # Nested if with early return
+    when x is greater than 10 do
+        when x is less than 100 do
+            return x
+        end
+    end
+    
+    # While with nested if
+    while x is less than 50 do
+        when x equals 20 do
+            set x to x + 10
+        end
+        increase x by 1
+    end
+    
+    return x
+end
+
+# Call with various inputs
+print torture with 5
+print torture with 15
+print torture with 100
+
+# Complex expression with function calls
+function double with x as integer returns integer
+    return x * 2
+end
+
+function triple with x as integer returns integer
+    return x * 3
+end
+
+create variable result as integer with value double with triple with 5 + 10
+print result
+
+# Boolean complexity
+create variable a as boolean with value true
+create variable b as boolean with value false
+create variable c as integer with value 10
+
+when a and (b or (c is greater than 5)) and not (c equals 20) do
+    print "PASS: Complex boolean"
+end
+
+# String + number attach
+create variable msg as text with value "Value: "
+create variable final as text with value msg attach result
+print final
+
+# List operations with condition
+create variable items as list with value []
+push(items, 1)
+push(items, 2)
+
+when length(items) equals 2 do
+    print "PASS: List in condition"
+end
+
+print "Test 30: PASS"

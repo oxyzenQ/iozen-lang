@@ -1,0 +1,49 @@
+# Test 16: Deep Nesting — Parser Torture
+# Risk: Stack overflow in traversal, block exit bug
+
+print "Test 16: Deep nesting"
+
+create variable x as integer with value 1
+
+# 5-level nested if
+when x equals 1 do
+    print "level 1"
+    when x equals 1 do
+        print "level 2"
+        when x equals 1 do
+            print "level 3"
+            when x equals 1 do
+                print "level 4"
+                when x equals 1 do
+                    print "level 5"
+                end
+            end
+        end
+    end
+end
+
+# 4-level nested loops
+create variable i as integer with value 0
+while i is less than 1 do
+    increase i by 1
+    create variable j as integer with value 0
+    while j is less than 1 do
+        increase j by 1
+        create variable k as integer with value 0
+        while k is less than 1 do
+            increase k by 1
+            print "deep loop"
+        end
+    end
+end
+
+# Mixed: loop inside if inside loop
+repeat 1 times do
+    when x equals 1 do
+        repeat 1 times do
+            print "mixed nesting"
+        end
+    end
+end
+
+print "Test 16: PASS"

@@ -1,0 +1,45 @@
+# Test 29: Memory Stress
+# Risk: Memory allocation, garbage collection, leaks
+
+print "Test 29: Memory stress"
+
+# Create many lists
+create variable l1 as list with value [1, 2, 3]
+create variable l2 as list with value [4, 5, 6]
+create variable l3 as list with value [7, 8, 9]
+
+# Modify lists
+push(l1, 4)
+push(l2, 7)
+push(l3, 10)
+
+print length(l1)
+print length(l2)
+print length(l3)
+
+# Nested data structures
+create variable data as list with value []
+push(data, [1, 2])
+push(data, [3, 4])
+push(data, [5, 6])
+
+print length(data)
+print data[0][0]
+
+# String accumulation
+create variable text1 as text with value ""
+repeat 5 times do
+    set text1 to text1 attach "x"
+end
+print length(text1)
+
+# Map usage
+create variable m as map with value map()
+set_key(m, "a", 1)
+set_key(m, "b", 2)
+set_key(m, "c", 3)
+
+print length(m)
+print get_key(m, "b")
+
+print "Test 29: PASS"

@@ -1,0 +1,31 @@
+# Test 21: Mixed Type Operations
+# Risk: Type coercion, precision loss
+
+print "Test 21: Mixed types"
+
+# Int + Float = Float
+create variable a as integer with value 5
+create variable b as float with value 2.5
+create variable result1 as float with value a + b
+print result1
+
+# Float * Int
+create variable result2 as float with value b * 3
+print result2
+
+# Division always tricky
+create variable result3 as float with value a / 2
+print result3
+
+# Comparison between int and float
+when a equals 5 and b equals 2.5 do
+    print "PASS: Mixed comparison"
+end
+
+# Text + number (attach)
+create variable msg as text with value "Result: "
+create variable num as integer with value 42
+create variable full_msg as text with value msg attach num
+print full_msg
+
+print "Test 21: PASS"

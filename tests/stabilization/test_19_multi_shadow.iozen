@@ -1,0 +1,41 @@
+# Test 19: Multi-Scope Shadowing Chain
+# Risk: Symbol resolution, scope chain
+
+print "Test 19: Multi-scope shadowing"
+
+# Global
+create variable a as integer with value 1
+
+function outer with a as integer returns integer
+    # Parameter shadows global
+    print a
+    
+    when a equals 10 do
+        # Local in first when
+        create variable a as integer with value 100
+        print a
+        
+        when true equals true do
+            # Nested scope
+            create variable a as integer with value 1000
+            print a
+        end
+        
+        print a
+    end
+    
+    when a equals 20 do
+        # Different branch, different local
+        create variable a as integer with value 200
+        print a
+    end
+    
+    print a
+    return a
+end
+
+print outer with 10
+print outer with 20
+print a
+
+print "Test 19: PASS"

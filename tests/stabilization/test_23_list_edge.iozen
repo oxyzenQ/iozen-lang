@@ -1,0 +1,27 @@
+# Test 23: List Edge Cases
+# Risk: Empty list, out of bounds, nested list
+
+print "Test 23: List edge cases"
+
+# Empty list
+create variable empty_list as list with value []
+print length(empty_list)
+
+# Single element
+create variable single as list with value [42]
+print single[0]
+
+# Nested list
+create variable nested as list with value [[1, 2], [3, 4]]
+print nested[0][0]
+print nested[1][1]
+
+# List with mixed types
+create variable mixed as list with value [1, 2.5, "hello"]
+print length(mixed)
+
+# Push to empty list
+push(empty_list, 100)
+print empty_list[0]
+
+print "Test 23: PASS"
