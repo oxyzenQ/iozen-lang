@@ -1,0 +1,156 @@
+# ============================================================
+# IOZEN Calculator - First Real Tool (Phase 7)
+# A simple command-line calculator written in IOZEN
+#
+# Usage: bun run iozen-cli/src/cli.ts run tools/calculator.iozen
+# ============================================================
+
+print "========================================"
+print "       IOZEN CALCULATOR v1.0"
+print "       A tool written in IOZEN"
+print "========================================"
+print ""
+
+# ============================================================
+# MATH FUNCTIONS
+# ============================================================
+
+function add with a as float and b as float returns float
+    return a + b
+end
+
+function subtract with a as float and b as float returns float
+    return a - b
+end
+
+function multiply with a as float and b as float returns float
+    return a * b
+end
+
+function divide with a as float and b as float returns float
+    when b equals 0 do
+        print "Error: Division by zero"
+        return 0
+    end
+    return a / b
+end
+
+function power with base as float and exp as float returns float
+    create variable result as float with value 1
+    create variable i as integer with value 0
+    create variable exp_int as integer with value to_integer(exp)
+
+    when exp_int < 0 do
+        print "Error: Negative exponents not supported"
+        return 0
+    end
+
+    repeat exp_int times do
+        set result to result * base
+    end
+    return result
+end
+
+function factorial with n as integer returns integer
+    when n is less than 0 do
+        print "Error: Negative factorial"
+        return 0
+    end
+    when n is less than or equal to 1 do
+        return 1
+    end
+    return n * factorial with n - 1
+end
+
+function fibonacci with n as integer returns integer
+    when n is less than or equal to 0 do
+        return 0
+    end
+    when n equals 1 do
+        return 1
+    end
+    # Use iteration to avoid recursion limit
+    create variable prev as integer with value 0
+    create variable curr as integer with value 1
+    create variable i as integer with value 2
+    while i is less than or equal to n do
+        create variable next as integer with value prev + curr
+        set prev to curr
+        set curr to next
+        increase i by 1
+    end
+    return curr
+end
+
+function is_prime with n as integer returns boolean
+    when n is less than 2 do
+        return false
+    end
+    when n equals 2 do
+        return true
+    end
+    create variable i as integer with value 2
+    while i * i is less than or equal to n do
+        when n % i equals 0 do
+            return false
+        end
+        increase i by 1
+    end
+    return true
+end
+
+# ============================================================
+# DEMO CALCULATIONS
+# ============================================================
+
+print "=== Basic Arithmetic ==="
+print ""
+
+create variable a as float with value 15.5
+create variable b as float with value 4.2
+
+print "a = " attach a attach ", b = " attach b
+print ""
+print "Add:       " attach a attach " + " attach b attach " = " attach add with a and b
+print "Subtract:  " attach a attach " - " attach b attach " = " attach subtract with a and b
+print "Multiply:  " attach a attach " * " attach b attach " = " attach multiply with a and b
+print "Divide:    " attach a attach " / " attach b attach " = " attach divide with a and b
+print ""
+
+print "=== Power & Factorial ==="
+print ""
+
+print "2^10 = " attach power with 2 and 10
+print "5! = " attach factorial with 5
+print "10! = " attach factorial with 10
+print ""
+
+print "=== Fibonacci Sequence ==="
+print ""
+
+print "Fibonacci numbers 1-15:"
+create variable fib_i as integer with value 1
+repeat 15 times do
+    print "  fib(" attach fib_i attach ") = " attach fibonacci with fib_i
+    increase fib_i by 1
+end
+print ""
+
+print "=== Prime Check ==="
+print ""
+
+print "Checking primes from 1-20:"
+create variable prime_i as integer with value 1
+repeat 20 times do
+    create variable is_p as boolean with value is_prime with prime_i
+    when is_p equals true do
+        print "  " attach prime_i attach " is prime"
+    end
+    increase prime_i by 1
+end
+print ""
+
+print "========================================"
+print "  Calculator demo complete!"
+print "  IOZEN can build real tools!"
+print "========================================"

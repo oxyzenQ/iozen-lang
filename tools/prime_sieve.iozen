@@ -1,0 +1,111 @@
+# ============================================================
+# IOZEN Prime Sieve - Phase 7 Tool
+# Sieve of Eratosthenes implementation in IOZEN
+#
+# Finds all prime numbers up to N
+# ============================================================
+
+print "========================================"
+print "    IOZEN PRIME SIEVE v1.0"
+print "    Sieve of Eratosthenes"
+print "========================================"
+print ""
+
+# ============================================================
+# SIEVE OF ERATOSTHENES
+# ============================================================
+
+function sieve_primes with limit as integer returns list
+    # Use a map to track prime status (key = number, value = is prime)
+    create variable is_prime_map as map with value map()
+
+    # Initialize all numbers from 2 to limit as potentially prime
+    create variable i as integer with value 2
+    while i is less than or equal to limit do
+        set_key(is_prime_map, i, true)
+        increase i by 1
+    end
+
+    # Sieve: mark multiples of each prime as not prime
+    create variable p as integer with value 2
+    while p * p is less than or equal to limit do
+        when get_key(is_prime_map, p) equals true do
+            # Mark all multiples of p as not prime
+            create variable multiple as integer with value p * p
+            while multiple is less than or equal to limit do
+                set_key(is_prime_map, multiple, false)
+                set multiple to multiple + p
+            end
+        end
+        increase p by 1
+    end
+
+    # Collect all primes into result list
+    create variable primes as list with value []
+    set i to 2
+    while i is less than or equal to limit do
+        when get_key(is_prime_map, i) equals true do
+            push(primes, i)
+        end
+        increase i by 1
+    end
+
+    return primes
+end
+
+# ============================================================
+# RUN SIEVE
+# ============================================================
+
+create variable limit as integer with value 100
+
+print "Finding all primes up to " attach limit
+print ""
+
+create variable primes as list with value sieve_primes with limit
+
+print "Found " attach length(primes) attach " prime numbers:"
+print ""
+
+# Print primes in rows of 10
+create variable count as integer with value 0
+create variable row as text with value ""
+create variable i as integer with value 0
+
+while i < length(primes) do
+    create variable p as integer with value primes[i]
+
+    when count equals 0 do
+        set row to "  "
+    end
+
+    # Pad number for alignment
+    create variable num_str as text with value to_text(p)
+    when p < 10 do
+        set num_str to " " attach num_str
+    end
+    when p < 100 do
+        set num_str to " " attach num_str
+    end
+
+    set row to row attach num_str attach " "
+    increase count by 1
+
+    when count equals 10 do
+        print row
+        set count to 0
+        set row to ""
+    end
+
+    increase i by 1
+end
+
+when count > 0 do
+    print row
+end
+
+print ""
+print "========================================"
+print "  Prime sieve complete!"
+print "  IOZEN handles algorithms well!"
+print "========================================"

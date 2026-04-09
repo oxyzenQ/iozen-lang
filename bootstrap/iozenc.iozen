@@ -17,7 +17,7 @@ print ""
 # ============================================================
 # INPUT: Raw IOZEN source code to compile
 # ============================================================
-create variable source as text with value "function adder with a as integer and b as integer returns integer\n    return a + b\nend\n\ncreate variable x as integer with value 10\ncreate variable y as integer with value adder(x, 32)\nprint y\n"
+create variable source as text with value "# IOZENC Test - Comprehensive Feature Demo\n\nfunction factorial with n as integer returns integer\n    when n is less than or equal to 1 do\n        return 1\n    end\n    return n * factorial with n - 1\nend\n\nfunction greet with name as text returns text\n    return \"Hello, \" attach name attach \"!\"\nend\n\ncreate variable x as integer with value 10\ncreate variable y as integer with value factorial(x)\nprint y\n\ncreate variable msg as text with value greet with \"IOZEN\"\nprint msg\n\nrepeat 3 times do\n    print \"Loop iteration\"\nend\n\ncreate variable i as integer with value 0\nwhile i is less than 3 do\n    print i\n    increase i by 1\nend\n\nwhen x equals 10 do\n    print \"x is ten\"\notherwise do\n    print \"x is not ten\"\nend\n"
 
 print "── Source ──────────────────────────────────"
 print source
@@ -51,6 +51,7 @@ function lex_is_alnum(ch) returns boolean
 end
 
 function lex_is_keyword(word) returns boolean
+    # Core keywords
     when word equals "print" do return true end
     when word equals "create" do return true end
     when word equals "variable" do return true end
@@ -58,16 +59,28 @@ function lex_is_keyword(word) returns boolean
     when word equals "as" do return true end
     when word equals "with" do return true end
     when word equals "value" do return true end
+    when word equals "set" do return true end
+    when word equals "to" do return true end
+    when word equals "by" do return true end
+    when word equals "of" do return true end
+
+    # Types
     when word equals "integer" do return true end
     when word equals "float" do return true end
     when word equals "text" do return true end
     when word equals "boolean" do return true end
+    when word equals "character" do return true end
     when word equals "list" do return true end
     when word equals "map" do return true end
+    when word equals "pointer" do return true end
+    when word equals "address" do return true end
+
+    # Functions
     when word equals "function" do return true end
     when word equals "returns" do return true end
     when word equals "return" do return true end
-    when word equals "end" do return true end
+
+    # Control flow
     when word equals "when" do return true end
     when word equals "otherwise" do return true end
     when word equals "do" do return true end
@@ -75,21 +88,53 @@ function lex_is_keyword(word) returns boolean
     when word equals "for" do return true end
     when word equals "each" do return true end
     when word equals "in" do return true end
+    when word equals "repeat" do return true end
+    when word equals "times" do return true end
+    when word equals "exit" do return true end
+    when word equals "continue" do return true end
+
+    # Match expression
+    when word equals "match" do return true end
+    when word equals "case" do return true end
+
+    # Error handling
+    when word equals "try" do return true end
+    when word equals "catch" do return true end
+    when word equals "throw" do return true end
+
+    # Structures
+    when word equals "structure" do return true end
+    when word equals "field" do return true end
+    when word equals "enum" do return true end
+    when word equals "union" do return true end
+
+    # Operators
     when word equals "and" do return true end
     when word equals "or" do return true end
     when word equals "not" do return true end
     when word equals "is" do return true end
+    when word equals "attach" do return true end
+    when word equals "borrow" do return true end
+
+    # Comparison phrases
+    when word equals "greater" do return true end
+    when word equals "less" do return true end
+    when word equals "than" do return true end
+    when word equals "equal" do return true end
+    when word equals "equals" do return true end
+
+    # Literals
     when word equals "true" do return true end
     when word equals "false" do return true end
     when word equals "nothing" do return true end
+
+    # Increment/decrement
     when word equals "increase" do return true end
     when word equals "decrease" do return true end
-    when word equals "by" do return true end
-    when word equals "set" do return true end
-    when word equals "to" do return true end
-    when word equals "of" do return true end
-    when word equals "attach" do return true end
-    when word equals "borrow" do return true end
+
+    # End block
+    when word equals "end" do return true end
+
     return false
 end
 
@@ -271,13 +316,81 @@ function parse_expression() returns map
 end
 
 function parse_comparison() returns map
-    create variable left as map with value parse_addition()
-    while par_tok_is with "EQ" or par_tok_is with "NEQ" or par_tok_is with "LT" or par_tok_is with "GT" or par_tok_is with "LTE" or par_tok_is with "GTE" or par_tok_is with "equals" do
+    create variable left as map with value parse_attach()
+
+    # Symbol operators: ==, !=, <, >, <=, >=
+    while par_tok_is with "EQ" or par_tok_is with "NEQ" or par_tok_is with "LT" or par_tok_is with "GT" or par_tok_is with "LTE" or par_tok_is with "GTE" do
         create variable op_tok as list with value par_advance()
-        create variable op as text with value op_tok[1]
-        when op equals "equals" do set op to "==" end
-        create variable right as map with value parse_addition()
+        create variable right as map with value parse_attach()
+        set left to map("kind", "BinaryExpr", "operator", op_tok[1], "left", left, "right", right)
+    end
+
+    # Natural language: equals
+    while par_tok_is with "equals" do
+        par_advance()
+        create variable right as map with value parse_attach()
+        set left to map("kind", "BinaryExpr", "operator", "==", "left", left, "right", right)
+    end
+
+    # Natural language: is greater than, is less than, is greater than or equal to, is less than or equal to
+    while par_tok_is with "is" do
+        par_advance()
+        create variable op as text with value ""
+
+        # is greater than [or equal to]
+        when par_tok_is with "greater" do
+            par_advance()
+            par_expect with "than"
+            set op to ">"
+            when par_tok_is with "or" do
+                par_advance()
+                par_expect with "equal"
+                par_expect with "to"
+                set op to ">="
+            end
+        end
+
+        # is less than [or equal to]
+        when par_tok_is with "less" do
+            par_advance()
+            par_expect with "than"
+            set op to "<"
+            when par_tok_is with "or" do
+                par_advance()
+                par_expect with "equal"
+                par_expect with "to"
+                set op to "<="
+            end
+        end
+
+        # is equal to
+        when par_tok_is with "equal" do
+            par_advance()
+            par_expect with "to"
+            set op to "=="
+        end
+
+        # is not equal to
+        when par_tok_is with "not" do
+            par_advance()
+            par_expect with "equal"
+            par_expect with "to"
+            set op to "!="
+        end
+
+        create variable right as map with value parse_attach()
         set left to map("kind", "BinaryExpr", "operator", op, "left", left, "right", right)
+    end
+
+    return left
+end
+
+function parse_attach() returns map
+    create variable left as map with value parse_addition()
+    while par_tok_is with "attach" do
+        par_advance()
+        create variable right as map with value parse_addition()
+        set left to map("kind", "BinaryExpr", "operator", "attach", "left", left, "right", right)
     end
     return left
 end
@@ -371,7 +484,7 @@ function parse_primary() returns map
     end
     when par_tok_is with "IDENT" do
         create variable tok as list with value par_advance()
-        # Check for function call
+        # Check for parenthesized function call: name(args)
         when par_tok_is with "LPAREN" do
             par_advance()
             create variable args as list with value []
@@ -383,6 +496,17 @@ function parse_primary() returns map
                 end
             end
             par_expect with "RPAREN"
+            return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
+        end
+        # Check for `with` style function call: name with arg1 [and arg2 ...]
+        when par_tok_is with "with" do
+            par_advance()
+            create variable args as list with value []
+            push(args, parse_expression())
+            while par_tok_is with "and" do
+                par_advance()
+                push(args, parse_expression())
+            end
             return map("kind", "FunctionCallExpr", "name", tok[1], "arguments", args)
         end
         return map("kind", "Identifier", "name", tok[1])
@@ -479,6 +603,118 @@ function parse_statement() returns map
         return map("kind", "Increase", "target", target, "amount", amount)
     end
 
+    when par_tok_is with "decrease" do
+        par_advance()
+        create variable target as map with value parse_expression()
+        par_expect with "by"
+        create variable amount as map with value parse_expression()
+        return map("kind", "Decrease", "target", target, "amount", amount)
+    end
+
+    when par_tok_is with "repeat" do
+        par_advance()
+        create variable count as map with value parse_expression()
+        par_expect with "times"
+        par_expect with "do"
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        par_expect with "end"
+        return map("kind", "Repeat", "count", count, "body", body)
+    end
+
+    when par_tok_is with "for" do
+        par_advance()
+        par_expect with "each"
+        create variable item_tok as list with value par_expect with "IDENT"
+        create variable index_name as text with value nothing
+        when par_tok_is with "," do
+            par_advance()
+            create variable idx_tok as list with value par_expect with "IDENT"
+            set index_name to idx_tok[1]
+        end
+        par_expect with "in"
+        create variable iterable as map with value parse_expression()
+        par_expect with "do"
+        create variable body as list with value []
+        while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(body, parse_statement())
+        end
+        par_expect with "end"
+        return map("kind", "ForEach", "item", item_tok[1], "index", index_name, "iterable", iterable, "body", body)
+    end
+
+    when par_tok_is with "exit" do
+        par_advance()
+        return map("kind", "Exit")
+    end
+
+    when par_tok_is with "continue" do
+        par_advance()
+        return map("kind", "Continue")
+    end
+
+    when par_tok_is with "match" do
+        par_advance()
+        create variable subject as map with value parse_expression()
+        create variable cases as list with value []
+        create variable default_body as list with value nothing
+        while par_tok_is with "case" or par_tok_is with "otherwise" do
+            when par_tok_is with "case" do
+                par_advance()
+                create variable pattern as map with value parse_expression()
+                par_expect with "do"
+                create variable case_body as list with value []
+                while not (par_tok_is with "end") and not (par_tok_is with "case") and not (par_tok_is with "otherwise") and not (par_tok_is with "EOF") do
+                    push(case_body, parse_statement())
+                end
+                when par_tok_is with "end" do par_advance() end
+                push(cases, map("kind", "MatchCase", "pattern", pattern, "body", case_body))
+            end
+            when par_tok_is with "otherwise" do
+                par_advance()
+                par_expect with "do"
+                set default_body to []
+                while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+                    push(default_body, parse_statement())
+                end
+            end
+        end
+        par_expect with "end"
+        return map("kind", "Match", "subject", subject, "cases", cases, "default", default_body)
+    end
+
+    when par_tok_is with "try" do
+        par_advance()
+        par_expect with "do"
+        create variable try_body as list with value []
+        while not (par_tok_is with "catch") and not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+            push(try_body, parse_statement())
+        end
+        create variable catch_var as text with value nothing
+        create variable catch_body as list with value []
+        when par_tok_is with "catch" do
+            par_advance()
+            when par_tok_is with "IDENT" do
+                create variable err_tok as list with value par_advance()
+                set catch_var to err_tok[1]
+            end
+            par_expect with "do"
+            while not (par_tok_is with "end") and not (par_tok_is with "EOF") do
+                push(catch_body, parse_statement())
+            end
+        end
+        par_expect with "end"
+        return map("kind", "TryCatch", "tryBody", try_body, "catchVar", catch_var, "catchBody", catch_body)
+    end
+
+    when par_tok_is with "throw" do
+        par_advance()
+        create variable err as map with value parse_expression()
+        return map("kind", "Throw", "error", err)
+    end
+
     when par_tok_is with "function" do
         par_advance()
         create variable name_tok as list with value par_expect with "IDENT"
@@ -528,6 +764,9 @@ end
 # STAGE 3: C CODE GENERATOR
 # ============================================================
 
+# Simple type tracking for variables
+create variable var_types as map with value map()
+
 function map_type_to_c(iozen_type) returns text
     when iozen_type equals "integer" do return "long long" end
     when iozen_type equals "float" do return "double" end
@@ -567,6 +806,10 @@ function generate_expr(node) returns text
         create variable op as text with value get_key(node, "operator")
         when op equals "and" do set op to "&&" end
         when op equals "or" do set op to "||" end
+        when op equals "attach" do
+            # String concatenation - use iozen_strcat helper
+            return "iozen_strcat(" attach left attach ", " attach right attach ")"
+        end
         return "(" attach left attach " " attach op attach " " attach right attach ")"
     end
     when kind equals "UnaryExpr" do
@@ -597,7 +840,10 @@ function generate_stmt(stmt, indent) returns text
 
     when kind equals "VariableDecl" do
         create variable name as text with value get_key(stmt, "name")
-        create variable c_type as text with value map_type_to_c(get_key(stmt, "typeName"))
+        create variable iozen_type as text with value get_key(stmt, "typeName")
+        create variable c_type as text with value map_type_to_c(iozen_type)
+        # Track variable type for later use
+        set_key(var_types, name, iozen_type)
         create variable val as map with value get_key(stmt, "value")
         when val != nothing do
             return ind attach c_type attach " " attach name attach " = " attach generate_expr(val) attach ";\n"
@@ -610,8 +856,39 @@ function generate_stmt(stmt, indent) returns text
     end
 
     when kind equals "PrintStmt" do
-        create variable expr as text with value generate_expr(get_key(stmt, "expressions")[0])
-        return ind attach "printf(\"%lld\\n\", " attach expr attach ");\n"
+        create variable exprs as list with value get_key(stmt, "expressions")
+        create variable first_expr as map with value exprs[0]
+        create variable expr_code as text with value generate_expr(first_expr)
+        create variable expr_kind as text with value get_key(first_expr, "kind")
+
+        # Determine format string based on expression type
+        create variable fmt as text with value "%lld\\n"
+        when expr_kind equals "Literal" do
+            create variable lit_type as text with value get_key(first_expr, "type")
+            when lit_type equals "text" do set fmt to "%s\\n" end
+            when lit_type equals "float" do set fmt to "%g\\n" end
+            when lit_type equals "boolean" do set fmt to "%s\\n" end
+        end
+        when expr_kind equals "Identifier" do
+            # Look up variable type
+            create variable var_name as text with value get_key(first_expr, "name")
+            create variable var_type as text with value get_key(var_types, var_name)
+            when var_type equals "text" do set fmt to "%s\\n" end
+            when var_type equals "float" do set fmt to "%g\\n" end
+            when var_type equals "boolean" do set fmt to "%s\\n" end
+        end
+        when expr_kind equals "BinaryExpr" do
+            # Check if it's a string operation (attach)
+            create variable op as text with value get_key(first_expr, "operator")
+            when op equals "attach" do set fmt to "%s\\n" end
+        end
+        when expr_kind equals "FunctionCallExpr" do
+            # Check if it's a known text-returning function
+            create variable func_name as text with value get_key(first_expr, "name")
+            when func_name equals "greet" do set fmt to "%s\\n" end
+        end
+
+        return ind attach "printf(\"" attach fmt attach "\", " attach expr_code attach ");\n"
     end
 
     when kind equals "ReturnStmt" do
@@ -680,13 +957,165 @@ function generate_stmt(stmt, indent) returns text
         return out attach ind attach "}\n\n"
     end
 
+    when kind equals "Repeat" do
+        create variable count as text with value generate_expr(get_key(stmt, "count"))
+        create variable out as text with value ind attach "for (long long _i = 0; _i < " attach count attach "; _i++) {\n"
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach generate_stmt(body[i], indent + 1)
+            increase i by 1
+        end
+        return out attach ind attach "}\n"
+    end
+
+    when kind equals "ForEach" do
+        create variable item as text with value get_key(stmt, "item")
+        create variable iterable as text with value generate_expr(get_key(stmt, "iterable"))
+        create variable body as list with value get_key(stmt, "body")
+        create variable idx_name as text with value get_key(stmt, "index")
+        create variable out as text with value ""
+
+        # For arrays: iterate with index
+        set out to ind attach "{\n"
+        set out to out attach ind attach "    long long _len = sizeof(" attach iterable attach ") / sizeof(" attach iterable attach "[0]);\n"
+        set out to out attach ind attach "    for (long long _j = 0; _j < _len; _j++) {\n"
+        set out to out attach ind attach "        long long " attach item attach " = " attach iterable attach "[_j];\n"
+        when idx_name != nothing do
+            set out to out attach ind attach "        long long " attach idx_name attach " = _j;\n"
+        end
+        create variable i as integer with value 0
+        while i < length(body) do
+            set out to out attach generate_stmt(body[i], indent + 2)
+            increase i by 1
+        end
+        set out to out attach ind attach "    }\n"
+        set out to out attach ind attach "}\n"
+        return out
+    end
+
+    when kind equals "Increase" do
+        create variable target as text with value generate_expr(get_key(stmt, "target"))
+        create variable amount as text with value generate_expr(get_key(stmt, "amount"))
+        return ind attach target attach " += " attach amount attach ";\n"
+    end
+
+    when kind equals "Decrease" do
+        create variable target as text with value generate_expr(get_key(stmt, "target"))
+        create variable amount as text with value generate_expr(get_key(stmt, "amount"))
+        return ind attach target attach " -= " attach amount attach ";\n"
+    end
+
+    when kind equals "Exit" do
+        return ind attach "break;\n"
+    end
+
+    when kind equals "Continue" do
+        return ind attach "continue;\n"
+    end
+
+    when kind equals "Match" do
+        create variable subject as text with value generate_expr(get_key(stmt, "subject"))
+        create variable cases as list with value get_key(stmt, "cases")
+        create variable default_body as anything with value get_key(stmt, "default")
+        create variable out as text with value ""
+        create variable i as integer with value 0
+
+        while i < length(cases) do
+            create variable c as map with value cases[i]
+            create variable pattern as text with value generate_expr(get_key(c, "pattern"))
+            create variable case_body as list with value get_key(c, "body")
+
+            when i equals 0 do
+                set out to ind attach "if (" attach subject attach " == " attach pattern attach ") {\n"
+            otherwise do
+                set out to out attach ind attach "} else if (" attach subject attach " == " attach pattern attach ") {\n"
+            end
+
+            create variable j as integer with value 0
+            while j < length(case_body) do
+                set out to out attach generate_stmt(case_body[j], indent + 1)
+                increase j by 1
+            end
+            increase i by 1
+        end
+
+        when default_body != nothing do
+            set out to out attach ind attach "} else {\n"
+            create variable j as integer with value 0
+            while j < length(default_body) do
+                set out to out attach generate_stmt(default_body[j], indent + 1)
+                increase j by 1
+            end
+        end
+
+        return out attach ind attach "}\n"
+    end
+
+    when kind equals "TryCatch" do
+        # C doesn't have exceptions - generate with setjmp/longjmp pattern
+        create variable try_body as list with value get_key(stmt, "tryBody")
+        create variable catch_var as text with value get_key(stmt, "catchVar")
+        create variable catch_body as list with value get_key(stmt, "catchBody")
+
+        create variable out as text with value ind attach "/* try */ {\n"
+        set out to out attach ind attach "    int _caught = 0;\n"
+        set out to out attach ind attach "    if (!_caught) {\n"
+
+        create variable i as integer with value 0
+        while i < length(try_body) do
+            set out to out attach generate_stmt(try_body[i], indent + 2)
+            increase i by 1
+        end
+
+        set out to out attach ind attach "    }\n"
+
+        when length(catch_body) > 0 do
+            set out to out attach ind attach "    if (_caught) {\n"
+            when catch_var != nothing do
+                set out to out attach ind attach "        char* " attach catch_var attach " = \"error\";\n"
+            end
+            set i to 0
+            while i < length(catch_body) do
+                set out to out attach generate_stmt(catch_body[i], indent + 2)
+                increase i by 1
+            end
+            set out to out attach ind attach "    }\n"
+        end
+
+        return out attach ind attach "}\n"
+    end
+
+    when kind equals "Throw" do
+        # C doesn't have exceptions - generate comment
+        create variable err as text with value generate_expr(get_key(stmt, "error"))
+        return ind attach "/* throw: " attach err attach " */\n"
+    end
+
+    when kind equals "ExprStmt" do
+        return ind attach generate_expr(get_key(stmt, "expression")) attach ";\n"
+    end
+
     return ind attach "/* Unknown: " attach kind attach " */\n"
 end
 
 function generate_c(ast) returns text
     create variable out as text with value "/* Generated by IOZENC — The IOZEN Compiler */\n\n"
     set out to out attach "#include <stdio.h>\n"
-    set out to out attach "#include <stdbool.h>\n\n"
+    set out to out attach "#include <stdbool.h>\n"
+    set out to out attach "#include <stdlib.h>\n"
+    set out to out attach "#include <string.h>\n\n"
+
+    # Helper function for string concatenation
+    set out to out attach "char* iozen_strcat(char* a, char* b) {\n"
+    set out to out attach "    size_t len_a = strlen(a);\n"
+    set out to out attach "    size_t len_b = strlen(b);\n"
+    set out to out attach "    char* result = malloc(len_a + len_b + 1);\n"
+    set out to out attach "    strcpy(result, a);\n"
+    set out to out attach "    strcat(result, b);\n"
+    set out to out attach "    return result;\n"
+    set out to out attach "}\n\n"
+
     create variable stmts as list with value get_key(ast, "statements")
     create variable i as integer with value 0
     create variable global_funcs as text with value ""
