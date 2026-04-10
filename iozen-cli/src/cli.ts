@@ -99,6 +99,11 @@ async function cmdRun(args: string[]) {
 
   const filePath = resolve(args[0]);
 
+  // Debug: Log file path
+  if (process.env.IOZEN_DEBUG) {
+    console.log(`[DEBUG] cmdRun: args[0]=${args[0]}, filePath=${filePath}`);
+  }
+
   if (!existsSync(filePath)) {
     error(`File not found: ${filePath}`);
     process.exit(1);
