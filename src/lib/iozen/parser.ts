@@ -964,7 +964,7 @@ export class Parser {
     while (this.check(TokenType.Or)) {
       this.advance();
       const right = this.parseAnd();
-      left = { kind: 'BinaryExpr', left, operator: 'or', right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: 'or', right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
     }
 
     return left;
@@ -976,7 +976,7 @@ export class Parser {
     while (this.check(TokenType.And)) {
       this.advance();
       const right = this.parseComparison();
-      left = { kind: 'BinaryExpr', left, operator: 'and', right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: 'and', right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
     }
 
     return left;
@@ -996,7 +996,7 @@ export class Parser {
     if (compOps.includes(this.peek().type)) {
       const op = this.parseComparisonOp();
       const right = this.parseAdditive();
-      left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: op, right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
       matched = true;
     }
 
@@ -1005,7 +1005,7 @@ export class Parser {
       this.advance();
       const op = this.parseComparisonOp();
       const right = this.parseAdditive();
-      left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: op, right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
       matched = true;
     }
 
@@ -1013,7 +1013,7 @@ export class Parser {
     if (!matched && (this.check(TokenType.Equal) || this.check(TokenType.Greater) || this.check(TokenType.Less))) {
       const op = this.parseComparisonOp();
       const right = this.parseAdditive();
-      left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: op, right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
       matched = true;
     }
 
@@ -1021,7 +1021,7 @@ export class Parser {
     if (!matched && this.check(TokenType.Inside)) {
       this.advance();
       const right = this.parseAdditive();
-      left = { kind: 'BinaryExpr', left, operator: 'inside', right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: 'inside', right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
       matched = true;
     }
 
@@ -1122,7 +1122,7 @@ export class Parser {
     while (this.check(TokenType.Plus) || this.check(TokenType.Minus)) {
       const op = this.advance().value;
       const right = this.parseMultiplicative();
-      left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: op, right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
     }
 
     return left;
@@ -1134,7 +1134,7 @@ export class Parser {
     while (this.check(TokenType.Star) || this.check(TokenType.Slash) || this.check(TokenType.Percent)) {
       const op = this.advance().value;
       const right = this.parseUnary();
-      left = { kind: 'BinaryExpr', left, operator: op, right } as BinaryExprNode;
+      left = { kind: 'BinaryExpr', left, operator: op, right, location: { line: (left as any).location?.line ?? 1, column: (left as any).location?.column ?? 1 } } as BinaryExprNode;
     }
 
     return left;
