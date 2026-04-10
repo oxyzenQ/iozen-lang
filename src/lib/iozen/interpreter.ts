@@ -3,23 +3,53 @@
 // Executes IOZEN programs by walking the AST
 // ============================================================
 
-import { Lexer } from './lexer';
-import { Parser } from './parser';
-import { ParseError } from './parser';
-import { Environment, RuntimeError, IOZENValue, IOZENResult, IOZENObject, IOZENMap, IOZENFunction } from './environment';
 import type {
-  ASTNode, ProgramNode, ImportNode, VariableDeclNode, FunctionDeclNode,
-  StructureDeclNode, EnumDeclNode, PrintStmtNode, ReturnStmtNode,
-  WhenNode, CheckNode, RepeatNode, WhileNode, ForEachNode,
-  IncreaseNode, SetFieldNode, AssignVarNode, FunctionCallStmtNode, BlockNode,
-  BinaryExprNode, UnaryExprNode, AttachExprNode, IdentifierNode,
-  LiteralNode, FunctionCallExprNode, MemberAccessNode,
-  IndexAccessNode, ListLiteralNode, HasValueNode, ValueInsideNode,
-  LambdaNode, ExitNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
-  PipelineExprNode, DestructureNode, MapLiteralNode, ListCompNode,
-  TernaryExprNode, CompoundAssignNode, ModuleDeclNode, UnionDeclNode,
-  SafeAccessNode, TypeAliasNode,
+    AssignVarNode,
+    ASTNode,
+    AttachExprNode,
+    BinaryExprNode,
+    CheckNode,
+    CompoundAssignNode,
+    DestructureNode,
+    EnumDeclNode,
+    ExitNode,
+    ForEachNode,
+    FunctionCallExprNode,
+    FunctionCallStmtNode,
+    FunctionDeclNode,
+    HasValueNode,
+    IdentifierNode,
+    ImportNode,
+    IncreaseNode,
+    IndexAccessNode,
+    LambdaNode,
+    ListCompNode,
+    ListLiteralNode,
+    LiteralNode,
+    MapLiteralNode,
+    MatchNode,
+    MemberAccessNode,
+    ModuleDeclNode,
+    PipelineExprNode,
+    PrintStmtNode,
+    RepeatNode,
+    ReturnStmtNode,
+    SafeAccessNode,
+    SetFieldNode,
+    StructureDeclNode,
+    TernaryExprNode,
+    ThrowNode,
+    TryCatchNode,
+    UnaryExprNode,
+    UnionDeclNode,
+    ValueInsideNode,
+    VariableDeclNode,
+    WhenNode,
+    WhileNode
 } from './ast';
+import { Environment, IOZENFunction, IOZENMap, IOZENObject, IOZENResult, IOZENValue, RuntimeError } from './environment';
+import { Lexer } from './lexer';
+import { ParseError, Parser } from './parser';
 
 // Special signal to unwind the call stack for return/exit
 class ReturnSignal {
@@ -2332,6 +2362,47 @@ export class Interpreter {
     }
     if (n === 'repeat' && args.length >= 2) {
       this.env.define('__last_result__', String(args[0]).repeat(Math.max(0, Math.floor(this.toNumber(args[1])))));
+      return true;
+    }
+
+    // Standard Library Functions
+    if (n === 'len' && args.length >= 1) {
+      const val = args[0];
+      if (Array.isArray(val)) {
+        this.env.define('__last_result__', val.length);
+      } else if (typeof val === 'string') {
+        this.env.define('__last_result__', val.length);
+      } else {
+        this.env.define('__last_result__', 0);
+      }
+      return true;
+    }
+    if (n === 'to_string' && args.length >= 1) {
+      const val = args[0];
+      if (typeof val === 'number') {
+        this.env.define('__last_result__', String(val));
+      } else if (typeof val === 'boolean') {
+        this.env.define('__last_result__', String(val));
+      } else if (typeof val === 'string') {
+        this.env.define('__last_result__', val);
+      } else if (Array.isArray(val)) {
+        this.env.define('__last_result__', `[list of ${val.length} elements]`);
+      } else {
+        this.env.define('__last_result__', String(val));
+      }
+      return true;
+    }
+    if (n === 'substr' && args.length >= 3) {
+      const str = String(args[0]);
+      const start = this.toNumber(args[1]);
+      const end = this.toNumber(args[2]);
+      this.env.define('__last_result__', str.substring(start, end));
+      return true;
+    }
+    if (n === 'contains' && args.length >= 2) {
+      const str = String(args[0]);
+      const substr = String(args[1]);
+      this.env.define('__last_result__', str.includes(substr));
       return true;
     }
 
