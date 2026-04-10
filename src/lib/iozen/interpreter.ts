@@ -2406,6 +2406,112 @@ export class Interpreter {
       return true;
     }
 
+    // Additional String Functions
+    if (n === 'split' && args.length >= 2) {
+      const str = String(args[0]);
+      const sep = String(args[1]);
+      this.env.define('__last_result__', str.split(sep));
+      return true;
+    }
+    if (n === 'join' && args.length >= 2 && Array.isArray(args[0])) {
+      const list = args[0] as IOZENValue[];
+      const sep = String(args[1]);
+      this.env.define('__last_result__', list.map(String).join(sep));
+      return true;
+    }
+    if (n === 'trim' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).trim());
+      return true;
+    }
+    if (n === 'upper' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).toUpperCase());
+      return true;
+    }
+    if (n === 'lower' && args.length >= 1) {
+      this.env.define('__last_result__', String(args[0]).toLowerCase());
+      return true;
+    }
+    if (n === 'starts_with' && args.length >= 2) {
+      const str = String(args[0]);
+      const prefix = String(args[1]);
+      this.env.define('__last_result__', str.startsWith(prefix));
+      return true;
+    }
+    if (n === 'ends_with' && args.length >= 2) {
+      const str = String(args[0]);
+      const suffix = String(args[1]);
+      this.env.define('__last_result__', str.endsWith(suffix));
+      return true;
+    }
+
+    // Type Conversion
+    if (n === 'to_integer' && args.length >= 1) {
+      const val = args[0];
+      if (typeof val === 'number') {
+        this.env.define('__last_result__', Math.floor(val));
+      } else if (typeof val === 'string') {
+        const parsed = parseInt(val, 10);
+        this.env.define('__last_result__', isNaN(parsed) ? 0 : parsed);
+      } else {
+        this.env.define('__last_result__', 0);
+      }
+      return true;
+    }
+    if (n === 'to_float' && args.length >= 1) {
+      const val = args[0];
+      if (typeof val === 'number') {
+        this.env.define('__last_result__', val);
+      } else if (typeof val === 'string') {
+        const parsed = parseFloat(val);
+        this.env.define('__last_result__', isNaN(parsed) ? 0.0 : parsed);
+      } else {
+        this.env.define('__last_result__', 0.0);
+      }
+      return true;
+    }
+
+    // File I/O Functions
+    if (n === 'read_file' && args.length >= 1) {
+      try {
+        const path = String(args[0]);
+        const content = fs.readFileSync(path, 'utf-8');
+        this.env.define('__last_result__', content);
+      } catch (e) {
+        this.env.define('__last_result__', '');
+      }
+      return true;
+    }
+    if (n === 'write_file' && args.length >= 2) {
+      try {
+        const path = String(args[0]);
+        const content = String(args[1]);
+        fs.writeFileSync(path, content, 'utf-8');
+        this.env.define('__last_result__', true);
+      } catch (e) {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+    if (n === 'file_exists' && args.length >= 1) {
+      try {
+        const path = String(args[0]);
+        this.env.define('__last_result__', fs.existsSync(path));
+      } catch (e) {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+    if (n === 'delete_file' && args.length >= 1) {
+      try {
+        const path = String(args[0]);
+        fs.unlinkSync(path);
+        this.env.define('__last_result__', true);
+      } catch (e) {
+        this.env.define('__last_result__', false);
+      }
+      return true;
+    }
+
     return false;
   }
 
