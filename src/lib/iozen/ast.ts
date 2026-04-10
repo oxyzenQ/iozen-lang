@@ -3,6 +3,13 @@
 // Abstract Syntax Tree node types for the IOZEN language
 // ============================================================
 
+// Phase 14.1: Source location tracking for real error messages
+export interface SourceLocation {
+  line: number;
+  column: number;
+  file?: string;
+}
+
 export type ASTNode =
   | ProgramNode
   | ImportNode
@@ -76,6 +83,7 @@ export interface VariableDeclNode {
   qualifiers: string[];
   value: ASTNode | null;
   isConstant: boolean;
+  location?: SourceLocation;  // Phase 14.1: Error location
 }
 
 export interface FunctionDeclNode {
@@ -85,6 +93,7 @@ export interface FunctionDeclNode {
   returnType: string;
   returnQualifiers: string[];
   body: ASTNode[];
+  location?: SourceLocation;  // Phase 14.1: Error location
 }
 
 export interface FunctionParamNode {
@@ -222,6 +231,7 @@ export interface BinaryExprNode {
   left: ASTNode;
   operator: string;
   right: ASTNode;
+  location?: SourceLocation;  // Phase 14.1: Error location
 }
 
 export interface UnaryExprNode {
@@ -238,6 +248,7 @@ export interface AttachExprNode {
 export interface IdentifierNode {
   kind: 'Identifier';
   name: string;
+  location?: SourceLocation;  // Phase 14.1: Error location
 }
 
 export interface LiteralNode {
@@ -250,6 +261,7 @@ export interface FunctionCallExprNode {
   kind: 'FunctionCallExpr';
   name: string;
   arguments: ASTNode[];
+  location?: SourceLocation;  // Phase 14.1: Error location
 }
 
 export interface MemberAccessNode {
