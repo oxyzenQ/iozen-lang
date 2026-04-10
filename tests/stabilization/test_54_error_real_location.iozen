@@ -1,0 +1,26 @@
+# Test 54: Real Error Locations
+# Tests that errors show correct file, line, and column
+
+function cause_type_error with no args returns integer
+    # This should cause a type error on line 6
+    create variable x as integer with value "not a number"
+    return x
+end
+
+function cause_undefined_var with no args returns integer
+    # This should cause "undefined variable" on line 12
+    return y
+end
+
+function cause_div_by_zero with no args returns integer
+    create variable a as integer with value 10
+    create variable b as integer with value 0
+    # This should cause division by zero on line 19
+    return a / b
+end
+
+function main with no args returns integer
+    print "Testing error locations..."
+    print "If you see this, errors weren't triggered!"
+    return 0
+end
