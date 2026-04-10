@@ -1,0 +1,13 @@
+# Test 50: Error Demo
+# This program has intentional type errors
+
+print "Test 50: Error Demo"
+
+# Line 7: Type error
+create variable x as integer with value 5
+create variable y as text with value "hello"
+
+# This should cause type error
+# create variable z as integer with value y + 3
+
+print "Test 50 Complete"

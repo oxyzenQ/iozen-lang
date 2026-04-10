@@ -44,18 +44,96 @@ end
 print "Compiling: " attach source_file
 print ""
 
+# Initialize source tracking for error reporting
+set_source_file with source_file
+set_source_content with file_content
+
 # ============================================================
 # STAGE 0: SYMBOL TABLE CORE + ERROR SYSTEM (Phase 9.3b + 9.3c)
 # ============================================================
 create variable compiler_errors as integer with value 0
 create variable max_errors as integer with value 10
 
-function add_error with msg as text returns nothing
+# Source location for error tracking
+# Location = { file: text, line: integer, column: integer }
+create variable current_file as text with value ""
+create variable source_lines as list with value []
+
+function set_source_file with filename as text returns nothing
+    set current_file to filename
+end
+
+function set_source_content with content as text returns nothing
+    # Split content into lines for context
+    set source_lines to split(content, "\n")
+end
+
+function make_location with line as integer and column as integer returns map
+    return map("file", current_file, "line", line, "column", column)
+end
+
+function add_error with msg as text and loc as map returns nothing
+    print ""
+    print "ERROR: " attach msg
+
+    create variable err_file as text with value get_key(loc, "file")
+    create variable err_line as integer with value get_key(loc, "line")
+    create variable err_col as integer with value get_key(loc, "column")
+
+    when err_line > 0 do
+        print " → " attach err_file attach ":" attach err_line attach ":" attach err_col
+        print ""
+
+        # Show context (1 line before, error line, 1 line after)
+        create variable start_line as integer with value err_line - 1
+        when start_line < 1 do set start_line to 1 end
+
+        create variable end_line as integer with value err_line + 1
+        when end_line > length(source_lines) do set end_line to length(source_lines) end
+
+        create variable i as integer with value start_line
+        while i <= end_line do
+            create variable line_content as text with value source_lines[i - 1]
+            create variable line_num as text with value i
+
+            when i equals err_line do
+                print " > " attach line_num attach " | " attach line_content
+                # Print caret pointing to column
+                create variable caret_padding as text with value repeat(" ", length(line_num) + 4 + err_col - 1)
+                print caret_padding attach "^"
+            end
+            when i != err_line do
+                print "   " attach line_num attach " | " attach line_content
+            end
+            increase i by 1
+        end
+    end
+
+    print ""
+    set compiler_errors to compiler_errors + 1
+    when compiler_errors > max_errors do
+        print "Too many errors, stopping."
+        stop
+    end
+end
+
+function repeat with str as text and count as integer returns text
+    create variable result as text with value ""
+    create variable i as integer with value 0
+    while i < count do
+        set result to result attach str
+        increase i by 1
+    end
+    return result
+end
+
+# Legacy error for backwards compatibility
+function add_error_simple with msg as text returns nothing
     print "ERROR: " attach msg
     set compiler_errors to compiler_errors + 1
     when compiler_errors > max_errors do
-        print "FATAL: Too many errors, stopping compilation"
-        # In real implementation, this would exit
+        print "Too many errors, stopping."
+        stop
     end
 end
 
@@ -1392,6 +1470,213 @@ function eliminate_dead_code_module with ir_module as map returns map
 end
 
 # ============================================================
+# CONTROL FLOW GRAPH (Phase 12) - Basic Structure
+# ============================================================
+
+# CFG Structure:
+# BasicBlock = {
+#   id: integer,
+#   statements: list,
+#   successors: list of block ids,
+#   predecessors: list of block ids
+# }
+
+function create_basic_block with block_id as integer returns map
+    return map("id", block_id, "statements", [], "successors", [], "predecessors", [])
+end
+
+function add_stmt_to_block with block as map and stmt as map returns nothing
+    create variable stmts as list with value get_key(block, "statements")
+    push(stmts, stmt)
+end
+
+function add_edge with from_block as map and to_block_id as integer returns nothing
+    create variable succs as list with value get_key(from_block, "successors")
+    push(succs, to_block_id)
+end
+
+# Convert linear IR to CFG for a single function
+function ir_to_cfg_function with ir_func as map and next_block_id as integer returns map
+    create variable func_name as text with value get_key(ir_func, "name")
+    create variable body as list with value get_key(ir_func, "body")
+    create variable blocks as list with value []
+    create variable current_block as map with value create_basic_block(next_block_id)
+    set next_block_id to next_block_id + 1
+
+    create variable i as integer with value 0
+    while i < length(body) do
+        create variable stmt as map with value body[i]
+        create variable stype as text with value get_key(stmt, "type")
+
+        when stype equals "IRIf" do
+            # Finish current block with condition
+            add_stmt_to_block with current_block and stmt
+            push(blocks, current_block)
+
+            # Create then block
+            create variable then_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+            create variable then_body as list with value get_key(stmt, "then_body")
+            create variable j as integer with value 0
+            while j < length(then_body) do
+                add_stmt_to_block with then_block and then_body[j]
+                increase j by 1
+            end
+            push(blocks, then_block)
+
+            # Create else block
+            create variable else_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+            create variable else_body as list with value get_key(stmt, "else_body")
+            set j to 0
+            while j < length(else_body) do
+                add_stmt_to_block with else_block and else_body[j]
+                increase j by 1
+            end
+            push(blocks, else_block)
+
+            # Create merge block for after if
+            create variable merge_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+
+            # Add edges: current → then, current → else
+            add_edge with current_block and get_key(then_block, "id")
+            add_edge with current_block and get_key(else_block, "id")
+
+            # Add edges: then → merge, else → merge
+            add_edge with then_block and get_key(merge_block, "id")
+            add_edge with else_block and get_key(merge_block, "id")
+
+            # Continue with merge block
+            set current_block to merge_block
+        end
+
+        when stype equals "IRWhile" do
+            # Create condition block
+            create variable cond_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+            add_stmt_to_block with cond_block and stmt
+            push(blocks, current_block)
+
+            # Create loop body block
+            create variable loop_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+            create variable loop_body as list with value get_key(stmt, "body")
+            create variable j as integer with value 0
+            while j < length(loop_body) do
+                add_stmt_to_block with loop_block and loop_body[j]
+                increase j by 1
+            end
+            push(blocks, loop_block)
+
+            # Create exit block
+            create variable exit_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+
+            # Add edges: cond → loop (true), cond → exit (false)
+            add_edge with cond_block and get_key(loop_block, "id")
+            add_edge with cond_block and get_key(exit_block, "id")
+
+            # Add edge: loop → cond (back edge)
+            add_edge with loop_block and get_key(cond_block, "id")
+
+            # Continue with exit block
+            set current_block to exit_block
+        end
+
+        when stype equals "IRRepeat" do
+            # Similar to while but with count
+            add_stmt_to_block with current_block and stmt
+
+            # Create loop body block
+            create variable loop_block as map with value create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+            create variable loop_body as list with value get_key(stmt, "body")
+            create variable j as integer with value 0
+            while j < length(loop_body) do
+                add_stmt_to_block with loop_block and loop_body[j]
+                increase j by 1
+            end
+            push(blocks, loop_block)
+
+            # Add edge for loop structure
+            add_edge with current_block and get_key(loop_block, "id")
+
+            # Continue with new block after loop
+            push(blocks, current_block)
+            set current_block to create_basic_block(next_block_id)
+            set next_block_id to next_block_id + 1
+        end
+
+        # Other statements go to current block
+        when stype != "IRIf" and stype != "IRWhile" and stype != "IRRepeat" do
+            add_stmt_to_block with current_block and stmt
+        end
+
+        increase i by 1
+    end
+
+    # Don't forget the last block
+    when length(get_key(current_block, "statements")) > 0 do
+        push(blocks, current_block)
+    end
+
+    return map("name", func_name, "blocks", blocks, "next_block_id", next_block_id)
+end
+
+function ir_to_cfg_module with ir_module as map returns map
+    create variable cfg_functions as list with value []
+    create variable functions as list with value get_key(ir_module, "functions")
+    create variable next_block_id as integer with value 0
+    create variable i as integer with value 0
+
+    while i < length(functions) do
+        create variable cfg_func as map with value ir_to_cfg_function(functions[i], next_block_id)
+        push(cfg_functions, cfg_func)
+        set next_block_id to get_key(cfg_func, "next_block_id")
+        increase i by 1
+    end
+
+    return map("type", "CFG", "functions", cfg_functions)
+end
+
+function dump_cfg_block with block as map returns text
+    create variable out as text with value ""
+    set out to out attach "Block " attach get_key(block, "id") attach ":\n"
+
+    create variable stmts as list with value get_key(block, "statements")
+    create variable i as integer with value 0
+    while i < length(stmts) do
+        set out to out attach "  " attach get_key(stmts[i], "type") attach "\n"
+        increase i by 1
+    end
+
+    create variable succs as list with value get_key(block, "successors")
+    when length(succs) > 0 do
+        set out to out attach "  → successors: " attach succs attach "\n"
+    end
+
+    return out
+end
+
+function dump_cfg with cfg_module as map returns text
+    create variable out as text with value "=== CFG DUMP ===\n"
+    create variable funcs as list with value get_key(cfg_module, "functions")
+    create variable i as integer with value 0
+    while i < length(funcs) do
+        set out to out attach "Function: " attach get_key(funcs[i], "name") attach "\n"
+        create variable blocks as list with value get_key(funcs[i], "blocks")
+        create variable j as integer with value 0
+        while j < length(blocks) do
+            set out to out attach dump_cfg_block(blocks[j]) attach "\n"
+            increase j by 1
+        end
+        increase i by 1
+    end
+    return out
+end
+
+# ============================================================
 # TYPE CHECKING (Phase 10)
 # ============================================================
 
@@ -1423,10 +1708,10 @@ function type_check_expr with expr as map and context as text returns nothing
 
         # Only integer operations supported for now
         when left_type != "integer" do
-            add_error with "Type error: left operand of " attach op attach " has type " attach left_type attach " (expected integer)"
+            add_error with "Type error: left operand of " attach op attach " has type " attach left_type attach " (expected integer)" and make_location(1, 1)
         end
         when right_type != "integer" do
-            add_error with "Type error: right operand of " attach op attach " has type " attach right_type attach " (expected integer)"
+            add_error with "Type error: right operand of " attach op attach " has type " attach right_type attach " (expected integer)" and make_location(1, 1)
         end
     end
 
@@ -1455,7 +1740,7 @@ function type_check_stmt with stmt as map returns nothing
         create variable var_type as text with value get_key(stmt, "var_type")
         create variable init_type as text with value type_of_expr(get_key(stmt, "init"))
         when init_type != var_type and init_type != "unknown" do
-            add_error with "Type error: cannot assign " attach init_type attach " to variable of type " attach var_type
+            add_error with "Type error: cannot assign " attach init_type attach " to variable of type " attach var_type and make_location(1, 1)
         end
     end
 

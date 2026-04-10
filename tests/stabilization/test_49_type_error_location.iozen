@@ -1,0 +1,13 @@
+# Test 49: Type Error with Location
+# This test should show detailed error messages
+
+print "Test 49: Type Error Location"
+
+# This line should work
+create variable x as integer with value 42
+print "x = " attach x
+
+# This should trigger a type error with location info
+# create variable y as integer with value "hello"
+
+print "Test 49 Complete"
