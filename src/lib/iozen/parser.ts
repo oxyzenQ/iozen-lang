@@ -3,22 +3,61 @@
 // Converts token stream into Abstract Syntax Tree (AST)
 // ============================================================
 
-import { Token, TokenType } from './tokens';
 import type {
-  ASTNode, ProgramNode, ImportNode, VariableDeclNode, FunctionDeclNode,
-  FunctionParamNode, StructureDeclNode, FieldNode, EnumDeclNode,
-  EnumCaseNode, PrintStmtNode, ReturnStmtNode, WhenNode,
-  WhenBranchNode, CheckNode, CheckCaseNode, RepeatNode,
-  WhileNode, ForEachNode, LabelNode, ExitNode, ContinueNode, IncreaseNode,
-  SetFieldNode, FunctionCallStmtNode, BlockNode, BinaryExprNode,
-  UnaryExprNode, AttachExprNode, IdentifierNode, LiteralNode,
-  FunctionCallExprNode, MemberAccessNode, ListLiteralNode, MapLiteralNode,
-  ListCompNode, TernaryExprNode, CompoundAssignNode,
-  ForceUnwrapNode, OrDefaultNode, HasValueNode, ValueInsideNode,
-  LambdaNode, MatchNode, MatchCaseNode, TryCatchNode, ThrowNode,
-  PipelineExprNode, DestructureNode, ModuleDeclNode, UnionDeclNode,
-  SafeAccessNode, TypeAliasNode,
+    ASTNode,
+    AttachExprNode,
+    BinaryExprNode,
+    BlockNode,
+    CheckCaseNode,
+    CheckNode,
+    CompoundAssignNode,
+    ContinueNode,
+    DestructureNode,
+    EnumCaseNode,
+    EnumDeclNode,
+    ExitNode,
+    FieldNode,
+    ForceUnwrapNode,
+    ForEachNode,
+    FunctionCallExprNode,
+    FunctionCallStmtNode,
+    FunctionDeclNode,
+    FunctionParamNode,
+    HasValueNode,
+    IdentifierNode,
+    ImportNode,
+    IncreaseNode,
+    LabelNode,
+    LambdaNode,
+    ListCompNode,
+    ListLiteralNode,
+    LiteralNode,
+    MapLiteralNode,
+    MatchCaseNode,
+    MatchNode,
+    MemberAccessNode,
+    ModuleDeclNode,
+    PipelineExprNode,
+    PrintStmtNode,
+    ProgramNode,
+    RepeatNode,
+    ReturnStmtNode,
+    SafeAccessNode,
+    SetFieldNode,
+    StructureDeclNode,
+    TernaryExprNode,
+    ThrowNode,
+    TryCatchNode,
+    TypeAliasNode,
+    UnaryExprNode,
+    UnionDeclNode,
+    ValueInsideNode,
+    VariableDeclNode,
+    WhenBranchNode,
+    WhenNode,
+    WhileNode
 } from './ast';
+import { Token, TokenType } from './tokens';
 
 export class ParseError extends Error {
   constructor(message: string, public token: Token) {
@@ -241,6 +280,9 @@ export class Parser {
       return { kind: 'Destructure', names, value } as DestructureNode;
     }
 
+    // Phase 14.1: Capture location from first token
+    const start = this.tokens[this.pos - 1];
+
     return {
       kind: 'VariableDecl',
       name: firstName,
@@ -249,6 +291,7 @@ export class Parser {
       qualifiers,
       value,
       isConstant,
+      location: start ? { line: start.line, column: start.column } : undefined,
     } as VariableDeclNode;
   }
 
