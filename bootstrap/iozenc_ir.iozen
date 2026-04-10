@@ -127,6 +127,90 @@ function repeat with str as text and count as integer returns text
     return result
 end
 
+# ============================================================================
+# STANDARD LIBRARY - Minimal but essential
+# ============================================================================
+
+# len() - Get length of string or list
+function len with value as any returns integer
+    create variable vtype as text with value type_of(value)
+    when vtype equals "text" do
+        return length(value)
+    end
+    when vtype equals "list" do
+        return length(value)
+    end
+    return 0
+end
+
+# to_string() - Convert any value to string representation
+function to_string with value as any returns text
+    create variable vtype as text with value type_of(value)
+    when vtype equals "integer" do
+        return value attach ""
+    end
+    when vtype equals "text" do
+        return value
+    end
+    when vtype equals "boolean" do
+        when value do return "true" end
+        return "false"
+    end
+    when vtype equals "list" do
+        return "[list of " attach length(value) attach " elements]"
+    end
+    return ""
+end
+
+# substr() - Extract substring (start is inclusive, end is exclusive)
+function substr with s as text and start as integer and endpos as integer returns text
+    create variable result as text with value ""
+    create variable i as integer with value start
+    while i < endpos and i < length(s) do
+        set result to result attach char_at(s, i)
+        increase i by 1
+    end
+    return result
+end
+
+# contains() - Check if string contains substring
+function contains with s as text and substr as text returns boolean
+    create variable s_len as integer with value length(s)
+    create variable sub_len as integer with value length(substr)
+
+    when sub_len > s_len do return false end
+    when sub_len equals 0 do return true end
+
+    create variable i as integer with value 0
+    while i <= s_len - sub_len do
+        create variable matched as boolean with value true
+        create variable j as integer with value 0
+        while j < sub_len do
+            when char_at(s, i + j) != char_at(substr, j) do
+                set matched to false
+                stop
+            end
+            increase j by 1
+        end
+        when matched do return true end
+        increase i by 1
+    end
+    return false
+end
+
+# upper() - Convert string to uppercase (basic ASCII only)
+function upper with s as text returns text
+    # Basic implementation - just return as-is for now
+    # Full ASCII upper conversion would need char code manipulation
+    return s
+end
+
+# lower() - Convert string to lowercase (basic ASCII only)
+function lower with s as text returns text
+    # Basic implementation - just return as-is for now
+    return s
+end
+
 # Legacy error for backwards compatibility
 function add_error_simple with msg as text returns nothing
     print "ERROR: " attach msg
@@ -155,6 +239,16 @@ create variable current_scope_id as integer with value 0
 create variable global_scope as map with value map("id", 0, "parent_id", -1, "syms", map(), "level", 0)
 set_key(scopes, 0, global_scope)
 
+# Register built-in stdlib functions in global scope
+# These are always available and cannot be shadowed by user code
+create variable builtin_funcs as map with value map()
+set_key(builtin_funcs, "len", map("sym_id", -1, "sym_type", "function", "data_type", "integer", "is_builtin", true))
+set_key(builtin_funcs, "to_string", map("sym_id", -2, "sym_type", "function", "data_type", "text", "is_builtin", true))
+set_key(builtin_funcs, "substr", map("sym_id", -3, "sym_type", "function", "data_type", "text", "is_builtin", true))
+set_key(builtin_funcs, "contains", map("sym_id", -4, "sym_type", "function", "data_type", "boolean", "is_builtin", true))
+set_key(builtin_funcs, "upper", map("sym_id", -5, "sym_type", "function", "data_type", "text", "is_builtin", true))
+set_key(builtin_funcs, "lower", map("sym_id", -6, "sym_type", "function", "data_type", "text", "is_builtin", true))
+
 function push_scope() returns integer
     create variable new_scope_id as integer with value next_scope_id
     set next_scope_id to next_scope_id + 1
@@ -173,6 +267,11 @@ function pop_scope() returns nothing
 end
 
 function lookup_symbol with name as text returns integer
+    # Check built-in functions first (cannot be shadowed)
+    when has_key(builtin_funcs, name) do
+        return get_key(builtin_funcs[name], "sym_id")
+    end
+    # Then check user-defined symbols in scope chain
     create variable scope_id as integer with value current_scope_id
     while scope_id >= 0 do
         create variable scope as map with value scopes[scope_id]
@@ -2463,6 +2562,32 @@ function ir_to_c_expr(ir_expr) returns text
     when etype equals "IRCall" do
         create variable func_name as text with value get_key(ir_expr, "func")
         create variable args as list with value get_key(ir_expr, "args")
+
+        # Check if this is a built-in stdlib function
+        when func_name equals "len" do
+            create variable arg_code as text with value ir_to_c_expr(args[0])
+            return "strlen(" attach arg_code attach ")"
+        end
+        when func_name equals "to_string" do
+            create variable arg_code as text with value ir_to_c_expr(args[0])
+            # For simplicity, use sprintf or to_text
+            return "to_text(" attach arg_code attach ")"
+        end
+        when func_name equals "substr" do
+            create variable str_arg as text with value ir_to_c_expr(args[0])
+            create variable start_arg as text with value ir_to_c_expr(args[1])
+            create variable end_arg as text with value ir_to_c_expr(args[2])
+            # Would need a helper function in C runtime
+            return "iozen_substr(" attach str_arg attach ", " attach start_arg attach ", " attach end_arg attach ")"
+        end
+        when func_name equals "contains" do
+            create variable str_arg as text with value ir_to_c_expr(args[0])
+            create variable sub_arg as text with value ir_to_c_expr(args[1])
+            # Would need a helper function in C runtime
+            return "iozen_contains(" attach str_arg attach ", " attach sub_arg attach ")"
+        end
+
+        # Regular function call
         create variable out as text with value func_name attach "("
         create variable i as integer with value 0
         while i < length(args) do
@@ -2575,7 +2700,23 @@ end
 function ir_module_to_c(ir_mod) returns text
     create variable out as text with value "/* Generated by IOZENC IR */\n\n"
     set out to out attach "#include <stdio.h>\n"
-    set out to out attach "#include <stdbool.h>\n\n"
+    set out to out attach "#include <stdbool.h>\n"
+    set out to out attach "#include <string.h>\n\n"
+
+    # C helper functions for stdlib
+    set out to out attach "/* IOZEN Standard Library Helpers */\n"
+    set out to out attach "char* iozen_substr(char* s, int start, int end) {\n"
+    set out to out attach "    static char buf[1024];\n"
+    set out to out attach "    int j = 0;\n"
+    set out to out attach "    for (int i = start; i < end && s[i]; i++) {\n"
+    set out to out attach "        buf[j++] = s[i];\n"
+    set out to out attach "    }\n"
+    set out to out attach "    buf[j] = '\\0';\n"
+    set out to out attach "    return buf;\n"
+    set out to out attach "}\n\n"
+    set out to out attach "bool iozen_contains(char* s, char* sub) {\n"
+    set out to out attach "    return strstr(s, sub) != NULL;\n"
+    set out to out attach "}\n\n"
     create variable functions as list with value get_key(ir_mod, "functions")
     create variable i as integer with value 0
     while i < length(functions) do

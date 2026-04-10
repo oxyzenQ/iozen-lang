@@ -1,0 +1,41 @@
+# Test 51: Standard Library Basic
+# Test len(), to_string(), substr(), contains()
+
+print "Test 51: Stdlib Basic"
+
+# len() for strings
+create variable msg as text with value "Hello"
+create variable msglen as integer with value len(msg)
+print "len(\"Hello\") = " attach msglen
+
+# len() for lists
+create variable mylist as list with value [1, 2, 3]
+create variable listlen as integer with value len(mylist)
+print "len([1,2,3]) = " attach listlen
+
+# to_string() for integers
+create variable num as integer with value 42
+create variable numstr as text with value to_string(num)
+print "to_string(42) = " attach numstr
+
+# to_string() for booleans
+create variable flag as boolean with value true
+create variable flagstr as text with value to_string(flag)
+print "to_string(true) = " attach flagstr
+
+# substr() - extract substring
+create variable hello as text with value "Hello World"
+create variable sub1 as text with value substr(hello, 0, 5)
+print "substr(\"Hello World\", 0, 5) = " attach sub1
+
+create variable sub2 as text with value substr(hello, 6, 11)
+print "substr(\"Hello World\", 6, 11) = " attach sub2
+
+# contains() - check substring
+create variable haslo as boolean with value contains("Hello", "lo")
+print "contains(\"Hello\", \"lo\") = " attach to_string(haslo)
+
+create variable hasxyz as boolean with value contains("Hello", "xyz")
+print "contains(\"Hello\", \"xyz\") = " attach to_string(hasxyz)
+
+print "Test 51 Complete"
