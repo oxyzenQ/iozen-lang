@@ -998,6 +998,173 @@ function check_return_paths with ast_node as map returns nothing
 end
 
 # ============================================================
+# CONSTANT PROPAGATION (Phase 10.5)
+# ============================================================
+
+function propagate_ir_expr with ir_expr as map and env as map returns map
+    create variable etype as text with value get_key(ir_expr, "type")
+
+    when etype equals "IRSymbolRef" do
+        create variable sym_id as integer with value get_key(ir_expr, "symbol_id")
+        when has_key(env, sym_id) do
+            # Replace variable reference with its constant value
+            return env[sym_id]
+        end
+        return ir_expr
+    end
+
+    when etype equals "IRBinaryOp" do
+        create variable left_prop as map with value propagate_ir_expr(get_key(ir_expr, "left"), env)
+        create variable right_prop as map with value propagate_ir_expr(get_key(ir_expr, "right"), env)
+        return map("type", "IRBinaryOp", "op", get_key(ir_expr, "op"), "left", left_prop, "right", right_prop, "data_type", get_key(ir_expr, "data_type"))
+    end
+
+    when etype equals "IRUnaryOp" do
+        return map("type", "IRUnaryOp", "op", get_key(ir_expr, "op"), "operand", propagate_ir_expr(get_key(ir_expr, "operand"), env), "data_type", get_key(ir_expr, "data_type"))
+    end
+
+    when etype equals "IRCall" do
+        # Propagate in arguments, but don't propagate the call itself
+        create variable args as list with value get_key(ir_expr, "args")
+        create variable prop_args as list with value []
+        create variable i as integer with value 0
+        while i < length(args) do
+            push(prop_args, propagate_ir_expr(args[i], env))
+            increase i by 1
+        end
+        return map("type", "IRCall", "func", get_key(ir_expr, "func"), "args", prop_args, "data_type", get_key(ir_expr, "data_type"))
+    end
+
+    # IRLiteral and others - return as-is
+    return ir_expr
+end
+
+function propagate_ir_stmt with ir_stmt as map and env as map returns map
+    create variable stype as text with value get_key(ir_stmt, "type")
+
+    when stype equals "IRVarDecl" do
+        create variable prop_init as map with value propagate_ir_expr(get_key(ir_stmt, "init"), env)
+
+        # If initialized with literal, add to environment
+        when get_key(prop_init, "type") equals "IRLiteral" do
+            create variable sym_id as integer with value get_key(ir_stmt, "symbol_id")
+            set_key(env, sym_id, prop_init)
+        end
+
+        return map("type", "IRVarDecl", "name", get_key(ir_stmt, "name"), "symbol_id", get_key(ir_stmt, "symbol_id"), "var_type", get_key(ir_stmt, "var_type"), "init", prop_init)
+    end
+
+    when stype equals "IRAssign" do
+        create variable prop_value as map with value propagate_ir_expr(get_key(ir_stmt, "value"), env)
+
+        # If assigning a literal, update environment
+        # If not, remove from environment (variable is no longer constant)
+        create variable sym_id as integer with value get_key(ir_stmt, "symbol_id")
+        when get_key(prop_value, "type") equals "IRLiteral" do
+            set_key(env, sym_id, prop_value)
+        end
+        when get_key(prop_value, "type") != "IRLiteral" do
+            when has_key(env, sym_id) do
+                delete_key(env, sym_id)
+            end
+        end
+
+        return map("type", "IRAssign", "name", get_key(ir_stmt, "name"), "symbol_id", sym_id, "value", prop_value)
+    end
+
+    when stype equals "IRReturn" do
+        return map("type", "IRReturn", "value", propagate_ir_expr(get_key(ir_stmt, "value"), env))
+    end
+
+    when stype equals "IRPrint" do
+        return map("type", "IRPrint", "value", propagate_ir_expr(get_key(ir_stmt, "value"), env))
+    end
+
+    when stype equals "IRIf" do
+        create variable prop_cond as map with value propagate_ir_expr(get_key(ir_stmt, "cond"), env)
+        create variable then_body as list with value get_key(ir_stmt, "then_body")
+        create variable prop_then as list with value []
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            push(prop_then, propagate_ir_stmt(then_body[i], env))
+            increase i by 1
+        end
+        create variable else_body as list with value get_key(ir_stmt, "else_body")
+        create variable prop_else as list with value []
+        set i to 0
+        while i < length(else_body) do
+            push(prop_else, propagate_ir_stmt(else_body[i], env))
+            increase i by 1
+        end
+        return map("type", "IRIf", "cond", prop_cond, "then_body", prop_then, "else_body", prop_else)
+    end
+
+    when stype equals "IRWhile" do
+        create variable prop_cond as map with value propagate_ir_expr(get_key(ir_stmt, "cond"), env)
+        # Note: For loops, we clear the env because we can't track across iterations
+        create variable empty_env as map with value map()
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable prop_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(prop_body, propagate_ir_stmt(body[i], empty_env))
+            increase i by 1
+        end
+        return map("type", "IRWhile", "cond", prop_cond, "body", prop_body)
+    end
+
+    when stype equals "IRRepeat" do
+        create variable prop_count as map with value propagate_ir_expr(get_key(ir_stmt, "count"), env)
+        # Clear env for loop body
+        create variable empty_env as map with value map()
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable prop_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(prop_body, propagate_ir_stmt(body[i], empty_env))
+            increase i by 1
+        end
+        return map("type", "IRRepeat", "count", prop_count, "body", prop_body)
+    end
+
+    when stype equals "IRFunction" do
+        # Fresh env for each function
+        create variable func_env as map with value map()
+        create variable body as list with value get_key(ir_stmt, "body")
+        create variable prop_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            push(prop_body, propagate_ir_stmt(body[i], func_env))
+            increase i by 1
+        end
+        return map("type", "IRFunction", "name", get_key(ir_stmt, "name"), "ret_type", get_key(ir_stmt, "ret_type"), "body", prop_body)
+    end
+
+    return ir_stmt
+end
+
+function propagate_ir_module with ir_module as map returns map
+    create variable env as map with value map()
+    create variable prop_functions as list with value []
+    create variable functions as list with value get_key(ir_module, "functions")
+    create variable i as integer with value 0
+    while i < length(functions) do
+        push(prop_functions, propagate_ir_stmt(functions[i], env))
+        increase i by 1
+    end
+
+    create variable prop_globals as list with value []
+    create variable globals as list with value get_key(ir_module, "globals")
+    set i to 0
+    while i < length(globals) do
+        push(prop_globals, propagate_ir_stmt(globals[i], env))
+        increase i by 1
+    end
+
+    return map("functions", prop_functions, "globals", prop_globals)
+end
+
+# ============================================================
 # TYPE CHECKING (Phase 10)
 # ============================================================
 
@@ -1900,8 +2067,13 @@ end
 print "  ✓ Types verified"
 print ""
 
+print "▸ Stage 3.45: Constant Propagation..."
+create variable ir_module_propagated as map with value propagate_ir_module(ir_module)
+print "  ✓ Constants propagated"
+print ""
+
 print "▸ Stage 3.5: IR Optimization (Constant Folding)..."
-create variable ir_module_optimized as map with value optimize_ir_module(ir_module)
+create variable ir_module_optimized as map with value optimize_ir_module(ir_module_propagated)
 print "  ✓ IR optimized"
 print ""
 

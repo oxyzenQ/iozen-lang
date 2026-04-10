@@ -1,0 +1,32 @@
+# Test 46: Constant Propagation
+# Verify x = 5, y = x + 3 becomes y = 8 at compile time
+
+print "Test 46: Constant Propagation"
+
+# Basic propagation: x = 5, y = x + 3 → y = 8
+create variable x as integer with value 5
+create variable y as integer with value x + 3
+print "y = x + 3 = " attach y
+when y equals 8 do print "  PASS: Basic propagation" end
+
+# Chain propagation: x → y → z
+create variable a as integer with value 2
+create variable b as integer with value a + 3  # b = 5
+create variable c as integer with value b + 4  # c = 9
+print "c = a + 3 + 4 = " attach c
+when c equals 9 do print "  PASS: Chain propagation" end
+
+# Mixed with constant folding
+create variable d as integer with value 10
+create variable e as integer with value d + 2 + 3  # Should fold to d + 5, then propagate
+print "e = d + 2 + 3 = " attach e
+when e equals 15 do print "  PASS: Propagation + folding" end
+
+# Nested expression
+create variable f as integer with value 3
+create variable g as integer with value (f + 1) * 2  # g = 8
+print "g = (f + 1) * 2 = " attach g
+when g equals 8 do print "  PASS: Nested propagation" end
+
+print ""
+print "Test 46 Complete"
