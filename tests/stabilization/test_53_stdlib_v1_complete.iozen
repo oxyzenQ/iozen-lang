@@ -1,0 +1,173 @@
+# Test 53: Standard Library v1 Complete Test
+# Tests all v1 stdlib functions
+
+function test_strings with no args returns integer
+    print "Testing string functions..."
+    
+    # len()
+    create variable s1 as text with value "hello"
+    create variable l1 as integer with value len(s1)
+    print "len('hello') = " attach l1
+    when l1 != 5 do
+        print "FAIL: len()"
+        return 1
+    end
+    
+    # to_string()
+    create variable n1 as integer with value 42
+    create variable s2 as text with value to_string(n1)
+    print "to_string(42) = " attach s2
+    
+    # substr()
+    create variable s3 as text with value substr("hello world", 0, 5)
+    print "substr('hello world', 0, 5) = " attach s3
+    when s3 != "hello" do
+        print "FAIL: substr()"
+        return 1
+    end
+    
+    # contains()
+    create variable has_world as boolean with value contains("hello world", "world")
+    print "contains('hello world', 'world') = " attach has_world
+    when not has_world do
+        print "FAIL: contains()"
+        return 1
+    end
+    
+    # upper() / lower()
+    create variable up as text with value upper("hello")
+    create variable low as text with value lower("WORLD")
+    print "upper('hello') = " attach up
+    print "lower('WORLD') = " attach low
+    
+    # trim()
+    create variable trimmed as text with value trim("  hello  ")
+    print "trim('  hello  ') = " attach trimmed
+    when trimmed != "hello" do
+        print "FAIL: trim()"
+        return 1
+    end
+    
+    print "String functions: PASS"
+    return 0
+end
+
+function test_split_join with no args returns integer
+    print ""
+    print "Testing split/join..."
+    
+    # split()
+    create variable csv as text with value "a,b,c"
+    create variable parts as list with value split(csv, ",")
+    print "split('a,b,c', ',') length = " attach len(parts)
+    when len(parts) != 3 do
+        print "FAIL: split() length"
+        return 1
+    end
+    
+    # join()
+    create variable items as list with value ["x", "y", "z"]
+    create variable joined as text with value join(items, "-")
+    print "join(['x','y','z'], '-') = " attach joined
+    when joined != "x-y-z" do
+        print "FAIL: join()"
+        return 1
+    end
+    
+    print "Split/Join: PASS"
+    return 0
+end
+
+function test_starts_ends with no args returns integer
+    print ""
+    print "Testing starts_with/ends_with..."
+    
+    create variable text1 as text with value "hello.txt"
+    create variable has_prefix as boolean with value starts_with(text1, "hello")
+    create variable has_suffix as boolean with value ends_with(text1, ".txt")
+    
+    print "starts_with('hello.txt', 'hello') = " attach has_prefix
+    print "ends_with('hello.txt', '.txt') = " attach has_suffix
+    
+    when not has_prefix do
+        print "FAIL: starts_with()"
+        return 1
+    end
+    when not has_suffix do
+        print "FAIL: ends_with()"
+        return 1
+    end
+    
+    print "Starts/Ends: PASS"
+    return 0
+end
+
+function test_type_conversion with no args returns integer
+    print ""
+    print "Testing type conversion..."
+    
+    # to_integer()
+    create variable n2 as integer with value to_integer("42")
+    print "to_integer('42') = " attach n2
+    when n2 != 42 do
+        print "FAIL: to_integer()"
+        return 1
+    end
+    
+    # to_float()
+    create variable f1 as float with value to_float("3.14")
+    print "to_float('3.14') = " attach f1
+    when f1 < 3.13 or f1 > 3.15 do
+        print "FAIL: to_float()"
+        return 1
+    end
+    
+    print "Type Conversion: PASS"
+    return 0
+end
+
+function test_list_ops with no args returns integer
+    print ""
+    print "Testing list operations..."
+    
+    # len() on list
+    create variable mylist as list with value [1, 2, 3, 4, 5]
+    create variable list_len as integer with value len(mylist)
+    print "len([1,2,3,4,5]) = " attach list_len
+    when list_len != 5 do
+        print "FAIL: len(list)"
+        return 1
+    end
+    
+    print "List operations: PASS"
+    return 0
+end
+
+function main with no args returns integer
+    print "=== Standard Library v1 Complete Test ==="
+    print ""
+    
+    create variable result as integer with value 0
+    
+    # Run all test groups
+    set result to test_strings()
+    when result != 0 do return result end
+    
+    set result to test_split_join()
+    when result != 0 do return result end
+    
+    set result to test_starts_ends()
+    when result != 0 do return result end
+    
+    set result to test_type_conversion()
+    when result != 0 do return result end
+    
+    set result to test_list_ops()
+    when result != 0 do return result end
+    
+    print ""
+    print "=== ALL TESTS PASSED ==="
+    print "IOZEN Standard Library v1 is working!"
+    
+    return 0
+end
