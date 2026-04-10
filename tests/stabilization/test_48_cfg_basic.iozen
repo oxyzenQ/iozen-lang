@@ -1,0 +1,30 @@
+# Test 48: CFG Basic
+# Verify control flow graph handles if/while correctly
+
+print "Test 48: CFG Basic"
+
+# Simple if
+create variable x as integer with value 10
+when x > 5 do
+    print "x is greater than 5"
+else
+    print "x is not greater than 5"
+end
+
+# Simple while loop
+create variable count as integer with value 0
+while count < 3 do
+    print "count = " attach count
+    set count to count + 1
+end
+
+# Nested if inside loop
+create variable i as integer with value 0
+while i < 2 do
+    when i equals 0 do
+        print "i is zero"
+    end
+    set i to i + 1
+end
+
+print "Test 48 Complete"

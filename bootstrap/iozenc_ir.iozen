@@ -1666,6 +1666,45 @@ function eliminate_dead_code_module with ir_module as map returns map
     return map("functions", dce_functions, "globals", dce_globals)
 end
 
+# Check if IR module changed between iterations
+# Uses serialization comparison for reliability
+function ir_module_changed with old_ir as map and new_ir as map returns boolean
+    # Simple serialize: count statements in all functions
+    create variable old_count as integer with value 0
+    create variable new_count as integer with value 0
+
+    create variable old_funcs as list with value get_key(old_ir, "functions")
+    create variable new_funcs as list with value get_key(new_ir, "functions")
+
+    # Different number of functions = changed
+    when length(old_funcs) != length(new_funcs) do return true end
+
+    # Count total statements
+    create variable i as integer with value 0
+    while i < length(old_funcs) do
+        create variable old_body as list with value get_key(old_funcs[i], "body")
+        create variable new_body as list with value get_key(new_funcs[i], "body")
+
+        # Different body length = changed
+        when length(old_body) != length(new_body) do return true end
+
+        set old_count to old_count + length(old_body)
+        set new_count to new_count + length(new_body)
+        increase i by 1
+    end
+
+    # Also check globals
+    create variable old_globals as list with value get_key(old_ir, "globals")
+    create variable new_globals as list with value get_key(new_ir, "globals")
+    when length(old_globals) != length(new_globals) do return true end
+
+    set old_count to old_count + length(old_globals)
+    set new_count to new_count + length(new_globals)
+
+    # If counts differ, something changed
+    return old_count != new_count
+end
+
 # ============================================================
 # CONTROL FLOW GRAPH (Phase 12) - Basic Structure
 # ============================================================

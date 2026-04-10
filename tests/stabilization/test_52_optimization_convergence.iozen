@@ -1,0 +1,19 @@
+# Test 52: Optimization Loop Convergence
+# Tests that iterative optimization converges correctly
+
+function fib_opt with n as integer returns integer
+    when n <= 1 do return n end
+    return fib_opt(n - 1) + fib_opt(n - 2)
+end
+
+function main with no args returns integer
+    # This should trigger multiple optimization passes
+    create variable x as integer with value 5
+    create variable y as integer with value x + 3
+    create variable z as integer with value y + 2
+    
+    # z should be folded to 10 after optimization
+    print z
+    
+    return 0
+end
