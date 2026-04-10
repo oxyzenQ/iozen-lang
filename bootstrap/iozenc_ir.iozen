@@ -1165,6 +1165,233 @@ function propagate_ir_module with ir_module as map returns map
 end
 
 # ============================================================
+# DEAD CODE ELIMINATION (Phase 11)
+# ============================================================
+
+function collect_used_symbols_expr with expr as map and used_set as map returns nothing
+    create variable etype as text with value get_key(expr, "type")
+
+    when etype equals "IRSymbolRef" do
+        create variable sym_id as integer with value get_key(expr, "symbol_id")
+        set_key(used_set, sym_id, true)
+    end
+
+    when etype equals "IRBinaryOp" do
+        collect_used_symbols_expr with get_key(expr, "left") and used_set
+        collect_used_symbols_expr with get_key(expr, "right") and used_set
+    end
+
+    when etype equals "IRUnaryOp" do
+        collect_used_symbols_expr with get_key(expr, "operand") and used_set
+    end
+
+    when etype equals "IRCall" do
+        create variable args as list with value get_key(expr, "args")
+        create variable i as integer with value 0
+        while i < length(args) do
+            collect_used_symbols_expr with args[i] and used_set
+            increase i by 1
+        end
+    end
+end
+
+function collect_used_symbols_stmt with stmt as map and used_set as map returns nothing
+    create variable stype as text with value get_key(stmt, "type")
+
+    when stype equals "IRVarDecl" do
+        collect_used_symbols_expr with get_key(stmt, "init") and used_set
+    end
+
+    when stype equals "IRAssign" do
+        collect_used_symbols_expr with get_key(stmt, "value") and used_set
+    end
+
+    when stype equals "IRReturn" do
+        collect_used_symbols_expr with get_key(stmt, "value") and used_set
+    end
+
+    when stype equals "IRPrint" do
+        collect_used_symbols_expr with get_key(stmt, "value") and used_set
+    end
+
+    when stype equals "IRIf" do
+        collect_used_symbols_expr with get_key(stmt, "cond") and used_set
+        create variable then_body as list with value get_key(stmt, "then_body")
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            collect_used_symbols_stmt with then_body[i] and used_set
+            increase i by 1
+        end
+        create variable else_body as list with value get_key(stmt, "else_body")
+        set i to 0
+        while i < length(else_body) do
+            collect_used_symbols_stmt with else_body[i] and used_set
+            increase i by 1
+        end
+    end
+
+    when stype equals "IRWhile" do
+        collect_used_symbols_expr with get_key(stmt, "cond") and used_set
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            collect_used_symbols_stmt with body[i] and used_set
+            increase i by 1
+        end
+    end
+
+    when stype equals "IRRepeat" do
+        collect_used_symbols_expr with get_key(stmt, "count") and used_set
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            collect_used_symbols_stmt with body[i] and used_set
+            increase i by 1
+        end
+    end
+
+    when stype equals "IRFunction" do
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            collect_used_symbols_stmt with body[i] and used_set
+            increase i by 1
+        end
+    end
+end
+
+function is_pure_vardecl with stmt as map returns boolean
+    # Check if variable declaration has no side effects
+    # For now, all our var decls are pure (just initialization)
+    # Future: check if init expression has function calls
+    return true
+end
+
+function eliminate_dead_code_stmt with stmt as map and used_set as map returns map
+    create variable stype as text with value get_key(stmt, "type")
+
+    when stype equals "IRVarDecl" do
+        create variable sym_id as integer with value get_key(stmt, "symbol_id")
+        when not has_key(used_set, sym_id) and is_pure_vardecl(stmt) do
+            # Return a marker for dead code (will be filtered out)
+            return map("type", "IRDead")
+        end
+        return stmt
+    end
+
+    when stype equals "IRIf" do
+        create variable then_body as list with value get_key(stmt, "then_body")
+        create variable filtered_then as list with value []
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            create variable filtered_stmt as map with value eliminate_dead_code_stmt(then_body[i], used_set)
+            when get_key(filtered_stmt, "type") != "IRDead" do
+                push(filtered_then, filtered_stmt)
+            end
+            increase i by 1
+        end
+
+        create variable else_body as list with value get_key(stmt, "else_body")
+        create variable filtered_else as list with value []
+        set i to 0
+        while i < length(else_body) do
+            create variable filtered_stmt as map with value eliminate_dead_code_stmt(else_body[i], used_set)
+            when get_key(filtered_stmt, "type") != "IRDead" do
+                push(filtered_else, filtered_stmt)
+            end
+            increase i by 1
+        end
+
+        return map("type", "IRIf", "cond", get_key(stmt, "cond"), "then_body", filtered_then, "else_body", filtered_else)
+    end
+
+    when stype equals "IRWhile" do
+        create variable body as list with value get_key(stmt, "body")
+        create variable filtered_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            create variable filtered_stmt as map with value eliminate_dead_code_stmt(body[i], used_set)
+            when get_key(filtered_stmt, "type") != "IRDead" do
+                push(filtered_body, filtered_stmt)
+            end
+            increase i by 1
+        end
+        return map("type", "IRWhile", "cond", get_key(stmt, "cond"), "body", filtered_body)
+    end
+
+    when stype equals "IRRepeat" do
+        create variable body as list with value get_key(stmt, "body")
+        create variable filtered_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            create variable filtered_stmt as map with value eliminate_dead_code_stmt(body[i], used_set)
+            when get_key(filtered_stmt, "type") != "IRDead" do
+                push(filtered_body, filtered_stmt)
+            end
+            increase i by 1
+        end
+        return map("type", "IRRepeat", "count", get_key(stmt, "count"), "body", filtered_body)
+    end
+
+    when stype equals "IRFunction" do
+        create variable body as list with value get_key(stmt, "body")
+        create variable filtered_body as list with value []
+        create variable i as integer with value 0
+        while i < length(body) do
+            create variable filtered_stmt as map with value eliminate_dead_code_stmt(body[i], used_set)
+            when get_key(filtered_stmt, "type") != "IRDead" do
+                push(filtered_body, filtered_stmt)
+            end
+            increase i by 1
+        end
+        return map("type", "IRFunction", "name", get_key(stmt, "name"), "ret_type", get_key(stmt, "ret_type"), "body", filtered_body)
+    end
+
+    return stmt
+end
+
+function eliminate_dead_code_module with ir_module as map returns map
+    # First pass: collect all used symbols
+    create variable used_set as map with value map()
+    create variable functions as list with value get_key(ir_module, "functions")
+    create variable i as integer with value 0
+    while i < length(functions) do
+        collect_used_symbols_stmt with functions[i] and used_set
+        increase i by 1
+    end
+
+    create variable globals as list with value get_key(ir_module, "globals")
+    set i to 0
+    while i < length(globals) do
+        collect_used_symbols_stmt with globals[i] and used_set
+        increase i by 1
+    end
+
+    # Second pass: eliminate dead code
+    create variable dce_functions as list with value []
+    set i to 0
+    while i < length(functions) do
+        create variable filtered_stmt as map with value eliminate_dead_code_stmt(functions[i], used_set)
+        when get_key(filtered_stmt, "type") != "IRDead" do
+            push(dce_functions, filtered_stmt)
+        end
+        increase i by 1
+    end
+
+    create variable dce_globals as list with value []
+    set i to 0
+    while i < length(globals) do
+        create variable filtered_stmt as map with value eliminate_dead_code_stmt(globals[i], used_set)
+        when get_key(filtered_stmt, "type") != "IRDead" do
+            push(dce_globals, filtered_stmt)
+        end
+        increase i by 1
+    end
+
+    return map("functions", dce_functions, "globals", dce_globals)
+end
+
+# ============================================================
 # TYPE CHECKING (Phase 10)
 # ============================================================
 
@@ -2077,7 +2304,13 @@ create variable ir_module_optimized as map with value optimize_ir_module(ir_modu
 print "  ✓ IR optimized"
 print ""
 
+print "▸ Stage 3.6: Dead Code Elimination..."
+create variable ir_module_dce as map with value eliminate_dead_code_module(ir_module_optimized)
+print "  ✓ Dead code eliminated"
+print ""
+
 print "▸ Stage 4: IR → C99 Code Generation..."
+create variable c_output as text with value ir_module_to_c(ir_module_dce)
 create variable c_output as text with value ir_module_to_c(ir_module_optimized)
 print "  ✓ C code generated"
 print ""

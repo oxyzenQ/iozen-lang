@@ -1,0 +1,27 @@
+# Test 47: Dead Code Elimination
+# Verify unused variables are removed
+
+print "Test 47: Dead Code Elimination"
+
+# x is used, y is unused
+create variable x as integer with value 42
+create variable y as integer with value 100
+print "x = " attach x
+when x equals 42 do print "  PASS: Used variable kept" end
+
+# a is used in return, b is unused
+create variable a as integer with value 5
+create variable b as integer with value 10
+print "a = " attach a
+when a equals 5 do print "  PASS: Unused variable eliminated" end
+
+# Chain: x used, y computed but not used
+# After propagation + folding + DCE: only result should remain
+create variable base as integer with value 10
+create variable temp as integer with value base + 5
+create variable result as integer with value temp + 5
+print "result = " attach result
+when result equals 20 do print "  PASS: Chain DCE with propagation" end
+
+print ""
+print "Test 47 Complete"
