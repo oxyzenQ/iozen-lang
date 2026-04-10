@@ -901,7 +901,7 @@ export class Interpreter {
         const b = node as BinaryExprNode;
         const left = this.evaluate(b.left, env);
         const right = this.evaluate(b.right, env);
-        return this.evalBinary(b.operator, left, right);
+        return this.evalBinary(b.operator, left, right, b);
       }
 
       case 'UnaryExpr': {
@@ -1082,7 +1082,7 @@ export class Interpreter {
     }
   }
 
-  private evalBinary(op: string, left: IOZENValue, right: IOZENValue): IOZENValue {
+  private evalBinary(op: string, left: IOZENValue, right: IOZENValue, node: ASTNode): IOZENValue {
     switch (op) {
       case '+':
         if (typeof left === 'string' || typeof right === 'string') {
@@ -1099,7 +1099,10 @@ export class Interpreter {
         }
         return this.toNumber(left) * this.toNumber(right);
       case '/':
-        if (this.toNumber(right) === 0) throw new RuntimeError('Division by zero', ...this.findNodeLine('/'));
+        if (this.toNumber(right) === 0) {
+          const [line, col] = this.getNodeLocation(node);
+          throw new RuntimeError('Division by zero', line, col);
+        }
         return this.toNumber(left) / this.toNumber(right);
       case '%': return this.toNumber(left) % this.toNumber(right);
       case '==': return left === right;
@@ -2719,6 +2722,18 @@ export class Interpreter {
     // For operators/symbols, search for the hint in source
     const loc = this.findNameInSource(hint);
     return loc ? [loc.line, loc.column] : [];
+  }
+
+  /**
+   * Phase 14.1: Get location from AST node if available
+   * Returns [line, column] tuple from node.location or undefined
+   */
+  private getNodeLocation(node: ASTNode): [number, number | undefined] {
+    const loc = (node as any).location;
+    if (loc && typeof loc.line === 'number' && typeof loc.column === 'number') {
+      return [loc.line, loc.column];
+    }
+    return [];
   }
 }
 
