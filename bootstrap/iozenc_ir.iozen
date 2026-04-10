@@ -336,19 +336,116 @@ function lex_read_str() returns list
     return ["STR", str]
 end
 
+# Location-aware versions of lexer helpers
+function lex_read_ident_with_loc with line as integer and col as integer returns list
+    create variable word as text with value ""
+    while lex_pos < lex_len and lex_is_alnum(char_at(source, lex_pos)) do
+        set word to word attach char_at(source, lex_pos)
+        set lex_pos to lex_pos + 1
+    end
+    # Check for keywords
+    when word equals "create" do return ["CREATE", "create", line, col] end
+    when word equals "variable" do return ["VAR", "variable", line, col] end
+    when word equals "as" do return ["AS", "as", line, col] end
+    when word equals "with" do return ["WITH", "with", line, col] end
+    when word equals "value" do return ["VALUE", "value", line, col] end
+    when word equals "integer" do return ["INTTYPE", "integer", line, col] end
+    when word equals "text" do return ["TEXTTYPE", "text", line, col] end
+    when word equals "boolean" do return ["BOOLEANTYPE", "boolean", line, col] end
+    when word equals "nothing" do return ["NOTHINGTYPE", "nothing", line, col] end
+    when word equals "set" do return ["SET", "set", line, col] end
+    when word equals "to" do return ["TO", "to", line, col] end
+    when word equals "when" do return ["WHEN", "when", line, col] end
+    when word equals "do" do return ["DO", "do", line, col] end
+    when word equals "else" do return ["ELSE", "else", line, col] end
+    when word equals "end" do return ["END", "end", line, col] end
+    when word equals "while" do return ["WHILE", "while", line, col] end
+    when word equals "repeat" do return ["REPEAT", "repeat", line, col] end
+    when word equals "times" do return ["TIMES", "times", line, col] end
+    when word equals "for" do return ["FOR", "for", line, col] end
+    when word equals "from" do return ["FROM", "from", line, col] end
+    when word equals "return" do return ["RETURN", "return", line, col] end
+    when word equals "returns" do return ["RETURNS", "returns", line, col] end
+    when word equals "function" do return ["FUNCTION", "function", line, col] end
+    when word equals "stop" do return ["STOP", "stop", line, col] end
+    when word equals "or" do return ["OR", "or", line, col] end
+    when word equals "and" do return ["AND", "and", line, col] end
+    when word equals "not" do return ["NOT", "not", line, col] end
+    when word equals "equals" do return ["EQUALS", "equals", line, col] end
+    when word equals "print" do return ["PRINT", "print", line, col] end
+    when word equals "true" do return ["BOOL", "true", line, col] end
+    when word equals "false" do return ["BOOL", "false", line, col] end
+    when word equals "map" do return ["MAP", "map", line, col] end
+    when word equals "list" do return ["LIST", "list", line, col] end
+    when word equals "has_key" do return ["HAS_KEY", "has_key", line, col] end
+    when word equals "get_key" do return ["GET_KEY", "get_key", line, col] end
+    when word equals "set_key" do return ["SET_KEY", "set_key", line, col] end
+    when word equals "delete_key" do return ["DELETE_KEY", "delete_key", line, col] end
+    when word equals "length" do return ["LENGTH", "length", line, col] end
+    when word equals "push" do return ["PUSH", "push", line, col] end
+    when word equals "pop" do return ["POP", "pop", line, col] end
+    when word equals "insert" do return ["INSERT", "insert", line, col] end
+    when word equals "increase" do return ["INCREASE", "increase", line, col] end
+    when word equals "decrease" do return ["DECREASE", "decrease", line, col] end
+    when word equals "by" do return ["BY", "by", line, col] end
+    when word equals "attach" do return ["ATTACH", "attach", line, col] end
+    when word equals "split" do return ["SPLIT", "split", line, col] end
+    return ["IDENT", word, line, col]
+end
+
+function lex_read_num_with_loc with line as integer and col as integer returns list
+    create variable num as text with value ""
+    while lex_pos < lex_len and lex_is_digit(char_at(source, lex_pos)) do
+        set num to num attach char_at(source, lex_pos)
+        set lex_pos to lex_pos + 1
+    end
+    return ["INT", num, line, col]
+end
+
+function lex_read_str_with_loc with line as integer and col as integer returns list
+    set lex_pos to lex_pos + 1
+    create variable str as text with value ""
+    while lex_pos < lex_len do
+        create variable ch as text with value char_at(source, lex_pos)
+        when ch equals "\"" do
+            set lex_pos to lex_pos + 1
+            return ["STR", str, line, col]
+        end
+        set str to str attach ch
+        set lex_pos to lex_pos + 1
+    end
+    return ["STR", str, line, col]
+end
+
 function tokenize() returns list
     create variable matched as boolean with value false
+    create variable current_line as integer with value 1
+    create variable current_col as integer with value 1
+    create variable line_start_pos as integer with value 0
+
     while lex_pos < lex_len do
         while lex_pos < lex_len and char_at(source, lex_pos) equals " " do
             set lex_pos to lex_pos + 1
+            set current_col to current_col + 1
         end
         when lex_pos >= lex_len do return tokens end
         create variable ch as text with value char_at(source, lex_pos)
         set matched to false
-        when ch equals "\n" or ch equals "\t" or ch equals "\r" do
+
+        # Track newlines for line counting
+        when ch equals "\n" do
             set lex_pos to lex_pos + 1
+            set current_line to current_line + 1
+            set current_col to 1
+            set line_start_pos to lex_pos
             set matched to true
         end
+        when ch equals "\t" or ch equals "\r" do
+            set lex_pos to lex_pos + 1
+            set current_col to current_col + 1
+            set matched to true
+        end
+
         when ch equals "#" do
             while lex_pos < lex_len and char_at(source, lex_pos) != "\n" do
                 set lex_pos to lex_pos + 1
@@ -356,28 +453,29 @@ function tokenize() returns list
             set matched to true
         end
         when ch equals "\"" do
-            push(tokens, lex_read_str())
+            push(tokens, lex_read_str_with_loc(current_line, current_col))
             set matched to true
         end
         when lex_is_digit(ch) do
-            push(tokens, lex_read_num())
+            push(tokens, lex_read_num_with_loc(current_line, current_col))
             set matched to true
         end
         when lex_is_alpha(ch) do
-            push(tokens, lex_read_ident())
+            push(tokens, lex_read_ident_with_loc(current_line, current_col))
             set matched to true
         end
-        when ch equals "+" do push(tokens, ["PLUS", "+"]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "-" do push(tokens, ["MINUS", "-"]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "*" do push(tokens, ["STAR", "*"]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "/" do push(tokens, ["SLASH", "/"]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "%" do push(tokens, ["PERCENT", "%"]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "," do push(tokens, ["COMMA", ","]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "(" do push(tokens, ["LPAREN", "("]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals ")" do push(tokens, ["RPAREN", ")"]) set lex_pos to lex_pos + 1 set matched to true end
-        when ch equals "=" do push(tokens, ["ASSIGN", "="]) set lex_pos to lex_pos + 1 set matched to true end
+        when ch equals "+" do push(tokens, ["PLUS", "+", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "-" do push(tokens, ["MINUS", "-", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "*" do push(tokens, ["STAR", "*", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "/" do push(tokens, ["SLASH", "/", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "%" do push(tokens, ["PERCENT", "%", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "," do push(tokens, ["COMMA", ",", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "(" do push(tokens, ["LPAREN", "(", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals ")" do push(tokens, ["RPAREN", ")", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
+        when ch equals "=" do push(tokens, ["ASSIGN", "=", current_line, current_col]) set lex_pos to lex_pos + 1 set current_col to current_col + 1 set matched to true end
         when matched equals false and lex_pos < lex_len do
             set lex_pos to lex_pos + 1
+            set current_col to current_col + 1
         end
     end
     return tokens
