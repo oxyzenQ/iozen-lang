@@ -1161,9 +1161,10 @@ export class Parser {
         this.consume(TokenType.RightParen, 'Expected ")"');
 
         if (expr.kind === 'Identifier') {
-          expr = { kind: 'FunctionCallExpr', name: (expr as IdentifierNode).name, arguments: args } as FunctionCallExprNode;
+          const ident = expr as IdentifierNode;
+          expr = { kind: 'FunctionCallExpr', name: ident.name, arguments: args, location: ident.location } as FunctionCallExprNode;
         } else {
-          expr = { kind: 'FunctionCallExpr', name: '__call__', arguments: [expr, ...args] } as FunctionCallExprNode;
+          expr = { kind: 'FunctionCallExpr', name: '__call__', arguments: [expr, ...args], location: (expr as any).location } as FunctionCallExprNode;
         }
         continue;
       }
@@ -1179,7 +1180,8 @@ export class Parser {
           this.advance(); // consume "and"
           args.push(this.parseOr());
         }
-        expr = { kind: 'FunctionCallExpr', name: (expr as IdentifierNode).name, arguments: args } as FunctionCallExprNode;
+        const ident = expr as IdentifierNode;
+        expr = { kind: 'FunctionCallExpr', name: ident.name, arguments: args, location: ident.location } as FunctionCallExprNode;
         continue;
       }
 
@@ -1338,7 +1340,7 @@ export class Parser {
         return this.parseNaturalCall(token.value);
       }
 
-      return { kind: 'Identifier', name: token.value } as IdentifierNode;
+      return { kind: 'Identifier', name: token.value, location: { line: token.line, column: token.column } } as IdentifierNode;
     }
 
     // "largest value in" / "smallest value in" — built-in functions
