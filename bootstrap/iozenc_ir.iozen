@@ -2818,19 +2818,61 @@ end
 print "  ✓ Types verified"
 print ""
 
-print "▸ Stage 3.45: Constant Propagation..."
-create variable ir_module_propagated as map with value propagate_ir_module(ir_module)
-print "  ✓ Constants propagated"
+print "▸ Stage 3.4: Type Checking..."
+create variable ir_module_typed as map with value type_check_module(ir_module)
+print "  ✓ Type check complete"
 print ""
 
-print "▸ Stage 3.5: IR Optimization (Constant Folding)..."
-create variable ir_module_optimized as map with value optimize_ir_module(ir_module_propagated)
-print "  ✓ IR optimized"
-print ""
+# Check for type errors and fail-fast
+when compiler_errors > 0 do
+    print ""
+    print "✗ Compilation failed due to type errors."
+    stop
+end
 
-print "▸ Stage 3.6: Dead Code Elimination..."
-create variable ir_module_dce as map with value eliminate_dead_code_module(ir_module_optimized)
-print "  ✓ Dead code eliminated"
+print "▸ Stage 3.5: Iterative Optimization Loop..."
+create variable max_iterations as integer with value 10
+create variable iteration as integer with value 0
+create variable converged as boolean with value false
+create variable current_ir as map with value ir_module_typed
+
+while iteration < max_iterations and not converged do
+    print "  ├─ Iteration " attach (iteration + 1) attach ":"
+
+    # Phase 1: Constant Propagation
+    create variable propagated_ir as map with value propagate_ir_module(current_ir)
+    print "      • Propagation"
+
+    # Phase 2: Constant Folding + Algebraic Simplification
+    create variable folded_ir as map with value optimize_ir_module(propagated_ir)
+    print "      • Folding"
+
+    # Phase 3: Dead Code Elimination
+    create variable dce_ir as map with value eliminate_dead_code_module(folded_ir)
+    print "      • DCE"
+
+    # Check for convergence (no changes from previous)
+    create variable changed as boolean with value ir_module_changed(current_ir, dce_ir)
+
+    when changed equals false do
+        set converged to true
+        print "      ✓ Converged (no more changes)"
+    end
+    when changed equals true do
+        print "      → Changes detected, continuing..."
+    end
+
+    set current_ir to dce_ir
+    increase iteration by 1
+end
+
+create variable ir_module_optimized as map with value current_ir
+when converged do
+    print "  ✓ Optimization converged after " attach iteration attach " iterations"
+end
+when not converged do
+    print "  ⚠ Optimization stopped after max iterations (" attach max_iterations attach ")"
+end
 print ""
 
 print "▸ Stage 4: IR → C99 Code Generation..."
