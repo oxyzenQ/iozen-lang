@@ -998,6 +998,148 @@ function check_return_paths with ast_node as map returns nothing
 end
 
 # ============================================================
+# TYPE CHECKING (Phase 10)
+# ============================================================
+
+function type_of_expr with expr as map returns text
+    create variable etype as text with value get_key(expr, "type")
+    when etype equals "IRLiteral" do return get_key(expr, "literal_type") end
+    when etype equals "IRSymbolRef" do return get_key(expr, "data_type") end
+    when etype equals "IRBinaryOp" do return get_key(expr, "data_type") end
+    when etype equals "IRUnaryOp" do return "boolean" end
+    when etype equals "IRCall" do return get_key(expr, "data_type") end
+    return "unknown"
+end
+
+function type_check_expr with expr as map and context as text returns nothing
+    create variable etype as text with value get_key(expr, "type")
+
+    when etype equals "IRBinaryOp" do
+        create variable op as text with value get_key(expr, "op")
+        create variable left as map with value get_key(expr, "left")
+        create variable right as map with value get_key(expr, "right")
+
+        # Type check operands first (recursively)
+        type_check_expr with left and "operand"
+        type_check_expr with right and "operand"
+
+        # Check type compatibility
+        create variable left_type as text with value type_of_expr(left)
+        create variable right_type as text with value type_of_expr(right)
+
+        # Only integer operations supported for now
+        when left_type != "integer" do
+            add_error with "Type error: left operand of " attach op attach " has type " attach left_type attach " (expected integer)"
+        end
+        when right_type != "integer" do
+            add_error with "Type error: right operand of " attach op attach " has type " attach right_type attach " (expected integer)"
+        end
+    end
+
+    when etype equals "IRUnaryOp" do
+        type_check_expr with get_key(expr, "operand") and "operand"
+    end
+
+    when etype equals "IRCall" do
+        # Type check all arguments
+        create variable args as list with value get_key(expr, "args")
+        create variable i as integer with value 0
+        while i < length(args) do
+            type_check_expr with args[i] and "argument"
+            increase i by 1
+        end
+    end
+end
+
+function type_check_stmt with stmt as map returns nothing
+    create variable stype as text with value get_key(stmt, "type")
+
+    when stype equals "IRVarDecl" do
+        type_check_expr with get_key(stmt, "init") and "initialization"
+
+        # Check if init type matches var type
+        create variable var_type as text with value get_key(stmt, "var_type")
+        create variable init_type as text with value type_of_expr(get_key(stmt, "init"))
+        when init_type != var_type and init_type != "unknown" do
+            add_error with "Type error: cannot assign " attach init_type attach " to variable of type " attach var_type
+        end
+    end
+
+    when stype equals "IRAssign" do
+        type_check_expr with get_key(stmt, "value") and "assignment"
+    end
+
+    when stype equals "IRReturn" do
+        type_check_expr with get_key(stmt, "value") and "return"
+    end
+
+    when stype equals "IRPrint" do
+        type_check_expr with get_key(stmt, "value") and "print"
+    end
+
+    when stype equals "IRIf" do
+        type_check_expr with get_key(stmt, "cond") and "condition"
+        create variable then_body as list with value get_key(stmt, "then_body")
+        create variable i as integer with value 0
+        while i < length(then_body) do
+            type_check_stmt with then_body[i]
+            increase i by 1
+        end
+        create variable else_body as list with value get_key(stmt, "else_body")
+        set i to 0
+        while i < length(else_body) do
+            type_check_stmt with else_body[i]
+            increase i by 1
+        end
+    end
+
+    when stype equals "IRWhile" do
+        type_check_expr with get_key(stmt, "cond") and "condition"
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            type_check_stmt with body[i]
+            increase i by 1
+        end
+    end
+
+    when stype equals "IRRepeat" do
+        type_check_expr with get_key(stmt, "count") and "count"
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            type_check_stmt with body[i]
+            increase i by 1
+        end
+    end
+
+    when stype equals "IRFunction" do
+        create variable body as list with value get_key(stmt, "body")
+        create variable i as integer with value 0
+        while i < length(body) do
+            type_check_stmt with body[i]
+            increase i by 1
+        end
+    end
+end
+
+function type_check_ir with ir_module as map returns nothing
+    create variable functions as list with value get_key(ir_module, "functions")
+    create variable i as integer with value 0
+    while i < length(functions) do
+        type_check_stmt with functions[i]
+        increase i by 1
+    end
+
+    create variable globals as list with value get_key(ir_module, "globals")
+    set i to 0
+    while i < length(globals) do
+        type_check_stmt with globals[i]
+        increase i by 1
+    end
+end
+
+# ============================================================
 # CONSTANT FOLDING OPTIMIZATION (Phase 9.5)
 # ============================================================
 
@@ -1035,7 +1177,7 @@ function fold_ir_expr with ir_expr as map returns map
                     set result to left_val / right_val
                 end
 
-                return map("type", "IRLiteral", "literal_type", "integer", "value", result)
+                return map("type", "IRLiteral", "literal_type", "integer", "value", result, "data_type", "integer")
             end
         end
 
@@ -1283,7 +1425,7 @@ end
 function ast_to_ir_expr(ast_node) returns map
     create variable kind as text with value get_key(ast_node, "kind")
     when kind equals "Literal" do
-        return map("type", "IRLiteral", "literal_type", get_key(ast_node, "type"), "value", get_key(ast_node, "value"))
+        return map("type", "IRLiteral", "literal_type", get_key(ast_node, "type"), "value", get_key(ast_node, "value"), "data_type", get_key(ast_node, "type"))
     end
     when kind equals "Identifier" do
         return map("type", "IRVariable", "name", get_key(ast_node, "name"))
@@ -1291,7 +1433,7 @@ function ast_to_ir_expr(ast_node) returns map
     when kind equals "SymbolRef" do
         create variable sym_id as integer with value get_key(ast_node, "symbol_id")
         create variable sym as map with value get_symbol(sym_id)
-        return map("type", "IRSymbolRef", "symbol_id", sym_id, "nm", get_key(sym, "nm"))
+        return map("type", "IRSymbolRef", "symbol_id", sym_id, "nm", get_key(sym, "nm"), "data_type", get_key(sym, "dt"))
     end
     when kind equals "BinaryExpr" do
         create variable op as text with value get_key(ast_node, "operator")
@@ -1309,7 +1451,13 @@ function ast_to_ir_expr(ast_node) returns map
         when op equals "%" do set op to "MOD" end
         when op equals "&&" do set op to "AND" end
         when op equals "||" do set op to "OR" end
-        return map("type", "IRBinaryOp", "op", op, "left", left, "right", right)
+        # For arithmetic ops, result type is same as operand type (assumed same)
+        # For comparison ops, result type is boolean (use integer for now)
+        create variable result_type as text with value "integer"
+        when op equals "EQ" or op equals "GT" or op equals "LT" or op equals "GTE" or op equals "LTE" do
+            set result_type to "boolean"
+        end
+        return map("type", "IRBinaryOp", "op", op, "left", left, "right", right, "data_type", result_type)
     end
     when kind equals "UnaryExpr" do
         create variable op as text with value get_key(ast_node, "operator")
@@ -1326,7 +1474,12 @@ function ast_to_ir_expr(ast_node) returns map
             push(args, ast_to_ir_expr(ast_args[i]))
             increase i by 1
         end
-        return map("type", "IRCall", "func", func_name, "args", args)
+        # Get function return type from function table
+        create variable func_ret_type as text with value "nothing"
+        when has_key(function_table, func_name) do
+            set func_ret_type to get_key(function_table[func_name], "ret_type")
+        end
+        return map("type", "IRCall", "func", func_name, "args", args, "data_type", func_ret_type)
     end
     return map("type", "IRLiteral", "literal_type", "nothing", "value", nothing)
 end
@@ -1735,6 +1888,16 @@ end
 create variable ir_funcs as list with value get_key(ir_module, "functions")
 create variable ir_globals as list with value get_key(ir_module, "globals")
 print "  ✓ IR Module: " attach length(ir_funcs) attach " functions, " attach length(ir_globals) attach " globals"
+print ""
+
+print "▸ Stage 3.4: Type Checking..."
+type_check_ir(ir_module)
+when has_errors() do
+    print ""
+    print "COMPILATION FAILED: Type errors detected"
+    stop
+end
+print "  ✓ Types verified"
 print ""
 
 print "▸ Stage 3.5: IR Optimization (Constant Folding)..."

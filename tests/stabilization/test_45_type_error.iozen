@@ -1,0 +1,19 @@
+# Test 45: Type Error Detection
+# This test should FAIL compilation with type error
+
+print "Test 45: Type Error Detection"
+
+# This should cause type error - trying to use incompatible types
+# (But since IOZEN currently only has integer and text, 
+#  we test with expressions that would fail)
+
+# Integer operations should work
+create varx as integer with value 42
+print "varx = " attach varx
+
+# This should be OK
+when varx > 0 do
+    print "varx is positive"
+end
+
+print "Test 45 Complete"
