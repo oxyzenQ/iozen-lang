@@ -8,7 +8,8 @@ export { Environment, RuntimeError } from './environment';
 export { Interpreter, executeIOZEN } from './interpreter';
 export { Lexer } from './lexer';
 export { ParseError, Parser } from './parser';
-export { KEYWORDS, SYMBOLS, Token, TokenType } from './tokens';
+export { KEYWORDS, SYMBOLS } from './tokens';
+export type { Token, TokenType } from './tokens';
 
 // Phase 17: SSA Form
 export { convertASTtoSSA } from './ast_to_ssa';

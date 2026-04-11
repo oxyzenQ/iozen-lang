@@ -3,9 +3,13 @@
   "version": "0.1.0",
   "description": "IOZEN — Safe, expressive systems programming language with natural syntax",
   "license": "MIT",
+  "bin": {
+    "iozen": "./iozen-cli/src/cli.ts"
+  },
   "scripts": {
     "dev": "bun run iozen-cli/src/cli.ts",
     "iozen": "bun run iozen-cli/src/cli.ts",
+    "run": "bun run iozen-cli/src/cli.ts run",
     "test": "bun run tests/test_all.ts"
   },
   "devDependencies": {
