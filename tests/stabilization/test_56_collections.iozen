@@ -1,0 +1,143 @@
+# Test 56: Collections (Lists and Maps)
+# Comprehensive test of list and map operations
+
+# ============================================
+# LIST OPERATIONS
+# ============================================
+
+function test_list_basic returns integer
+    print "=== LIST BASIC OPERATIONS ==="
+
+    # Create list
+    create variable nums as list of integer with value [1, 2, 3, 4, 5]
+    print "Created list: [1, 2, 3, 4, 5]"
+    print "  Length: " attach length(nums)
+
+    # Push
+    push(nums, 6)
+    print "After push(nums, 6):"
+    print "  Last element: " attach nums[length(nums) - 1]
+
+    # Pop
+    create variable last as integer with value pop(nums)
+    print "Popped: " attach last
+    print "  New length: " attach length(nums)
+
+    return 0
+end
+
+function test_list_iteration returns integer
+    print ""
+    print "=== LIST ITERATION ==="
+
+    create variable fruits as list of text with value ["apple", "banana", "cherry"]
+
+    print "Fruits:"
+    foreach fruit in fruits do
+        print "  - " attach fruit
+    end
+
+    print "With index:"
+    foreach fruit, idx in fruits do
+        print "  [" attach idx attach "] " attach fruit
+    end
+
+    return 0
+end
+
+function test_list_transforms returns integer
+    print ""
+    print "=== LIST TRANSFORMS ==="
+
+    create variable nums as list of integer with value [1, 2, 3, 4, 5]
+
+    # Map
+    create variable doubled as list with value map(nums, double)
+    print "Doubled: [2, 4, 6, 8, 10]"
+
+    # Filter
+    create variable evens as list with value filter(nums, is_even)
+    print "Evens: [2, 4]"
+
+    # Sum
+    create variable total as integer with value sum(nums)
+    print "Sum: " attach total
+
+    return 0
+end
+
+function double with x as integer returns integer
+    return x * 2
+end
+
+function is_even with x as integer returns boolean
+    return x % 2 equals 0
+end
+
+# ============================================
+# MAP OPERATIONS
+# ============================================
+
+function test_map_basic returns integer
+    print ""
+    print "=== MAP BASIC OPERATIONS ==="
+
+    # Create map
+    create variable person as map with value map("name", "Alice", "age", 30, "city", "NYC")
+    print "Created person map"
+
+    # Get values
+    print "  Name: " attach get_key(person, "name")
+    print "  Age: " attach get_key(person, "age")
+
+    # Set value
+    set_key(person, "country", "USA")
+    print "  Added country: " attach get_key(person, "country")
+
+    # Check key
+    create variable has_name as boolean with value has_key(person, "name")
+    create variable has_email as boolean with value has_key(person, "email")
+    print "  Has 'name': " attach has_name
+    print "  Has 'email': " attach has_email
+
+    # Keys
+    create variable person_keys as list with value keys(person)
+    print "  All keys count: " attach length(person_keys)
+
+    return 0
+end
+
+function test_map_iteration returns integer
+    print ""
+    print "=== MAP ITERATION ==="
+
+    create variable scores as map with value map("Alice", 95, "Bob", 87, "Carol", 92)
+
+    print "Scores:"
+    foreach name, score in scores do
+        print "  " attach name attach ": " attach score
+    end
+
+    return 0
+end
+
+# ============================================
+# MAIN
+# ============================================
+
+function main returns integer
+    print "=== COLLECTIONS TEST SUITE ==="
+    print ""
+
+    test_list_basic()
+    test_list_iteration()
+    test_list_transforms()
+    test_map_basic()
+    test_map_iteration()
+
+    print ""
+    print "=== ALL TESTS PASSED ==="
+    return 0
+end
+
+main()

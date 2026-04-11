@@ -1,0 +1,12 @@
+# Simple foreach test
+function main returns integer
+    create variable items as list of integer with value [1, 2, 3]
+    
+    for each item in items do
+        print item
+    end
+    
+    return 0
+end
+
+main()
