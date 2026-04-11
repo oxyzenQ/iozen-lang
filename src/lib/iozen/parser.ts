@@ -615,7 +615,12 @@ export class Parser {
     return { kind: 'While', condition, body } as WhileNode;
   }
 
-  private parseForEach(): ASTNode {
+  private parseForEach(isParallel: boolean = false): ASTNode {
+    // Check for parallel keyword: "parallel for each"
+    if (!isParallel && this.match(TokenType.Parallel)) {
+      return this.parseForEach(true);
+    }
+
     this.consume(TokenType.For, 'Expected "for"');
     this.consume(TokenType.Each, 'Expected "each"');
     const variable = this.consume(TokenType.Identifier, 'Expected variable name').value;
@@ -631,7 +636,7 @@ export class Parser {
     this.consume(TokenType.Do, 'Expected "do"');
     const body = this.parseBlockBody();
     this.consume(TokenType.End, 'Expected "end"');
-    return { kind: 'ForEach', variable, indexVariable, iterable, body } as ForEachNode;
+    return { kind: 'ForEach', variable, indexVariable, iterable, body, parallel: isParallel } as ForEachNode;
   }
 
   private parseLabel(): ASTNode {

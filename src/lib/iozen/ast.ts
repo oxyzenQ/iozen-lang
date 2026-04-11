@@ -189,6 +189,7 @@ export interface ForEachNode {
   indexVariable: string | null;
   iterable: ASTNode;
   body: ASTNode[];
+  parallel?: boolean;  // Phase 22: parallel for-each
 }
 
 export interface LabelNode {

@@ -17,6 +17,17 @@ export type * from './ssa_ir';
 export * as SSA from './ssa_ir';
 export { SSAOptimizer, optimizeSSAFunction } from './ssa_optimizer';
 
+// Phase 22: Parallel Runtime
+export {
+    ThreadPool, executeParallel,
+    getGlobalThreadPool,
+    parallelForEach,
+    parallelMap,
+    parallelReduce,
+    setGlobalThreadPool
+} from './parallel_runtime';
+export type { ParallelOptions, Task, TaskFunction, TaskResult } from './parallel_runtime';
+
 // Language metadata
 export const IOZEN_VERSION = '0.1.0';
 export const IOZEN_NAME = 'IOZEN';
