@@ -14,6 +14,7 @@ export { KEYWORDS, SYMBOLS, Token, TokenType } from './tokens';
 export { convertASTtoSSA } from './ast_to_ssa';
 export type * from './ssa_ir';
 export * as SSA from './ssa_ir';
+export { SSAOptimizer, optimizeSSAFunction } from './ssa_optimizer';
 
 // Language metadata
 export const IOZEN_VERSION = '0.1.0';

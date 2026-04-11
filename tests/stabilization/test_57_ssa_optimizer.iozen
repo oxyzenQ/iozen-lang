@@ -1,0 +1,57 @@
+# Test 57: SSA Optimization Demo
+# This file demonstrates SSA-based optimizations
+
+# Example 1: Constant propagation across branches
+function test_const_prop returns integer
+    create variable x as integer with value 5
+    create variable y as integer with value 10
+
+    when x > 0 do
+        set y to y + 1
+    end
+    when x <= 0 do
+        set y to y - 1
+    end
+
+    return y
+end
+
+# Example 2: Simple arithmetic (should fold)
+function test_arithmetic_fold returns integer
+    create variable a as integer with value 10
+    create variable b as integer with value 20
+    create variable c as integer with value a + b
+    return c
+end
+
+# Example 3: Unused variable elimination
+function test_dead_code returns integer
+    create variable used as integer with value 42
+    create variable unused as integer with value 100
+    return used
+end
+
+# Example 4: Trivial phi simplification
+function test_phi_simp returns integer
+    create variable x as integer with value 5
+    when x > 3 do
+        set x to x + 1
+    end
+    when x <= 3 do
+        set x to x + 1
+    end
+    return x
+end
+
+function main returns integer
+    print "Testing SSA optimization..."
+
+    print "test_const_prop: " attach test_const_prop()
+    print "test_arithmetic_fold: " attach test_arithmetic_fold()
+    print "test_dead_code: " attach test_dead_code()
+    print "test_phi_simp: " attach test_phi_simp()
+
+    return 0
+end
+
+main()
