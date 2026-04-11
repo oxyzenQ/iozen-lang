@@ -1,0 +1,218 @@
+// Day 2: Minimal Tokenizer
+// Target: Recognize basic tokens for IOZEN v0.1
+// NO OVERENGINEERING - just what we need for fastfetch
+
+export type TokenType = 
+  | 'FN'           // fn
+  | 'MAIN'         // main
+  | 'PRINT'        // print
+  | 'IDENT'        // identifier
+  | 'STRING'       // "..."
+  | 'NUMBER'       // 123
+  | 'LPAREN'       // (
+  | 'RPAREN'       // )
+  | 'LBRACE'       // {
+  | 'RBRACE'       // }
+  | 'PLUS'         // +
+  | 'COMMA'        // ,
+  | 'NEWLINE'      // \n
+  | 'EOF'          // end of file
+  | 'COMMENT'      // // ...
+  | 'SKIP';        // whitespace
+
+export interface Token {
+  type: TokenType;
+  value: string;
+  line: number;
+  column: number;
+}
+
+// Keywords
+const KEYWORDS: Record<string, TokenType> = {
+  'fn': 'FN',
+  'main': 'MAIN',
+  'print': 'PRINT',
+};
+
+export class MinimalTokenizer {
+  private source: string;
+  private position: number = 0;
+  private line: number = 1;
+  private column: number = 1;
+
+  constructor(source: string) {
+    this.source = source;
+  }
+
+  tokenize(): Token[] {
+    const tokens: Token[] = [];
+
+    while (!this.isAtEnd()) {
+      const token = this.nextToken();
+      if (token && token.type !== 'SKIP' && token.type !== 'COMMENT') {
+        tokens.push(token);
+      }
+    }
+
+    tokens.push({ type: 'EOF', value: '', line: this.line, column: this.column });
+    return tokens;
+  }
+
+  private nextToken(): Token | null {
+    this.skipWhitespace();
+
+    if (this.isAtEnd()) return null;
+
+    const startLine = this.line;
+    const startCol = this.column;
+    const char = this.peek();
+
+    // Comments
+    if (char === '/' && this.peekNext() === '/') {
+      return this.comment(startLine, startCol);
+    }
+
+    // String literals
+    if (char === '"') {
+      return this.string(startLine, startCol);
+    }
+
+    // Numbers
+    if (this.isDigit(char)) {
+      return this.number(startLine, startCol);
+    }
+
+    // Identifiers / Keywords
+    if (this.isAlpha(char)) {
+      return this.identifier(startLine, startCol);
+    }
+
+    // Single-character tokens
+    switch (char) {
+      case '(': this.advance(); return { type: 'LPAREN', value: '(', line: startLine, column: startCol };
+      case ')': this.advance(); return { type: 'RPAREN', value: ')', line: startLine, column: startCol };
+      case '{': this.advance(); return { type: 'LBRACE', value: '{', line: startLine, column: startCol };
+      case '}': this.advance(); return { type: 'RBRACE', value: '}', line: startLine, column: startCol };
+      case '+': this.advance(); return { type: 'PLUS', value: '+', line: startLine, column: startCol };
+      case ',': this.advance(); return { type: 'COMMA', value: ',', line: startLine, column: startCol };
+      case '\n': 
+        this.advance();
+        this.line++;
+        this.column = 1;
+        return { type: 'NEWLINE', value: '\n', line: startLine, column: startCol };
+    }
+
+    // Unknown character - skip for Day 2
+    this.advance();
+    return { type: 'SKIP', value: char, line: startLine, column: startCol };
+  }
+
+  private string(line: number, col: number): Token {
+    let value = '';
+    this.advance(); // consume opening "
+
+    while (!this.isAtEnd() && this.peek() !== '"') {
+      value += this.advance();
+    }
+
+    if (this.isAtEnd()) {
+      throw new Error(`Unterminated string at line ${line}, col ${col}`);
+    }
+
+    this.advance(); // consume closing "
+    return { type: 'STRING', value, line, column: col };
+  }
+
+  private number(line: number, col: number): Token {
+    let value = '';
+    
+    while (!this.isAtEnd() && this.isDigit(this.peek())) {
+      value += this.advance();
+    }
+
+    return { type: 'NUMBER', value, line, column: col };
+  }
+
+  private identifier(line: number, col: number): Token {
+    let value = '';
+    
+    while (!this.isAtEnd() && this.isAlphaNumeric(this.peek())) {
+      value += this.advance();
+    }
+
+    const type = KEYWORDS[value] || 'IDENT';
+    return { type, value, line, column: col };
+  }
+
+  private comment(line: number, col: number): Token {
+    let value = '';
+    
+    while (!this.isAtEnd() && this.peek() !== '\n') {
+      value += this.advance();
+    }
+
+    return { type: 'COMMENT', value, line, column: col };
+  }
+
+  private skipWhitespace(): void {
+    while (!this.isAtEnd()) {
+      const char = this.peek();
+      if (char === ' ' || char === '\t' || char === '\r') {
+        this.advance();
+      } else {
+        break;
+      }
+    }
+  }
+
+  private isAtEnd(): boolean {
+    return this.position >= this.source.length;
+  }
+
+  private peek(): string {
+    if (this.isAtEnd()) return '\0';
+    return this.source[this.position];
+  }
+
+  private peekNext(): string {
+    if (this.position + 1 >= this.source.length) return '\0';
+    return this.source[this.position + 1];
+  }
+
+  private advance(): string {
+    const char = this.source[this.position];
+    this.position++;
+    this.column++;
+    return char;
+  }
+
+  private isDigit(char: string): boolean {
+    return char >= '0' && char <= '9';
+  }
+
+  private isAlpha(char: string): boolean {
+    return (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || char === '_';
+  }
+
+  private isAlphaNumeric(char: string): boolean {
+    return this.isAlpha(char) || this.isDigit(char);
+  }
+}
+
+// Helper function
+export function tokenize(source: string): Token[] {
+  const tokenizer = new MinimalTokenizer(source);
+  return tokenizer.tokenize();
+}
+
+// Pretty print tokens (for debugging)
+export function printTokens(tokens: Token[]): void {
+  console.log('Tokens:');
+  for (const token of tokens) {
+    if (token.type === 'EOF') {
+      console.log(`  ${token.type.padEnd(10)}`);
+    } else {
+      console.log(`  ${token.type.padEnd(10)} "${token.value}" (line ${token.line})`);
+    }
+  }
+}

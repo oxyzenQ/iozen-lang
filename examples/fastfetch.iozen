@@ -1,0 +1,17 @@
+// IOZEN Fastfetch Clone - System Info Display
+// Week 1 Target: Working CLI tool
+
+fn main() {
+    print("")
+    print("  ╭─────────────── System Information ───────────────╮")
+    print("  │                                                  │")
+    print("  │  OS:       " + get_os())
+    print("  │  Host:     " + get_hostname())
+    print("  │  User:     " + get_user())
+    print("  │  CPU:      " + get_cpu())
+    print("  │  RAM:      " + get_ram())
+    print("  │  Uptime:   " + get_uptime())
+    print("  │                                                  │")
+    print("  ╰──────────────────────────────────────────────────╯")
+    print("")
+}
