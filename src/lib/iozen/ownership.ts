@@ -645,77 +645,83 @@ export class HardenedOwnershipTracker extends OwnershipTracker {
       operation,
       variable,
       threadId: this.currentThreadId,
-      time: Date.now()
+
+// Comprehensive safety check
+comprehensiveCheck(name: string, isWrite: boolean, isParallel: boolean, isAtomicOp = false): OwnershipDiagnostic[] {
+const diagnostics: OwnershipDiagnostic[] = [];
+
+// 1. Basic ownership check
+const variable = this.getVariable(name);
+if (!variable) {
+  diagnostics.push({
+    type: 'data_race',
+    variable: name,
+    message: `Variable '${name}' not found`,
+    location: { line: 0, column: 0 },
+    severity: 'error'
+  });
+  return diagnostics;
+}
+
+// 2. CRITICAL: Check for non-atomic write to shared atomic variable
+if (isWrite && variable.ownership === OwnershipKind.SharedAtomic && !isAtomicOp) {
+  diagnostics.push({
+    type: 'data_race',
+    variable: name,
+    message: `Non-atomic write to shared atomic variable '${name}'. ` +
+             `Use atomic operations (atomic add, atomic store, etc.)`,
+    location: variable.declaredAt,
+    severity: 'error',
+    fix: 'Use atomic operations: atomic add, atomic store, atomic load'
+  });
+}
+
+// 3. Borrow check
+if (isWrite && !this.borrowChecker.canWrite(name)) {
+  diagnostics.push({
+    type: 'borrow_conflict',
+    variable: name,
+    message: `Cannot write to '${name}' while borrowed`,
+    location: variable.declaredAt,
+    severity: 'error'
+  });
+}
+
+// 4. Escape check
+const escapeDiag = this.escapeAnalyzer.checkUseAfterEscape(name, variable.declaredAt);
+if (escapeDiag) {
+  diagnostics.push(escapeDiag);
+}
+
+// 5. Aliasing check (for writes)
+if (isWrite && this.aliasingChecker.hasMutableAlias(name)) {
+  diagnostics.push({
+    type: 'data_race',
+    variable: name,
+    message: `Variable '${name}' has mutable aliases. ` +
+             `Concurrent modification may cause data races.`,
+    location: variable.declaredAt,
+    severity: 'error',
+    fix: 'Ensure unique ownership before modification'
+  });
+}
+
+// 6. Parallel context check
+if (isParallel) {
+  if (variable.ownership === OwnershipKind.Owned && variable.isMutable) {
+    diagnostics.push({
+      type: 'data_race',
+      variable: name,
+      message: `Mutable variable '${name}' in parallel context. ` +
+               `Use 'shared const' or 'shared atomic'.`,
+      location: variable.declaredAt,
+      severity: 'error'
     });
   }
+}
 
-  // Comprehensive safety check
-  comprehensiveCheck(name: string, isWrite: boolean, isParallel: boolean): OwnershipDiagnostic[] {
-    const diagnostics: OwnershipDiagnostic[] = [];
-
-    // 1. Basic ownership check
-    const variable = this.getVariable(name);
-    if (!variable) {
-      diagnostics.push({
-        type: 'data_race',
-        variable: name,
-        message: `Variable '${name}' not found`,
-        location: { line: 0, column: 0 },
-        severity: 'error'
-      });
-      return diagnostics;
-    }
-
-    // 2. Borrow check
-    if (isWrite && !this.borrowChecker.canWrite(name)) {
-      diagnostics.push({
-        type: 'borrow_conflict',
-        variable: name,
-        message: `Cannot write to '${name}' while borrowed`,
-        location: variable.declaredAt,
-        severity: 'error'
-      });
-    }
-
-    // 3. Escape check
-    const escapeDiag = this.escapeAnalyzer.checkUseAfterEscape(name, variable.declaredAt);
-    if (escapeDiag) {
-      diagnostics.push(escapeDiag);
-    }
-
-    // 4. Aliasing check (for writes)
-    if (isWrite && this.aliasingChecker.hasMutableAlias(name)) {
-      diagnostics.push({
-        type: 'data_race',
-        variable: name,
-        message: `Variable '${name}' has mutable aliases. ` +
-                 `Concurrent modification may cause data races.`,
-        location: variable.declaredAt,
-        severity: 'error',
-        fix: 'Ensure unique ownership before modification'
-      });
-    }
-
-    // 5. Parallel context check
-    if (isParallel) {
-      if (variable.ownership === OwnershipKind.Owned && variable.isMutable) {
-        diagnostics.push({
-          type: 'data_race',
-          variable: name,
-          message: `Mutable variable '${name}' in parallel context. ` +
-                   `Use 'shared const' or 'shared atomic'.`,
-          location: variable.declaredAt,
-          severity: 'error'
-        });
-      }
-    }
-
-    return diagnostics;
-  }
-
-  // Move with escape tracking
-  moveVariableWithEscape(name: string, toThread: number): { success: boolean; diagnostics: OwnershipDiagnostic[] } {
-    const diagnostics: OwnershipDiagnostic[] = [];
+return diagnostics;
+}
     const variable = this.getVariable(name);
 
     if (!variable) {
