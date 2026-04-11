@@ -11,12 +11,8 @@ export { ParseError, Parser } from './parser';
 export { KEYWORDS, SYMBOLS } from './tokens';
 export type { Token, TokenType } from './tokens';
 
-// Phase 17: SSA Form
-export { convertASTtoSSA } from './ast_to_ssa';
-export { SSACodeGenerator, generateCFromSSA } from './ssa_codegen';
-export type * from './ssa_ir';
-export * as SSA from './ssa_ir';
-export { SSAOptimizer, optimizeSSAFunction } from './ssa_optimizer';
+// Phase 17: SSA Form (not used in v0.1)
+// export { convertASTtoSSA } from './ast_to_ssa';
 
 // Phase 22: Parallel Runtime (Simulated)
 export {
