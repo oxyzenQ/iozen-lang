@@ -42,6 +42,9 @@ export interface IOZENResult {
 }
 
 export class RuntimeError extends Error {
+  public file?: string;
+  public source?: string;
+
   constructor(
     message: string,
     public line?: number,
@@ -49,6 +52,45 @@ export class RuntimeError extends Error {
   ) {
     super(message);
     this.name = 'RuntimeError';
+  }
+
+  /**
+   * Phase 14.2: Pretty error formatting with source preview
+   */
+  formatPretty(): string {
+    const lines: string[] = [];
+
+    // Header: ERROR: message
+    lines.push(`ERROR: ${this.message}`);
+
+    // Location: file:line:column
+    const loc = this.file
+      ? `${this.file}:${this.line ?? 1}:${this.column ?? 1}`
+      : `line ${this.line ?? 1}, column ${this.column ?? 1}`;
+    lines.push(` --> ${loc}`);
+    lines.push('');
+
+    // Source preview (if available)
+    if (this.source && this.line) {
+      const sourceLines = this.source.split('\n');
+      const lineNum = this.line;
+      const col = this.column ?? 1;
+
+      // Previous line (context)
+      if (lineNum > 1 && sourceLines[lineNum - 2]) {
+        lines.push(`  ${String(lineNum - 1).padStart(4)} | ${sourceLines[lineNum - 2]}`);
+      }
+
+      // Current line (error line)
+      const currentLine = sourceLines[lineNum - 1] || '';
+      lines.push(`> ${String(lineNum).padStart(4)} | ${currentLine}`);
+
+      // Caret pointer
+      const caretSpace = ' '.repeat(6 + col);
+      lines.push(`${caretSpace}^`);
+    }
+
+    return lines.join('\n');
   }
 }
 

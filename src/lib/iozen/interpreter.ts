@@ -228,33 +228,25 @@ export class Interpreter {
   // ---- Error Formatting ----
 
   private formatRuntimeError(e: RuntimeError): string {
-    const lines: string[] = [];
+    // Phase 14.2: Use pretty format with source preview
+    // Attach source and file info to error
+    e.source = this.source;
+    e.file = this.sourceFilePath ?? undefined;
 
-    // Try to find the relevant name in the source for common error patterns
-    const nameMatch = e.message.match(/"([^"]+)"/);
-    let loc: { line: number; column: number } | null = null;
-    if (nameMatch) {
-      const name = nameMatch[1];
-      loc = this.findNameInSource(name);
+    // If error has no line, try to find it
+    if (e.line === undefined || e.line <= 0) {
+      const nameMatch = e.message.match(/"([^"]+)"/);
+      if (nameMatch) {
+        const loc = this.findNameInSource(nameMatch[1]);
+        if (loc) {
+          e.line = loc.line;
+          e.column = loc.column;
+        }
+      }
     }
 
-    // If the error already has line info, use it
-    if (e.line !== undefined && e.line > 0) {
-      loc = { line: e.line, column: e.column };
-    }
-
-    // Check if we should add "did you mean?" for undefined variable/function errors
-    const baseMessage = e.message.includes('\n')
-      ? e.message  // already has suggestion embedded
-      : this.enrichWithSuggestion(e.message);
-
-    lines.push(`Runtime error: ${baseMessage}`);
-
-    if (loc) {
-      this.appendSourceContext(lines, loc.line, loc.column);
-    }
-
-    return lines.join('\n');
+    // Use pretty format
+    return e.formatPretty();
   }
 
   private enrichWithSuggestion(message: string): string {

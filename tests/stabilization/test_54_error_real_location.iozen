@@ -24,3 +24,6 @@ function main returns integer
     # This should trigger division by zero on line 19
     return cause_div_by_zero()
 end
+
+# Call main to trigger error
+main()
