@@ -106,11 +106,6 @@ async function cmdRun(args: string[]) {
 
   const filePath = resolve(args[0]);
 
-  // Debug: Log file path
-  if (process.env.IOZEN_DEBUG) {
-    console.log(`[DEBUG] cmdRun: args[0]=${args[0]}, filePath=${filePath}`);
-  }
-
   if (!existsSync(filePath)) {
     error(`File not found: ${filePath}`);
     process.exit(1);
@@ -118,56 +113,19 @@ async function cmdRun(args: string[]) {
 
   const source = await readFile(filePath, "utf-8");
 
-  log(`${C.cyan}⚙  Compiling and running ${C.white}${basename(filePath)}${C.reset}`);
-
-  const t0 = performance.now();
+  log(`${C.cyan}⚙  Running ${C.white}${basename(filePath)}${C.reset}`);
 
   try {
-    // Phase 1: Lexing
-    const t1 = performance.now();
-    const lexer = new Lexer(source);
-    const tokens = lexer.tokenize();
-    const lexTime = (performance.now() - t1).toFixed(2);
+    // Week 1: Use v2 pipeline (minimal, fast)
+    const { tokenize } = await import('../../src/lib/iozen/tokenizer_v2');
+    const { parse } = await import('../../src/lib/iozen/parser_v2');
+    const { execute } = await import('../../src/lib/iozen/interpreter_v2');
 
-    log(`${C.gray}  ✓ Lexer:     ${tokens.length} tokens in ${lexTime}ms${C.reset}`);
+    const tokens = tokenize(source);
+    const ast = parse(tokens);
+    execute(ast);
 
-    // Phase 2: Parsing
-    const t2 = performance.now();
-    const parser = new Parser(tokens);
-    const ast = parser.parse();
-    const parseTime = (performance.now() - t2).toFixed(2);
-
-    log(`${C.gray}  ✓ Parser:    ${ast.statements.length} statements in ${parseTime}ms${C.reset}`);
-
-    // Phase 3: Interpretation
-    const t3 = performance.now();
-    const interpreter = new Interpreter();
-    interpreter.setSourceFilePath(filePath);
-    const result = interpreter.run(source);
-    const execTime = (performance.now() - t3).toFixed(2);
-    const totalTime = (performance.now() - t0).toFixed(2);
-
-    log(`${C.gray}  ✓ Executor:  ${result.output.length} outputs in ${execTime}ms${C.reset}`);
-    log("");
-
-    // Print output
-    for (const line of result.output) {
-      console.log(line);
-    }
-
-    // Print errors
-    for (const err of result.errors) {
-      console.error(`${C.red}  ✗ ${err}${C.reset}`);
-    }
-
-    // Summary
-    log("");
-    if (result.errors.length === 0) {
-      log(`${C.green}  ✔ Success${C.reset} — ${result.output.length} lines output in ${totalTime}ms`);
-    } else {
-      log(`${C.red}  ✗ Failed${C.reset} — ${result.errors.length} error(s)`);
-      process.exit(1);
-    }
+    log(`${C.green}  ✔ Success${C.reset}`);
   } catch (e) {
     if (e instanceof ParseError) {
       const lines = source.split('\n');

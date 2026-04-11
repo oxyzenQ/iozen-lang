@@ -27,7 +27,7 @@ export interface ExpressionStatement {
   expression: Expression;
 }
 
-export type Statement = 
+export type Statement =
   | FunctionDeclaration
   | PrintStatement
   | ExpressionStatement;
@@ -113,26 +113,35 @@ export class MinimalParser {
 
   private parseFunctionDeclaration(): FunctionDeclaration {
     this.consume('FN', 'Expected "fn"');
-    
-    const name = this.consume('IDENT', 'Expected function name').value;
-    
+
+    // Accept IDENT or MAIN as function name
+    let name: string;
+    if (this.check('IDENT')) {
+      name = this.consume('IDENT', 'Expected function name').value;
+    } else if (this.check('MAIN')) {
+      this.advance();
+      name = 'main';
+    } else {
+      throw new Error(`Expected function name. Got ${this.peek().type}`);
+    }
+
     this.consume('LPAREN', 'Expected "(" after function name');
-    
+
     // Parameters (for v0.1, we'll keep it simple - no params or just handle main())
     const params: string[] = [];
-    
+
     if (!this.check('RPAREN')) {
       // Parse parameter
       const param = this.consume('IDENT', 'Expected parameter name').value;
       params.push(param);
-      
+
       // For now, ignore multiple params
       while (this.match('COMMA')) {
         const extraParam = this.consume('IDENT', 'Expected parameter name').value;
         params.push(extraParam);
       }
     }
-    
+
     this.consume('RPAREN', 'Expected ")" after parameters');
     this.consume('LBRACE', 'Expected "{" before function body');
 
@@ -226,7 +235,7 @@ export class MinimalParser {
       // Check if it's a function call
       if (this.match('LPAREN')) {
         const args: Expression[] = [];
-        
+
         if (!this.check('RPAREN')) {
           args.push(this.parseExpression());
           while (this.match('COMMA')) {
@@ -310,7 +319,7 @@ export function parse(tokens: Token[]): Program {
 // Pretty print AST (for debugging)
 export function printAST(node: any, indent = 0): void {
   const prefix = '  '.repeat(indent);
-  
+
   if (!node) {
     console.log(`${prefix}null`);
     return;
@@ -331,12 +340,12 @@ export function printAST(node: any, indent = 0): void {
   }
 
   console.log(`${prefix}${node.type} {`);
-  
+
   for (const [key, value] of Object.entries(node)) {
     if (key === 'type') continue;
     console.log(`${prefix}  ${key}:`);
     printAST(value, indent + 2);
   }
-  
+
   console.log(`${prefix}}`);
 }

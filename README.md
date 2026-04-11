@@ -49,25 +49,41 @@ npm install
 Create a file called `hello.iozen`:
 
 ```iozen
-print "Hello, World!"
+fn main() {
+    print("Hello, World!")
+}
 ```
 
 ### Run
 
 ```bash
-# Using Bun (recommended)
-bun run iozen-cli/src/cli.ts run hello.iozen
+# Using tsx (recommended)
+npx tsx iozen-cli/src/run.ts run hello.iozen
 
-# Using npx
-npx iozen run hello.iozen
+# Or with bun
+bun run iozen-cli/src/run.ts run hello.iozen
 ```
 
-### Create a New Project
+### Demo: Fastfetch Clone
+
+IOZEN can now display system information:
 
 ```bash
-bun run iozen-cli/src/cli.ts init my_project
-cd my_project
-bun run ../iozen-cli/src/cli.ts run main.iozen
+npx tsx iozen-cli/src/run.ts run examples/fastfetch.iozen
+```
+
+Output:
+```
+  ╭─────────────── System Information ───────────────╮
+  │                                                  │
+  │  OS:       Linux                                 │
+  │  Host:     desktop                               │
+  │  User:     user                                  │
+  │  CPU:      AMD Ryzen 5 5600G                     │
+  │  RAM:      8GB / 16GB                            │
+  │  Uptime:   3h 42m                                │
+  │                                                  │
+  ╰──────────────────────────────────────────────────╯
 ```
 
 ### Build Standalone Binary
@@ -77,35 +93,30 @@ bun run iozen-cli/src/cli.ts build main.iozen --output my_program
 ./my_program
 ```
 
-## Code Examples
+## Week 1: v0.1 Features
 
-### Variables & Types
+IOZEN v0.1 can now compile and execute real programs!
 
+### Features
+- ✅ Functions: `fn main() { ... }`
+- ✅ Print: `print("Hello")`
+- ✅ String concatenation: `"OS: " + get_os()`
+- ✅ Built-in system functions: `get_os()`, `get_cpu()`, `get_ram()`, `get_uptime()`
+
+### Examples
+
+**Hello World:**
 ```iozen
-create variable name as text with value "IOZEN"
-create variable version as integer with value 1
-create variable pi as float with value 3.14159
-create variable active as boolean with value true
-
-print "Language: " attach name attach ", Version: " attach version
+fn main() {
+    print("Hello, World!")
+}
 ```
 
-### Functions
-
+**System Info:**
 ```iozen
-function greet with name as text returns text
-    return "Hello, " attach name attach "!"
-end
-
-function factorial with n as integer returns integer
-    when n is less than or equal to 1 do
-        return 1
-    end
-    return n * factorial with n - 1
-end
-
-print greet with "World"
-print "5! = " attach factorial with 5
+fn main() {
+    print("OS: " + get_os())
+}
 ```
 
 ### Control Flow
