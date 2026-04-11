@@ -44,12 +44,19 @@ export type { WorkerMessage, WorkerTask } from './worker_pool';
 export {
     ParallelArray,
     SharedMemoryPool,
-    SharedQueue, createAtomicCounter,
+    SharedQueue,
+    createAtomicCounter,
     createSharedFloat64Array,
     createSharedInt32Array,
     createSharedUint8Array
 } from './shared_memory';
 export type { AtomicCounter, SharedBuffer, SharedData } from './shared_memory';
+
+// Phase 25: Work-Stealing (Chase-Lev Deque)
+export {
+    ChaseLevDeque, WORK_STEALING_CONFIG, WorkStealingPool
+} from './chase_lev';
+export type { Task } from './chase_lev';
 
 // Language metadata
 export const IOZEN_VERSION = '0.1.0';
