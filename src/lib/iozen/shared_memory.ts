@@ -5,15 +5,15 @@
 
 /**
  * Phase 24: Shared Memory
- * 
+ *
  * Why this matters:
  * - No serialization overhead
  * - No data copying
  * - Direct memory access across threads
  * - C-level performance for parallel workloads
- * 
+ *
  * Architecture:
- * 
+ *
  *   Main Thread              Worker Threads
  *   ┌─────────────┐         ┌─────────────┐
  *   │ SharedArray │◀───────▶│ SharedArray │
@@ -24,11 +24,11 @@
  *   │ │ (raw)   │ │         │ │ (raw)   │ │
  *   │ └─────────┘ │         │ └─────────┘ │
  *   └─────────────┘         └─────────────┘
- * 
+ *
  * Before (Phase 23):
  *   Worker A → serialize → copy → Worker B
  *   (slow for small tasks)
- * 
+ *
  * After (Phase 24):
  *   Worker A ──▶ Shared Memory ◀── Worker B
  *   (zero-copy, C-level performance)
@@ -247,12 +247,13 @@ export class ParallelArray {
         });
 
         // Send task with SharedArrayBuffer (zero-copy)
+        // NOTE: SharedArrayBuffer does NOT need transfer list
         worker.postMessage({
           type: 'map',
           start,
           end,
           resultBuffer,
-        }, [resultBuffer]);
+        });
       });
 
       promises.push(promise);
@@ -309,7 +310,7 @@ export class ParallelArray {
           initial,
           partialBuffer,
           workerId: i,
-        }, [partialBuffer]);
+        });
       });
 
       promises.push(promise);
@@ -359,30 +360,30 @@ parentPort.on('message', (message) => {
       case 'map': {
         const { start, end, resultBuffer } = message;
         const resultView = new Float64Array(resultBuffer);
-        
+
         for (let i = start; i < end; i++) {
           // Apply function (simplified - in real impl, deserialize fn)
           resultView[i] = i * i; // Example: square
         }
-        
+
         parentPort.postMessage({ type: 'done' });
         break;
       }
-      
+
       case 'reduce': {
         const { start, end, initial, partialBuffer, workerId } = message;
         const partialView = new Float64Array(partialBuffer);
-        
+
         let sum = initial;
         for (let i = start; i < end; i++) {
           sum += i; // Example: sum
         }
-        
+
         Atomics.store(partialView, workerId, sum);
         parentPort.postMessage({ type: 'done' });
         break;
       }
-      
+
       default:
         parentPort.postMessage({ type: 'error', error: 'Unknown task type' });
     }

@@ -6,8 +6,8 @@ import {
     createAtomicCounter,
     createSharedInt32Array,
     SharedQueue,
-    WorkerThreadPool
-} from '../../src/lib/iozen';
+} from '../../src/lib/iozen/shared_memory';
+import { WorkerThreadPool } from '../../src/lib/iozen/worker_pool';
 
 console.log('=== SHARED MEMORY STRESS TEST ===');
 console.log('Rule: If any test fails, Phase 24 is NOT complete\n');
