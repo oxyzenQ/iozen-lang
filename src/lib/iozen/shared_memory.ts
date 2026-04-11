@@ -137,56 +137,93 @@ export function createAtomicCounter(initialValue = 0): AtomicCounter {
 }
 
 // ===== Lock-Free Queue (SPSC - Single Producer Single Consumer) =====
+//
+// DESIGN: Only 1 thread writes (producer), only 1 thread reads (consumer)
+// This makes it lock-free without CAS - just need proper memory ordering
+//
+// Layout in SharedArrayBuffer:
+// [0-3]: head (consumer index) - only consumer writes
+// [4-7]: tail (producer index) - only producer writes
+// [8+]: data slots
 
-export class SharedQueue<T> {
+export class SharedQueue {
   private buffer: SharedArrayBuffer;
-  private headView: Int32Array;
-  private tailView: Int32Array;
+  private headView: Int32Array;  // Consumer index - only consumer writes
+  private tailView: Int32Array;  // Producer index - only producer writes
   private dataView: Int32Array;
   private capacity: number;
 
   constructor(capacity: number) {
     this.capacity = capacity;
-    // Layout: [head, tail, ...data...]
-    const bytes = 8 + capacity * 4; // 2 counters + data
+    // Layout: [head(4), tail(4), ...data(4*capacity)...]
+    const bytes = 8 + capacity * 4;
     this.buffer = new SharedArrayBuffer(bytes);
     this.headView = new Int32Array(this.buffer, 0, 1);
     this.tailView = new Int32Array(this.buffer, 4, 1);
     this.dataView = new Int32Array(this.buffer, 8, capacity);
 
+    // Initialize indices to 0
     Atomics.store(this.headView, 0, 0);
     Atomics.store(this.tailView, 0, 0);
   }
 
+  /**
+   * PRODUCER ONLY: Enqueue an item
+   * Returns false if queue is full
+   *
+   * SAFE because:
+   * - Only producer writes to tail
+   * - Producer reads head (consumer's position) to check full
+   * - Atomics.load ensures we see consumer's updates
+   */
   enqueue(item: number): boolean {
     const tail = Atomics.load(this.tailView, 0);
     const nextTail = (tail + 1) % this.capacity;
 
-    // Check if full
+    // Check if queue is full (need to read consumer's head)
+    // Atomics.load ensures we see the latest head value
     if (nextTail === Atomics.load(this.headView, 0)) {
       return false; // Queue full
     }
 
-    // Store item and update tail
-    Atomics.store(this.dataView, tail, item);
+    // Store item at current tail position
+    this.dataView[tail] = item;
+
+    // Update tail (producer only writes here)
     Atomics.store(this.tailView, 0, nextTail);
     return true;
   }
 
+  /**
+   * CONSUMER ONLY: Dequeue an item
+   * Returns null if queue is empty
+   *
+   * SAFE because:
+   * - Only consumer writes to head
+   * - Consumer reads tail (producer's position) to check empty
+   * - Atomics.load ensures we see producer's updates
+   */
   dequeue(): number | null {
     const head = Atomics.load(this.headView, 0);
 
-    // Check if empty
+    // Check if queue is empty (need to read producer's tail)
+    // Atomics.load ensures we see the latest tail value
     if (head === Atomics.load(this.tailView, 0)) {
       return null; // Queue empty
     }
 
-    // Load item and update head
-    const item = Atomics.load(this.dataView, head);
+    // Load item at current head position
+    const item = this.dataView[head];
+
+    // Update head (consumer only writes here)
     Atomics.store(this.headView, 0, (head + 1) % this.capacity);
     return item;
   }
 
+  /**
+   * Get current size (approximate - may be stale)
+   * Only for diagnostics, not for synchronization
+   */
   size(): number {
     const head = Atomics.load(this.headView, 0);
     const tail = Atomics.load(this.tailView, 0);
@@ -204,6 +241,14 @@ export class SharedQueue<T> {
 
   getBuffer(): SharedArrayBuffer {
     return this.buffer;
+  }
+
+  /**
+   * Reset queue (for reuse)
+   */
+  clear(): void {
+    Atomics.store(this.headView, 0, 0);
+    Atomics.store(this.tailView, 0, 0);
   }
 }
 
