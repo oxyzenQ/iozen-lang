@@ -1,75 +1,49 @@
-// Day 1: CLI Entry Point + File Reader + Minimal Execution
-// Target: iozen run file.iozen → executes print statements
+// Day 4: CLI Entry Point + Full Pipeline
+// Target: iozen run file.iozen → tokenize → parse → execute
 
 import * as fs from 'fs';
-import * as path from 'path';
+import { execute } from '../../src/lib/iozen/interpreter_v2';
+import { parse } from '../../src/lib/iozen/parser_v2';
+import { tokenize } from '../../src/lib/iozen/tokenizer_v2';
 
 export function runCommand(args: string[]): void {
   if (args.length === 0) {
     console.log('Usage: iozen run <file.iozen>');
     process.exit(1);
   }
-  
+
   const filePath = args[0];
-  
+
   // Check file exists
   if (!fs.existsSync(filePath)) {
     console.error(`Error: File not found: ${filePath}`);
     process.exit(1);
   }
-  
+
   // Check extension
   if (!filePath.endsWith('.iozen')) {
     console.error('Error: File must have .iozen extension');
     process.exit(1);
   }
-  
+
   // Read file
   const code = fs.readFileSync(filePath, 'utf-8');
-  
-  // Execute
-  executeMinimal(code);
-}
 
-// Minimal execution for Day 1
-// Just handles print("...") statements inside fn main() { }
-function executeMinimal(code: string): void {
-  const lines = code.split('\n');
-  let inMain = false;
-  
-  for (const line of lines) {
-    const trimmed = line.trim();
-    
-    // Skip empty lines and comments
-    if (!trimmed || trimmed.startsWith('//')) continue;
-    
-    // Track if we're in main function
-    if (trimmed.startsWith('fn main()')) {
-      inMain = true;
-      continue;
-    }
-    
-    // End of main
-    if (inMain && trimmed === '}') {
-      inMain = false;
-      continue;
-    }
-    
-    // Only execute if in main
-    if (!inMain) continue;
-    
-    // Parse print("...")
-    const printMatch = trimmed.match(/print\s*\(\s*"([^"]*)"\s*\)/);
-    if (printMatch) {
-      console.log(printMatch[1]);
-    }
+  // Execute pipeline
+  try {
+    const tokens = tokenize(code);
+    const ast = parse(tokens);
+    execute(ast);
+  } catch (err) {
+    console.error(`Error: ${err}`);
+    process.exit(1);
   }
 }
 
 // Direct execution
 if (require.main === module) {
   const args = process.argv.slice(2);
-  
+
   if (args[0] === 'run') {
     runCommand(args.slice(1));
   } else {
