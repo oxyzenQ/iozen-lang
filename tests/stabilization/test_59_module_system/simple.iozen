@@ -1,0 +1,7 @@
+# Simple test without imports
+function main returns integer
+    print "Simple test works!"
+    return 0
+end
+
+main()

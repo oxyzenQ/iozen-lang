@@ -5,10 +5,10 @@ import add, multiply from "./math_utils.iozen"
 
 function main returns integer
     print "Testing module system..."
-    
+
     print "add(5, 3) = " attach add(5, 3)
     print "multiply(4, 7) = " attach multiply(4, 7)
-    
+
     return 0
 end
 

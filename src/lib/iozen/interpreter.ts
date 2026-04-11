@@ -14,6 +14,7 @@ import type {
     DestructureNode,
     EnumDeclNode,
     ExitNode,
+    ExportNode,
     ForEachNode,
     FunctionCallExprNode,
     FunctionCallStmtNode,
@@ -33,6 +34,7 @@ import type {
     ModuleDeclNode,
     PipelineExprNode,
     PrintStmtNode,
+    ProgramNode,
     RepeatNode,
     ReturnStmtNode,
     SafeAccessNode,
@@ -79,6 +81,7 @@ export class Interpreter {
   private sourceLines: string[] = [];
   private sourceFilePath: string | null = null;
   private importedModules: Set<string> = new Set();
+  private moduleCache = new Map<string, Map<string, IOZENValue>>(); // path -> exports
 
   constructor() {
     this.env = new Environment();
@@ -303,6 +306,34 @@ export class Interpreter {
     return null;
   }
 
+  // ---- Module System ----
+
+  private executeModule(ast: ProgramNode, env: Environment): Map<string, IOZENValue> {
+    const exports = new Map<string, IOZENValue>();
+
+    for (const stmt of ast.statements) {
+      switch (stmt.kind) {
+        case 'Export': {
+          const exportNode = stmt as ExportNode;
+          // Execute the declaration first
+          this.executeStatement(exportNode.declaration, env);
+
+          // Collect exported names
+          for (const name of exportNode.names) {
+            if (env.has(name)) {
+              exports.set(name, env.get(name));
+            }
+          }
+          break;
+        }
+        default:
+          this.executeStatement(stmt, env);
+      }
+    }
+
+    return exports;
+  }
+
   // ---- Statement Executors ----
 
   private execImport(node: ImportNode, env: Environment): void {
@@ -319,39 +350,64 @@ export class Interpreter {
     const { resolve, dirname } = require('node:path');
     const fullPath = resolve(dirname(basePath), modulePath);
 
-    // Prevent circular imports
+    // Check if already loaded in cache
     const resolvedKey = resolve(fullPath);
-    if (this.importedModules.has(resolvedKey)) return;
-    this.importedModules.add(resolvedKey);
+    let moduleExports = this.moduleCache.get(resolvedKey);
 
-    try {
-      const { readFileSync } = require('node:fs');
-      const moduleSource = readFileSync(resolvedKey, 'utf-8');
+    if (!moduleExports) {
+      // Prevent circular imports
+      if (this.importedModules.has(resolvedKey)) {
+        throw new RuntimeError(`Circular import detected: ${modulePath}`, undefined, node.location);
+      }
+      this.importedModules.add(resolvedKey);
 
-      // Parse the imported module
-      const lexer = new Lexer(moduleSource);
-      const tokens = lexer.tokenize();
-      const parser = new Parser(tokens);
-      const ast = parser.parse();
+      try {
+        const { readFileSync } = require('node:fs');
+        const moduleSource = readFileSync(resolvedKey, 'utf-8');
 
-      // Execute in a child environment
-      const moduleEnv = env.child();
-      const savedFilePath = this.sourceFilePath;
-      const savedSource = this.source;
-      const savedLines = this.sourceLines;
+        // Parse the imported module
+        const lexer = new Lexer(moduleSource);
+        const tokens = lexer.tokenize();
+        const parser = new Parser(tokens);
+        const ast = parser.parse();
 
-      this.sourceFilePath = resolvedKey;
-      this.source = moduleSource;
-      this.sourceLines = moduleSource.split('\n');
+        // Execute in a child environment (isolated module scope)
+        const moduleEnv = env.child();
+        const savedFilePath = this.sourceFilePath;
+        const savedSource = this.source;
+        const savedLines = this.sourceLines;
 
-      this.executeBlock(ast.statements, moduleEnv);
+        this.sourceFilePath = resolvedKey;
+        this.source = moduleSource;
+        this.sourceLines = moduleSource.split('\n');
 
-      // Restore state
-      this.sourceFilePath = savedFilePath;
-      this.source = savedSource;
-      this.sourceLines = savedLines;
+        // Execute module and collect exports
+        moduleExports = this.executeModule(ast, moduleEnv);
 
-      // If specific names are requested, only expose those into current env
+        // Cache the exports
+        this.moduleCache.set(resolvedKey, moduleExports);
+
+        // Restore state
+        this.sourceFilePath = savedFilePath;
+        this.source = savedSource;
+        this.sourceLines = savedLines;
+      } catch (e) {
+        throw new RuntimeError(`Failed to load module ${modulePath}: ${e}`, undefined, node.location);
+      }
+    }
+
+    // Inject requested imports into current environment
+    if (node.importNames && node.importNames.length > 0) {
+      // Import specific names
+      for (const name of node.importNames) {
+        const value = moduleExports.get(name);
+        if (value === undefined) {
+          throw new RuntimeError(`'${name}' is not exported from module ${modulePath}`, undefined, node.location);
+        }
+        env.define(name, value);
+      }
+    } else {
+      // Import all exports (namespace import - future feature)
       if (node.importNames.length > 0) {
         for (const name of node.importNames) {
           if (moduleEnv.has(name)) {
@@ -375,11 +431,6 @@ export class Interpreter {
           // Already in structureDefs, no need to duplicate
         }
       }
-    } catch (e) {
-      if (e instanceof RuntimeError) {
-        throw new RuntimeError(`Cannot import module "${node.modulePath}": ${e.message}`, ...this.findNameInSourceOrThrow(node.modulePath));
-      }
-      throw new RuntimeError(`Cannot import module "${node.modulePath}": ${String(e)}`, ...this.findNameInSourceOrThrow(node.modulePath));
     }
   }
 
