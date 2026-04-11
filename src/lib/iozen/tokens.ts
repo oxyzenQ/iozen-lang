@@ -43,6 +43,8 @@ export enum TokenType {
   End = 'End',
   Return = 'Return',
   Import = 'Import',
+  Export = 'Export',
+  From = 'From',
   Module = 'Module',
   Expose = 'Expose',
   // --- Control flow ---
@@ -194,6 +196,8 @@ export const KEYWORDS: Record<string, TokenType> = {
   'end': TokenType.End,
   'return': TokenType.Return,
   'import': TokenType.Import,
+  'export': TokenType.Export,
+  'from': TokenType.From,
   'module': TokenType.Module,
   'expose': TokenType.Expose,
 

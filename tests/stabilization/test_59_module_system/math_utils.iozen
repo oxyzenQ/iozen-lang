@@ -1,0 +1,21 @@
+# Math Utils Module
+# Demonstrates export functionality
+
+export function add returns integer
+    take x as integer
+    take y as integer
+    return x + y
+end
+
+export function multiply returns integer
+    take x as integer
+    take y as integer
+    return x * y
+end
+
+export constant PI as float with value 3.14159
+
+# Private function (not exported)
+function helper returns integer
+    return 42
+end

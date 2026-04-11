@@ -8,19 +8,12 @@ import type {
     AttachExprNode,
     BinaryExprNode,
     BlockNode,
-    CheckCaseNode,
     CheckNode,
-    CompoundAssignNode,
     ContinueNode,
-    DestructureNode,
-    EnumCaseNode,
     EnumDeclNode,
     ExitNode,
-    FieldNode,
-    ForceUnwrapNode,
     ForEachNode,
     FunctionCallExprNode,
-    FunctionCallStmtNode,
     FunctionDeclNode,
     FunctionParamNode,
     HasValueNode,
@@ -29,31 +22,19 @@ import type {
     IncreaseNode,
     LabelNode,
     LambdaNode,
-    ListCompNode,
     ListLiteralNode,
     LiteralNode,
     MapLiteralNode,
-    MatchCaseNode,
     MatchNode,
     MemberAccessNode,
-    ModuleDeclNode,
-    PipelineExprNode,
     PrintStmtNode,
     ProgramNode,
     RepeatNode,
     ReturnStmtNode,
-    SafeAccessNode,
     SetFieldNode,
     StructureDeclNode,
-    TernaryExprNode,
-    ThrowNode,
-    TryCatchNode,
-    TypeAliasNode,
-    UnaryExprNode,
     UnionDeclNode,
-    ValueInsideNode,
     VariableDeclNode,
-    WhenBranchNode,
     WhenNode,
     WhileNode
 } from './ast';
@@ -107,6 +88,8 @@ export class Parser {
     switch (token.type) {
       case TokenType.Import:
         return this.parseImport();
+      case TokenType.Export:
+        return this.parseExport();
       case TokenType.Create:
         return this.parseVariableDecl();
       case TokenType.Constant:
@@ -198,6 +181,48 @@ export class Parser {
       modulePath: parts.join('/'),
       importNames,
     } as ImportNode;
+  }
+
+  private parseExport(): ASTNode {
+    this.consume(TokenType.Export, 'Expected "export"');
+
+    // Can export: function, variable declaration, constant
+    if (this.check(TokenType.Function)) {
+      const func = this.parseFunctionDecl();
+      const names = this.extractExportNames(func);
+      return {
+        kind: 'Export',
+        declaration: func,
+        names,
+      } as ExportNode;
+    } else if (this.check(TokenType.Create)) {
+      const varDecl = this.parseVariableDecl();
+      const names = this.extractExportNames(varDecl);
+      return {
+        kind: 'Export',
+        declaration: varDecl,
+        names,
+      } as ExportNode;
+    } else if (this.check(TokenType.Constant)) {
+      const varDecl = this.parseVariableDecl(true);
+      const names = this.extractExportNames(varDecl);
+      return {
+        kind: 'Export',
+        declaration: varDecl,
+        names,
+      } as ExportNode;
+    } else {
+      throw new ParseError('Expected function, variable, or constant after export', this.peek());
+    }
+  }
+
+  private extractExportNames(node: ASTNode): string[] {
+    if (node.kind === 'FunctionDecl') {
+      return [(node as FunctionDeclNode).name];
+    } else if (node.kind === 'VariableDecl') {
+      return [(node as VariableDeclNode).name];
+    }
+    return [];
   }
 
   private parseVariableDecl(isConstant: boolean = false): ASTNode {

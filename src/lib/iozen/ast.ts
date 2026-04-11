@@ -13,6 +13,7 @@ export interface SourceLocation {
 export type ASTNode =
   | ProgramNode
   | ImportNode
+  | ExportNode
   | VariableDeclNode
   | FunctionDeclNode
   | StructureDeclNode
@@ -72,6 +73,15 @@ export interface ImportNode {
   kind: 'Import';
   modulePath: string;
   importNames: string[];  // empty = import all
+  location?: SourceLocation;
+}
+
+// ---- Export ----
+export interface ExportNode {
+  kind: 'Export';
+  declaration: ASTNode;  // FunctionDecl, VariableDecl, etc.
+  names: string[];       // names being exported
+  location?: SourceLocation;
 }
 
 // ---- Declarations ----
