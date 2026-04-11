@@ -44,8 +44,7 @@ export enum TokenType {
   Return = 'Return',
   Import = 'Import',
   Export = 'Export',
-  From = 'From',
-  Module = 'Module',
+  Package = 'Package',
   Expose = 'Expose',
   // --- Control flow ---
   Match = 'Match',
@@ -122,7 +121,6 @@ export enum TokenType {
   Wait = 'Wait',
   Start = 'Start',
   Task = 'Task',
-  Parallel = 'Parallel',
   Atomic = 'Atomic',
 
   // --- Logical operators ---
