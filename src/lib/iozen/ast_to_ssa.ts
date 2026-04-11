@@ -51,6 +51,8 @@ class SSABuilder {
   private variableCounter = new Map<string, number>();
   private breakTarget: string | null = null;
   private continueTarget: string | null = null;
+  // Track variable versions at the end of each block (for phi insertion)
+  private blockVariableVersions = new Map<string, Map<string, number>>();
 
   convertModule(ast: ProgramNode): SSAModule {
     const module: SSAModule = {
@@ -204,6 +206,9 @@ class SSABuilder {
       this.convertStatement(stmt);
     }
 
+    // Save variable versions at end of then block
+    this.saveBlockVariableVersions(thenBlockId);
+
     // Jump to merge
     if (this.currentBlock.terminator.kind === 'exit') {
       this.currentBlock.terminator = { kind: 'jump', target: mergeBlockId };
@@ -218,6 +223,9 @@ class SSABuilder {
       for (const stmt of node.elseBody) {
         this.convertStatement(stmt);
       }
+
+      // Save variable versions at end of else block
+      this.saveBlockVariableVersions(elseBlockId);
 
       if (this.currentBlock.terminator.kind === 'exit') {
         this.currentBlock.terminator = { kind: 'jump', target: mergeBlockId };
@@ -501,16 +509,61 @@ class SSABuilder {
   }
 
   private insertPhiNodes(block: SSABasicBlock, predecessors: string[]): void {
-    // Minimal phi insertion: for each variable that might have different versions
-    // coming from different predecessors, insert a phi node
-    // This is a simplified version - full SSA requires dominator analysis
+    // Phase 17.3: Proper phi node insertion
+    // For each variable that has different versions from different predecessors,
+    // insert a phi node at the merge block
 
-    // For now, we skip complex phi insertion and rely on the fact that
-    // our simple control flow makes variable versioning straightforward
+    // Collect all variables that exist in any predecessor
+    const allVars = new Set<string>();
+    for (const predId of predecessors) {
+      const predVersions = this.blockVariableVersions.get(predId);
+      if (predVersions) {
+        for (const varName of predVersions.keys()) {
+          allVars.add(varName);
+        }
+      }
+    }
+
+    // For each variable, check if versions differ across predecessors
+    for (const varName of allVars) {
+      const versions: { block: string; version: number }[] = [];
+
+      for (const predId of predecessors) {
+        const predVersions = this.blockVariableVersions.get(predId);
+        const version = predVersions?.get(varName) || 0;
+        versions.push({ block: predId, version });
+      }
+
+      // Check if versions are different
+      const firstVersion = versions[0].version;
+      const hasDifferentVersions = versions.some(v => v.version !== firstVersion);
+
+      if (hasDifferentVersions) {
+        // Need phi node
+        const newVersion = this.getNextVersion(varName);
+
+        // Build incoming values for phi
+        const incoming = versions.map(v => ({
+          value: { kind: 'variable', name: varName, version: v.version } as SSAValue,
+          block: v.block,
+        }));
+
+        // Insert phi at the beginning of the block
+        const phiInst: SSAInstruction = {
+          kind: 'phi',
+          dest: varName,
+          destVer: newVersion,
+          incoming,
+        };
+
+        block.instructions.unshift(phiInst);
+      }
+    }
   }
-}
 
-export function convertASTtoSSA(ast: ProgramNode): SSAModule {
-  const builder = new SSABuilder();
-  return builder.convertModule(ast);
+  private saveBlockVariableVersions(blockId: string): void {
+    // Save current variable versions for this block
+    const versions = new Map(this.variableCounter);
+    this.blockVariableVersions.set(blockId, versions);
+  }
 }
