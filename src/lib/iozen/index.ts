@@ -17,7 +17,7 @@ export type * from './ssa_ir';
 export * as SSA from './ssa_ir';
 export { SSAOptimizer, optimizeSSAFunction } from './ssa_optimizer';
 
-// Phase 22: Parallel Runtime
+// Phase 22: Parallel Runtime (Simulated)
 export {
     ThreadPool, executeParallel,
     getGlobalThreadPool,
@@ -27,6 +27,29 @@ export {
     setGlobalThreadPool
 } from './parallel_runtime';
 export type { ParallelOptions, Task, TaskFunction, TaskResult } from './parallel_runtime';
+
+// Phase 23: Real Worker Threads
+export {
+    WorkerThreadPool, getGlobalWorkerPool,
+    setGlobalWorkerPool,
+    workerBenchmarkPrimes,
+    workerExecute,
+    workerParallelForEach,
+    workerParallelMap,
+    workerParallelReduce
+} from './worker_pool';
+export type { WorkerMessage, WorkerTask } from './worker_pool';
+
+// Phase 24: Shared Memory
+export {
+    ParallelArray,
+    SharedMemoryPool,
+    SharedQueue, createAtomicCounter,
+    createSharedFloat64Array,
+    createSharedInt32Array,
+    createSharedUint8Array
+} from './shared_memory';
+export type { AtomicCounter, SharedBuffer, SharedData } from './shared_memory';
 
 // Language metadata
 export const IOZEN_VERSION = '0.1.0';
