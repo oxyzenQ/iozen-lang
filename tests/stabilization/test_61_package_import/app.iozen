@@ -1,0 +1,13 @@
+# Test 61: Package Import Resolution
+# Demonstrates import from "package-name" (not just relative path)
+
+# This should resolve to iozen_modules/math-utils/index.iozen
+import hello from "math-utils"
+
+function main returns integer
+    print "Testing package import..."
+    hello()
+    return 0
+end
+
+main()

@@ -1,0 +1,7 @@
+{
+  "name": "test-package-import",
+  "version": "0.1.0",
+  "dependencies": {
+    "math-utils": "^1.0.0"
+  }
+}

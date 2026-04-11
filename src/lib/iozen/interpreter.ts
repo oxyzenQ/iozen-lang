@@ -336,22 +336,89 @@ export class Interpreter {
 
   // ---- Statement Executors ----
 
+  /**
+   * Resolve module path - supports:
+   * - Relative paths: "./math_utils.iozen", "../lib/utils.iozen"
+   * - Package names: "math-utils" → "./iozen_modules/math-utils/index.iozen"
+   */
+  private resolveModulePath(modulePath: string, basePath: string): string {
+    const { resolve, dirname, join, existsSync } = require('node:path');
+    const { existsSync: fsExists } = require('node:fs');
+
+    // If it's a relative path (starts with ./ or ../)
+    if (modulePath.startsWith('./') || modulePath.startsWith('../')) {
+      // Add .iozen extension if not present
+      if (!modulePath.endsWith('.iozen')) {
+        modulePath = modulePath + '.iozen';
+      }
+      return resolve(dirname(basePath), modulePath);
+    }
+
+    // If it's an absolute path
+    if (modulePath.startsWith('/')) {
+      return modulePath;
+    }
+
+    // It's a package name - try iozen_modules/
+    const projectRoot = this.findProjectRoot(basePath);
+    const packageDir = join(projectRoot, 'iozen_modules', modulePath);
+
+    // Check for index.iozen in package directory
+    const indexPath = join(packageDir, 'index.iozen');
+    if (fsExists(indexPath)) {
+      return indexPath;
+    }
+
+    // Check for package main from iozen.json
+    const manifestPath = join(packageDir, 'iozen.json');
+    if (fsExists(manifestPath)) {
+      try {
+        const manifest = JSON.parse(require('node:fs').readFileSync(manifestPath, 'utf-8'));
+        const mainFile = manifest.main || 'index.iozen';
+        const mainPath = join(packageDir, mainFile);
+        if (fsExists(mainPath)) {
+          return mainPath;
+        }
+      } catch {
+        // Fall through to error
+      }
+    }
+
+    // Not found - return as-is (will fail with proper error later)
+    return modulePath;
+  }
+
+  /**
+   * Find project root by looking for iozen.json
+   */
+  private findProjectRoot(startPath: string): string {
+    const { dirname, join, existsSync } = require('node:path');
+    const { existsSync: fsExists } = require('node:fs');
+
+    let current = startPath;
+    while (current !== '/') {
+      if (fsExists(join(current, 'iozen.json'))) {
+        return current;
+      }
+      const parent = dirname(current);
+      if (parent === current) break;
+      current = parent;
+    }
+
+    // Fallback: return current directory
+    return dirname(startPath);
+  }
+
   private execImport(node: ImportNode, env: Environment): void {
     // Resolve module path relative to current file
     let basePath = this.sourceFilePath || process.cwd();
     let modulePath = node.modulePath;
 
-    // Add .iozen extension if not present
-    if (!modulePath.endsWith('.iozen')) {
-      modulePath = modulePath + '.iozen';
-    }
-
-    // Resolve relative to the current file's directory
-    const { resolve, dirname } = require('node:path');
-    const fullPath = resolve(dirname(basePath), modulePath);
+    // Resolve the module path (handles relative and package imports)
+    const { resolve } = require('node:path');
+    const resolvedKey = resolve(this.resolveModulePath(modulePath, basePath));
 
     // Check if already loaded in cache
-    const resolvedKey = resolve(fullPath);
     let moduleExports = this.moduleCache.get(resolvedKey);
 
     if (!moduleExports) {
@@ -407,29 +474,9 @@ export class Interpreter {
         env.define(name, value);
       }
     } else {
-      // Import all exports (namespace import - future feature)
-      if (node.importNames.length > 0) {
-        for (const name of node.importNames) {
-          if (moduleEnv.has(name)) {
-            env.define(name, moduleEnv.get(name));
-          }
-        }
-      } else {
-        // Import all — expose non-private names
-        // Functions and structures defined at module level are imported
-        // (Variables starting with _ are considered private)
-        for (const name of moduleEnv.names()) {
-          if (!name.startsWith('__') && !name.startsWith('_')) {
-            // Don't re-define names that already exist in current scope
-            if (!env.has(name)) {
-              env.define(name, moduleEnv.get(name));
-            }
-          }
-        }
-        // Also import structure definitions
-        for (const [sName, sDef] of this.structureDefs) {
-          // Already in structureDefs, no need to duplicate
-        }
+      // Import all exports
+      for (const [name, value] of moduleExports) {
+        env.define(name, value);
       }
     }
   }

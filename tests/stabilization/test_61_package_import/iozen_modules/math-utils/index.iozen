@@ -1,0 +1,19 @@
+# Math Utils Package
+# Installed in iozen_modules/
+
+export function hello returns integer
+    print "Hello from math-utils package!"
+    return 0
+end
+
+export function add returns integer
+    take x as integer
+    take y as integer
+    return x + y
+end
+
+export function multiply returns integer
+    take x as integer
+    take y as integer
+    return x * y
+end
