@@ -1,0 +1,38 @@
+# Test 57: SSA Form Test
+# Testing SSA IR conversion
+
+function simple_math returns integer
+    create variable x as integer with value 10
+    create variable y as integer with value 20
+    create variable z as integer with value x + y
+    return z
+end
+
+function with_if returns integer
+    create variable x as integer with value 10
+    when x > 5 do
+        set x to x + 1
+    end
+    when x <= 5 do
+        set x to x - 1
+    end
+    return x
+end
+
+function with_loop returns integer
+    create variable i as integer with value 0
+    while i < 5 do
+        set i to i + 1
+    end
+    return i
+end
+
+function main returns integer
+    print "Testing SSA conversion..."
+    print "simple_math result: " attach simple_math()
+    print "with_if result: " attach with_if()
+    print "with_loop result: " attach with_loop()
+    return 0
+end
+
+main()
