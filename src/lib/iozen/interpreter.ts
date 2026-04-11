@@ -3,6 +3,7 @@
 // Executes IOZEN programs by walking the AST
 // ============================================================
 
+import * as fs from 'node:fs';
 import type {
     AssignVarNode,
     ASTNode,
@@ -1323,15 +1324,7 @@ export class Interpreter {
       return true;
     }
 
-    // Type conversion
-    if ((n === 'to_integer' || n === 'int') && args.length >= 1) {
-      this.env.define('__last_result__', parseInt(String(args[0]), 10));
-      return true;
-    }
-    if (n === 'to_float' && args.length >= 1) {
-      this.env.define('__last_result__', parseFloat(String(args[0])));
-      return true;
-    }
+    // Type conversion - to_text only (to_integer/to_float moved to callBuiltinByName)
     if (n === 'to_text' && args.length >= 1) {
       this.env.define('__last_result__', String(args[0]));
       return true;
@@ -1496,26 +1489,7 @@ export class Interpreter {
       this.env.define('__last_result__', '');
       return true;
     }
-    if (n === 'read_file' && args.length >= 1) {
-      try {
-        const { readFileSync } = require('node:fs');
-        const content = readFileSync(String(args[0]), 'utf-8');
-        this.env.define('__last_result__', content);
-      } catch {
-        throw new RuntimeError(`Cannot read file: "${args[0]}"`);
-      }
-      return true;
-    }
-    if (n === 'write_file' && args.length >= 2) {
-      try {
-        const { writeFileSync } = require('node:fs');
-        writeFileSync(String(args[0]), String(args[1]), 'utf-8');
-        this.env.define('__last_result__', true);
-      } catch {
-        throw new RuntimeError(`Cannot write file: "${args[0]}"`);
-      }
-      return true;
-    }
+    // File I/O moved to callBuiltinByName (hardened versions)
     if (n === 'append_file' && args.length >= 2) {
       try {
         const { appendFileSync } = require('node:fs');
@@ -2391,6 +2365,18 @@ export class Interpreter {
       const str = String(args[0]);
       const start = this.toNumber(args[1]);
       const end = this.toNumber(args[2]);
+
+      // Bounds checking
+      if (start < 0) {
+        throw new RuntimeError(`substr: start index cannot be negative (${start})`);
+      }
+      if (end < start) {
+        throw new RuntimeError(`substr: end index (${end}) cannot be less than start index (${start})`);
+      }
+      if (start > str.length) {
+        throw new RuntimeError(`substr: start index (${start}) out of bounds (string length: ${str.length})`);
+      }
+
       this.env.define('__last_result__', str.substring(start, end));
       return true;
     }
@@ -2446,9 +2432,14 @@ export class Interpreter {
         this.env.define('__last_result__', Math.floor(val));
       } else if (typeof val === 'string') {
         const parsed = parseInt(val, 10);
-        this.env.define('__last_result__', isNaN(parsed) ? 0 : parsed);
+        if (isNaN(parsed)) {
+          throw new RuntimeError(`Cannot convert "${val}" to integer: invalid format`);
+        }
+        this.env.define('__last_result__', parsed);
+      } else if (typeof val === 'boolean') {
+        this.env.define('__last_result__', val ? 1 : 0);
       } else {
-        this.env.define('__last_result__', 0);
+        throw new RuntimeError(`Cannot convert ${typeof val} to integer`);
       }
       return true;
     }
@@ -2458,51 +2449,58 @@ export class Interpreter {
         this.env.define('__last_result__', val);
       } else if (typeof val === 'string') {
         const parsed = parseFloat(val);
-        this.env.define('__last_result__', isNaN(parsed) ? 0.0 : parsed);
+        if (isNaN(parsed)) {
+          throw new RuntimeError(`Cannot convert "${val}" to float: invalid format`);
+        }
+        this.env.define('__last_result__', parsed);
+      } else if (typeof val === 'boolean') {
+        this.env.define('__last_result__', val ? 1.0 : 0.0);
       } else {
-        this.env.define('__last_result__', 0.0);
+        throw new RuntimeError(`Cannot convert ${typeof val} to float`);
       }
       return true;
     }
 
     // File I/O Functions
     if (n === 'read_file' && args.length >= 1) {
+      const path = String(args[0]);
+      if (!fs.existsSync(path)) {
+        throw new RuntimeError(`File not found: "${path}"`);
+      }
       try {
-        const path = String(args[0]);
         const content = fs.readFileSync(path, 'utf-8');
         this.env.define('__last_result__', content);
-      } catch (e) {
-        this.env.define('__last_result__', '');
+      } catch (e: any) {
+        throw new RuntimeError(`Cannot read file "${path}": ${e.message}`);
       }
       return true;
     }
     if (n === 'write_file' && args.length >= 2) {
+      const path = String(args[0]);
+      const content = String(args[1]);
       try {
-        const path = String(args[0]);
-        const content = String(args[1]);
         fs.writeFileSync(path, content, 'utf-8');
         this.env.define('__last_result__', true);
-      } catch (e) {
-        this.env.define('__last_result__', false);
+      } catch (e: any) {
+        throw new RuntimeError(`Cannot write to file "${path}": ${e.message}`);
       }
       return true;
     }
     if (n === 'file_exists' && args.length >= 1) {
-      try {
-        const path = String(args[0]);
-        this.env.define('__last_result__', fs.existsSync(path));
-      } catch (e) {
-        this.env.define('__last_result__', false);
-      }
+      const path = String(args[0]);
+      this.env.define('__last_result__', fs.existsSync(path));
       return true;
     }
     if (n === 'delete_file' && args.length >= 1) {
+      const path = String(args[0]);
+      if (!fs.existsSync(path)) {
+        throw new RuntimeError(`Cannot delete: file not found "${path}"`);
+      }
       try {
-        const path = String(args[0]);
         fs.unlinkSync(path);
         this.env.define('__last_result__', true);
-      } catch (e) {
-        this.env.define('__last_result__', false);
+      } catch (e: any) {
+        throw new RuntimeError(`Cannot delete file "${path}": ${e.message}`);
       }
       return true;
     }

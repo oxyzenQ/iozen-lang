@@ -1,0 +1,121 @@
+# Test 55: Stdlib Hardening
+# Tests edge cases and error handling for stdlib functions
+
+# ============================================
+# FILE I/O EDGE CASES
+# ============================================
+
+function test_file_not_found returns integer
+    print "Testing read_file with non-existent file..."
+    # This should throw: File not found
+    create variable content as text with value read_file("nonexistent_file_12345.txt")
+    return 0
+end
+
+function test_file_exists_check returns integer
+    print "Testing file_exists..."
+    # This should return false, not throw
+    create variable exists as boolean with value file_exists("nonexistent_file_12345.txt")
+    when exists equals false do
+        print "  OK: file_exists returns false for non-existent file"
+    end
+    return 0
+end
+
+# ============================================
+# TYPE CONVERSION EDGE CASES
+# ============================================
+
+function test_to_integer_valid returns integer
+    print "Testing to_integer with valid input..."
+    create variable n as integer with value to_integer("42")
+    print "  OK: to_integer('42') = " attach n
+    return 0
+end
+
+function test_to_integer_invalid returns integer
+    print "Testing to_integer with invalid input..."
+    # This should throw: Cannot convert "abc" to integer
+    create variable n as integer with value to_integer("abc")
+    return 0
+end
+
+function test_to_float_valid returns integer
+    print "Testing to_float with valid input..."
+    create variable f as float with value to_float("3.14")
+    print "  OK: to_float('3.14') = " attach f
+    return 0
+end
+
+function test_to_float_invalid returns integer
+    print "Testing to_float with invalid input..."
+    # This should throw: Cannot convert "xyz" to float
+    create variable f as float with value to_float("xyz")
+    return 0
+end
+
+# ============================================
+# STRING OPERATIONS EDGE CASES
+# ============================================
+
+function test_substr_valid returns integer
+    print "Testing substr with valid input..."
+    create variable s as text with value substr("hello", 1, 4)
+    print "  OK: substr('hello', 1, 4) = '" attach s attach "'"
+    return 0
+end
+
+function test_substr_negative_start returns integer
+    print "Testing substr with negative start..."
+    # This should throw: start index cannot be negative
+    create variable s as text with value substr("hello", -1, 3)
+    return 0
+end
+
+function test_substr_end_before_start returns integer
+    print "Testing substr with end < start..."
+    # This should throw: end index cannot be less than start
+    create variable s as text with value substr("hello", 3, 1)
+    return 0
+end
+
+function test_substr_out_of_bounds returns integer
+    print "Testing substr with out of bounds..."
+    # This should throw: start index out of bounds
+    create variable s as text with value substr("hi", 10, 15)
+    return 0
+end
+
+# ============================================
+# MAIN TEST RUNNER
+# ============================================
+
+function main returns integer
+    print "=== STDLIB HARDENING TESTS ==="
+    print ""
+
+    # Test valid operations first
+    test_file_exists_check()
+    test_to_integer_valid()
+    test_to_float_valid()
+    test_substr_valid()
+
+    print ""
+    print "=== EDGE CASE TESTS (should show errors) ==="
+    print ""
+
+    # These should throw errors with pretty formatting
+    # Uncomment one at a time to test specific error
+    # test_file_not_found()
+    # test_to_integer_invalid()
+    # test_to_float_invalid()
+    # test_substr_negative_start()
+    # test_substr_end_before_start()
+    # test_substr_out_of_bounds()
+
+    print ""
+    print "All valid tests passed!"
+    return 0
+end
+
+main()

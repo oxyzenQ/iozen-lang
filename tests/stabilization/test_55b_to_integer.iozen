@@ -1,0 +1,8 @@
+# Test 55b: to_integer Invalid Format
+function main returns integer
+    print "Testing to_integer with invalid input..."
+    create variable n as integer with value to_integer("abc")
+    return 0
+end
+
+main()

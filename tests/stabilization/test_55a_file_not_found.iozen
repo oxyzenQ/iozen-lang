@@ -1,0 +1,8 @@
+# Test 55a: File Not Found Error
+function main returns integer
+    print "Testing read_file with non-existent file..."
+    create variable content as text with value read_file("nonexistent_file_12345.txt")
+    return 0
+end
+
+main()

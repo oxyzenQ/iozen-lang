@@ -1,0 +1,8 @@
+# Test 55c: substr Edge Cases
+function main returns integer
+    print "Testing substr with negative start..."
+    create variable s as text with value substr("hello", -1, 3)
+    return 0
+end
+
+main()
