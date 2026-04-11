@@ -1,0 +1,41 @@
+# Test 58: SSA to C Code Generation
+# This file demonstrates SSA-based C code generation
+
+# Simple arithmetic (should be constant-folded)
+function simple_math returns integer
+    create variable x as integer with value 10
+    create variable y as integer with value 20
+    create variable z as integer with value x + y
+    return z
+end
+
+# With conditionals (shows phi nodes)
+function with_conditional returns integer
+    create variable x as integer with value 5
+    when x > 3 do
+        set x to x + 10
+    end
+    when x <= 3 do
+        set x to x + 1
+    end
+    return x
+end
+
+# Loop (shows basic block structure)
+function with_loop returns integer
+    create variable i as integer with value 0
+    while i < 10 do
+        set i to i + 1
+    end
+    return i
+end
+
+function main returns integer
+    print "Testing SSA codegen..."
+    print "simple_math: " attach simple_math()
+    print "with_conditional: " attach with_conditional()
+    print "with_loop: " attach with_loop()
+    return 0
+end
+
+main()

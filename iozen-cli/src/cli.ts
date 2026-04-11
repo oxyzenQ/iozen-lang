@@ -13,9 +13,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
-import { Interpreter } from "../../src/lib/iozen/interpreter";
-import { Lexer } from "../../src/lib/iozen/lexer";
-import { ParseError, Parser } from "../../src/lib/iozen/parser";
+import { Interpreter, Lexer, ParseError, Parser } from "../../src/lib/iozen";
 
 // ---- ANSI Colors (no external dependency) ----
 const C = {
@@ -69,6 +67,9 @@ async function main() {
       break;
     case "ast":
       await cmdAst(args.slice(1));
+      break;
+    case "ssa":
+      await cmdSSA(args.slice(1));
       break;
     case "repl":
     case "shell":
@@ -392,6 +393,71 @@ function printASTNode(node: any, indent: number): void {
     } else if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
       log(`${pad}${C.dim}${key}:${C.reset} ${C.white}${JSON.stringify(value)}${C.reset}`);
     }
+  }
+}
+
+async function cmdSSA(args: string[]) {
+  if (args.length === 0) {
+    error('Usage: iozen ssa <file.iozen> [--opt] [--c]');
+    process.exit(1);
+  }
+
+  const filePath = resolve(args[0]);
+  if (!existsSync(filePath)) {
+    error(`File not found: ${filePath}`);
+    process.exit(1);
+  }
+
+  const optimize = args.includes('--opt');
+  const genC = args.includes('--c');
+
+  try {
+    const source = await readFile(filePath, 'utf-8');
+
+    log(`${C.cyan}=== SSA IR Generation ===${C.reset}\n`);
+
+    // Parse
+    const lexer = new Lexer(source);
+    const tokens = lexer.tokenize();
+    const parser = new Parser(tokens);
+    const ast = parser.parse();
+
+    // Convert to SSA
+    const ssa = convertASTtoSSA(ast);
+
+    log(`${C.green}Generated SSA for ${ssa.functions.length} functions${C.reset}\n`);
+
+    // Optionally optimize
+    if (optimize) {
+      log(`${C.yellow}Running SSA optimizations...${C.reset}\n`);
+      for (const func of ssa.functions) {
+        optimizeSSAFunction(func);
+      }
+    }
+
+    // Print SSA IR
+    log(`${C.cyan}=== SSA IR ===${C.reset}`);
+    for (const func of ssa.functions) {
+      log('');
+      log(SSA.formatFunction(func));
+    }
+
+    // Optionally generate C
+    if (genC) {
+      log('\n');
+      log(`${C.cyan}=== Generated C Code ===${C.reset}`);
+      log('');
+      const cCode = generateCFromSSA(ssa);
+      log(cCode);
+    }
+
+  } catch (e) {
+    if (e instanceof ParseError) {
+      error(`Parse error: ${e.message}`);
+    } else {
+      error(`Error: ${e}`);
+    }
+    process.exit(1);
   }
 }
 
