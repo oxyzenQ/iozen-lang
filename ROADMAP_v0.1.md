@@ -1,257 +1,263 @@
-# IOZEN v0.1 Roadmap: Fastfetch Clone Target
+# IOZEN Language Roadmap
 
-## 🎯 Goal (2-4 Weeks)
+> **Current Status:** v0.3 - Turing Complete Language ✅
+> **Last Updated:** April 12, 2026
+> **See Also:** `AI_AGENT_GUIDE.md` for technical details for AI agents
 
-IOZEN can compile and execute a simple fastfetch-like CLI program:
+## 🎯 Project Overview
+
+IOZEN is a systems programming language experiment with two parallel tracks:
+1. **Working Interpreter** (Week 1-3 ✅ COMPLETE) - Usable language now!
+2. **Advanced Runtime** (Experimental) - Work-stealing scheduler, memory safety model
+
+## ✅ ACHIEVED: Working Language (v0.3)
+
+IOZEN can now run real programs:
 
 ```iozen
 fn main() {
+    // Variables
+    let name = "IOZEN"
+    let version = 0.3
+
+    // System info with colors
+    print(color("cyan", "System Information"))
     print("OS: " + get_os())
     print("CPU: " + get_cpu())
     print("RAM: " + get_ram())
-    print("Uptime: " + get_uptime())
+
+    // Control flow
+    if (version >= 1.0) {
+        print("Production ready!")
+    } else {
+        print("In development")
+    }
+
+    // Loops
+    let i = 0
+    while (i < 3) {
+        print("Count: " + i)
+        i = i + 1
+    }
 }
 ```
 
 **Output:**
 ```
+System Information
 OS: Linux
-CPU: AMD Ryzen 5 5600G
-RAM: 16GB / 32GB
-Uptime: 3h 42m
+CPU: AMD Ryzen 7 5800HS
+RAM: 14GB / 15GB
+In development
+Count: 0
+Count: 1
+Count: 2
 ```
 
 ---
 
-## ⚠️ SCOPE CUT (Important!)
+## ✅ COMPLETED: Week 1-3 Features
 
-### ❌ OUT OF SCOPE (for v0.1):
-- ❌ Full memory safety (keep what we have, no new features)
-- ❌ Complex parallelism (scheduler exists but not required for demo)
-- ❌ Full module system (basic imports only)
-- ❌ Optimized compiler (interpreter mode OK)
-- ❌ Advanced types (structs, generics)
+### Week 1: Core Language ✅
+- ✅ Tokenizer, Parser, Interpreter (v2)
+- ✅ CLI: `iozen run file.iozen`
+- ✅ Functions, print statements
+- ✅ String concatenation
 
-### ✅ IN SCOPE:
-- ✅ Minimal parser (expressions, functions, calls)
-- ✅ Basic runtime (print, string concat)
-- ✅ System info functions (os, cpu, ram, uptime)
-- ✅ CLI that compiles and runs .iozen files
-- ✅ Simple fastfetch clone program
+### Week 2: Variables & System Info ✅
+- ✅ Variables: `let x = 10`
+- ✅ Math: `+ - * / %`
+- ✅ Comparison: `== != < > <= >=`
+- ✅ Colors: `color("red", "text")`
+- ✅ System: `get_os()`, `get_cpu()`, `get_ram()`, `get_disk()`, `get_shell()`, `get_resolution()`
+- ✅ String functions: `length()`, `upper()`, `lower()`, `pad()`
 
----
+### Week 3: Control Flow ✅ **(TURING COMPLETE!)**
+- ✅ `if/else` statements
+- ✅ `while` loops
+- ✅ `for` loops
+- ✅ `break` and `continue`
+- ✅ Return from functions
+- ✅ Working examples: `fastfetch.iozen`, `control_flow.iozen`
 
-## 📅 Week-by-Week Breakdown
+## 🚀 HOW TO RUN
 
-### Week 1: Core Parser + Basic Runtime
+```bash
+# Using Bun (recommended)
+bun iozen-cli/src/cli.ts run examples/fastfetch_v2.iozen
 
-**Day 1-2: Minimal Parser**
-```
-Target: Parse simple expressions and functions
-
-Input:
-  fn main() {
-    print("hello")
-  }
-
-Output: AST that represents this
-```
-
-Files to create:
-- `src/lib/iozen/parser_v2.ts` - simplified parser
-- `tests/v0.1/test_parser.ts` - parser tests
-
-**Day 3-4: Basic Interpreter**
-```
-Target: Execute parsed AST
-
-Can run:
-  print("hello")
-  let x = 5
-  print(x)
-  print("Value: " + x)
-```
-
-Files to create:
-- `src/lib/iozen/interpreter_v2.ts` - minimal interpreter
-- `tests/v0.1/test_interpreter.ts`
-
-**Day 5-7: CLI Tool**
-```
-Target: iozen run file.iozen
-
-$ iozen run hello.iozen
-hello
-```
-
-Files to modify:
-- `iozen-cli/src/cli.ts` - add "run" command
-
----
-
-### Week 2: System Info + String Operations
-
-**Day 8-10: String Operations**
-```
-Target: String concat, basic formatting
-
-"OS: " + get_os()  // works
-"CPU: " + cpu_name // works
-```
-
-**Day 11-14: System Info Functions**
-```
-Target: Built-in system info functions
-
-get_os()      -> "Linux"
-get_cpu()     -> "AMD Ryzen 5 5600G"
-get_ram()     -> "16GB / 32GB"
-get_uptime()  -> "3h 42m"
-```
-
-Files to create:
-- `src/lib/iozen/builtins.ts` - system info functions
-- `src/lib/iozen/system.ts` - OS interaction
-
-Test:
-```iozen
-// test_system.iozen
-fn main() {
-    print("Testing system info:")
-    print("OS: " + get_os())
-}
+# Examples
+bun iozen-cli/src/cli.ts run examples/hello.iozen           # Basic
+bun iozen-cli/src/cli.ts run examples/fastfetch.iozen       # System info
+bun iozen-cli/src/cli.ts run examples/fastfetch_v2.iozen    # With colors
+bun iozen-cli/src/cli.ts run examples/control_flow.iozen    # Loops demo
 ```
 
 ---
 
-### Week 3: Fastfetch Clone
+## 📅 ROADMAP: Future Phases
 
-**Day 15-18: Fastfetch Program**
-```
-Target: Complete fastfetch clone in IOZEN
+### Phase 4: Arrays & Structs (Next)
+**Goal:** Add compound data types
 
-File: examples/fastfetch.iozen
-```
+Features:
+- Arrays: `let arr = [1, 2, 3]`
+- Array indexing: `arr[0]`, `arr[1] = 5`
+- Array length: `arr.length`
+- Structs/objects: `let person = { name: "John", age: 30 }`
+- Field access: `person.name`
 
-```iozen
-fn main() {
-    print("")
-    print("  ╭─────────────── System Information ───────────────╮")
-    print("  │                                                │")
-    print("  │  OS:       " + pad(get_os(), 35) + "│")
-    print("  │  CPU:      " + pad(get_cpu(), 35) + "│")
-    print("  │  RAM:      " + pad(get_ram(), 35) + "│")
-    print("  │  Uptime:   " + pad(get_uptime(), 35) + "│")
-    print("  │                                                │")
-    print("  ╰────────────────────────────────────────────────╯")
-    print("")
-}
+### Phase 5: Modules & Imports
+**Goal:** Code organization
 
-fn pad(s, len) {
-    while length(s) < len {
-        s = s + " "
-    }
-    return s
-}
-```
+Features:
+- Module system: `import { foo } from "./lib.iozen"`
+- Export: `export fn helper() { ... }`
+- Package manager basics
 
-**Day 19-21: Polish + Testing**
-- Make sure it runs reliably
-- Error messages clear
-- Edge cases handled
+### Phase 6: Error Handling
+**Goal:** Robust error management
+
+Features:
+- Result types
+- Try/catch or error propagation
+- Better error messages with line numbers
+
+### Phase 7: Compile to Binary (Advanced)
+**Goal:** Not interpreted anymore
+
+Options:
+- Compile to JavaScript/Node.js (easier)
+- Compile to LLVM IR → native binary (harder)
+- Use existing runtime components (chase_lev, atomic_types)
+
+### Phase 8: Production Ready
+**Goal:** Usable for real projects
+
+Features:
+- Standard library
+- Tooling (formatter, linter)
+- Documentation generator
+- IDE support
+
+### Phase 9: Rust-Level (Long-term)
+**Goal:** Mature systems language
+
+Reality check:
+- Requires 3-5 years serious work
+- Needs community
+- LLVM backend stable
+- Borrow checker or equivalent
+
+**Current realistic target:** Phase 5-6 (usable language with modules)
 
 ---
 
-### Week 4: Demo + Documentation
+## 🎁 Bonus Features (Already Done!)
 
-**Day 22-25: Documentation**
-```
-- README with install instructions
-- Examples folder
-- Simple tutorial
-```
-
-**Day 26-28: Final Polish**
-```
-- Clean up any remaining issues
-- Make sure "iozen run examples/fastfetch.iozen" works
-- Screenshot/video demo
-```
-
----
-
-## 🎁 Bonus (if time permits)
-
-If ahead of schedule, add ONE of:
-- [ ] Basic colors in output
-- [ ] One more system info (disk usage, hostname)
-- [ ] Config file support (simple JSON)
-
-**NOT both. Pick one.**
+All originally planned bonus features now completed:
+- ✅ Basic colors in output - `color("red", "text")`
+- ✅ More system info - `get_disk()`, `get_shell()`, `get_resolution()`
+- ✅ Control flow - if/else, loops (beyond original scope!)
 
 ---
 
 ## 🚫 ANTI-GOALS (Don't Do These!)
 
-- ❌ "Let me just add this one feature..." → NO. Scope is locked.
+- ❌ "Let me just add this one feature..." → NO. Finish current phase first.
 - ❌ "I should refactor the parser first..." → NO. Current parser works.
-- ❌ "Let me make the type system perfect..." → NO. Not needed for v0.1.
+- ❌ "Let me make the type system perfect..." → NO. Not needed yet.
 - ❌ "I should add async/await..." → NO. Way out of scope.
+- ❌ "I should integrate the scheduler now..." → NO. Language first, optimization later.
+- ❌ "Let me rewrite everything..." → NO. Build on what works.
 
 ---
 
-## ✅ Definition of Done
+## ✅ Definition of Done (v0.3 ACHIEVED!)
 
 ```
-☑️ iozen run examples/fastfetch.iozen produces output
-☑️ Output shows: OS, CPU, RAM, Uptime
-☑️ README explains how to install and run
-☑️ Repository is public (or ready to be)
-☑️ Can show this to someone and they understand what it is
+☑️ iozen run examples/fastfetch.iozen produces output ✅
+☑️ Output shows: OS, CPU, RAM, Uptime, Disk, Shell ✅
+☑️ Colors work in output ✅
+☑️ Control flow works (if/else, loops) ✅
+☑️ Language is Turing complete ✅
+☑️ Multiple working examples ✅
+```
+
+## 🎯 Next Definition of Done (v0.4)
+
+```
+☐ Arrays work: [1, 2, 3] and arr[0]
+☐ Structs/objects work: { name: "value" }
+☐ Can write useful programs with compound data
+☐ Examples using arrays and structs
 ```
 
 ---
 
-## 🏆 Success Metrics
+## 🏆 Success Metrics (ACHIEVED!)
 
-**Not measured by:**
-- Lines of code
-- Number of features
-- How "elegant" the code is
+**Week 1-3: All Metrics Met! ✅**
 
-**Measured by:**
-- ✅ Does fastfetch.iozen run?
-- ✅ Can someone else clone and run it?
-- ✅ Is there a demo to show?
+- ✅ Does fastfetch.iozen run? YES
+- ✅ Can someone else clone and run it? YES (Bun/Node.js)
+- ✅ Is there a demo to show? YES (4 working examples!)
+
+**Additional Wins:**
+- ✅ Turing complete language
+- ✅ Colored output working
+- ✅ Control flow (if/else, loops)
+- ✅ Bun compatibility achieved
+
+**Metrics for Next Phase:**
+- ⬜ Can write array-based programs?
+- ⬜ Can organize code with modules?
+- ⬜ Can handle errors gracefully?
 
 ---
 
-## 🚀 Daily Habit
+## 🚀 Daily Habit (Updated)
 
 **Every day ask:**
-1. Does this get me closer to fastfetch working?
+1. Does this get me closer to **Phase 4 (Arrays/Structs)**?
 2. Is this in scope?
 3. Can I ship this today?
 
 If answer to #1 is "no", stop and re-align.
 
+**Current Focus:** Make language feature-complete before optimization.
+
 ---
 
-## 🎯 The Real Goal
+## 🎯 The Real Goal (ACHIEVED!)
 
-This isn't about fastfetch.
+This was never about fastfetch.
 
-It's about:
+It was about:
 > **Proving IOZEN can compile and run real programs.**
 
-Once this works, you have:
-- A demo
-- Credibility
-- Momentum
-- Something to show/build on
+**Now achieved:**
+- ✅ A demo (fastfetch.iozen)
+- ✅ Credibility (Turing complete language)
+- ✅ Momentum (3 weeks of progress)
+- ✅ Something to show/build on (working foundation)
 
-**That's worth more than 10 half-finished features.**
+**New Goal:**
+> **Making IOZEN a practical, usable language.**
+
+Next milestone: Arrays, structs, modules - features that make it useful for real tasks.
 
 ---
 
-Ready? Say: **"gas week1"**
+## 📚 Documentation Index
+
+| File | Purpose |
+|------|---------|
+| `AI_AGENT_GUIDE.md` | Technical guide for AI agents |
+| `ROADMAP_v0.1.md` | This file - project roadmap |
+| `README.md` | User-facing documentation |
+| `examples/` | Working code examples |
+
+---
+
+Ready? Say: **"gas week4"** (Arrays & Structs) or **"gas ship"** (Release v0.3)

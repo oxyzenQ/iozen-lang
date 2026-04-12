@@ -34,11 +34,51 @@ export interface VariableDeclaration {
   isConst: boolean;
 }
 
+export interface IfStatement {
+  type: 'IfStatement';
+  condition: Expression;
+  thenBranch: Statement[];
+  elseBranch: Statement[] | null;
+}
+
+export interface WhileStatement {
+  type: 'WhileStatement';
+  condition: Expression;
+  body: Statement[];
+}
+
+export interface ForStatement {
+  type: 'ForStatement';
+  initializer: VariableDeclaration | ExpressionStatement | null;
+  condition: Expression | null;
+  increment: Expression | null;
+  body: Statement[];
+}
+
+export interface BreakStatement {
+  type: 'BreakStatement';
+}
+
+export interface ContinueStatement {
+  type: 'ContinueStatement';
+}
+
+export interface ReturnStatement {
+  type: 'ReturnStatement';
+  value: Expression | null;
+}
+
 export type Statement =
   | FunctionDeclaration
   | PrintStatement
   | ExpressionStatement
-  | VariableDeclaration;
+  | VariableDeclaration
+  | IfStatement
+  | WhileStatement
+  | ForStatement
+  | BreakStatement
+  | ContinueStatement
+  | ReturnStatement;
 
 export type Expression =
   | StringLiteral
@@ -105,6 +145,28 @@ export class MinimalParser {
 
     if (this.isAtEnd()) return null;
 
+    // Control flow
+    if (this.check('IF')) {
+      return this.parseIfStatement();
+    }
+    if (this.check('WHILE')) {
+      return this.parseWhileStatement();
+    }
+    if (this.check('FOR')) {
+      return this.parseForStatement();
+    }
+    if (this.check('BREAK')) {
+      this.advance();
+      return { type: 'BreakStatement' };
+    }
+    if (this.check('CONTINUE')) {
+      this.advance();
+      return { type: 'ContinueStatement' };
+    }
+    if (this.check('RETURN')) {
+      return this.parseReturnStatement();
+    }
+
     // Variable declaration (let or const)
     if (this.check('LET') || this.check('CONST')) {
       return this.parseVariableDeclaration();
@@ -122,6 +184,109 @@ export class MinimalParser {
 
     // Expression statement
     return this.parseExpressionStatement();
+  }
+
+  private parseIfStatement(): IfStatement {
+    this.consume('IF', 'Expected "if"');
+    this.consume('LPAREN', 'Expected "(" after "if"');
+    const condition = this.parseExpression();
+    this.consume('RPAREN', 'Expected ")" after condition');
+
+    const thenBranch = this.parseBlock();
+
+    let elseBranch: Statement[] | null = null;
+    if (this.match('ELSE')) {
+      elseBranch = this.parseBlock();
+    }
+
+    return {
+      type: 'IfStatement',
+      condition,
+      thenBranch,
+      elseBranch
+    };
+  }
+
+  private parseWhileStatement(): WhileStatement {
+    this.consume('WHILE', 'Expected "while"');
+    this.consume('LPAREN', 'Expected "(" after "while"');
+    const condition = this.parseExpression();
+    this.consume('RPAREN', 'Expected ")" after condition');
+
+    const body = this.parseBlock();
+
+    return {
+      type: 'WhileStatement',
+      condition,
+      body
+    };
+  }
+
+  private parseForStatement(): ForStatement {
+    this.consume('FOR', 'Expected "for"');
+    this.consume('LPAREN', 'Expected "(" after "for"');
+
+    let initializer: VariableDeclaration | ExpressionStatement | null = null;
+    if (this.check('LET') || this.check('CONST')) {
+      initializer = this.parseVariableDeclaration();
+    } else if (!this.check('SEMICOLON')) {
+      initializer = this.parseExpressionStatement();
+    }
+
+    // Simple for with expression only (for x in 0..10 style)
+    if (this.check('RPAREN')) {
+      this.advance();
+      const body = this.parseBlock();
+      return {
+        type: 'ForStatement',
+        initializer,
+        condition: null,
+        increment: null,
+        body
+      };
+    }
+
+    // C-style for loop
+    let condition: Expression | null = null;
+    if (!this.check('IDENT') || !this.peekNext('RPAREN')) {
+      condition = this.parseExpression();
+    }
+    this.consume('RPAREN', 'Expected ")" after for clause');
+
+    const body = this.parseBlock();
+
+    return {
+      type: 'ForStatement',
+      initializer,
+      condition,
+      increment: null,
+      body
+    };
+  }
+
+  private parseReturnStatement(): ReturnStatement {
+    this.consume('RETURN', 'Expected "return"');
+    let value: Expression | null = null;
+    if (!this.check('NEWLINE') && !this.check('RBRACE')) {
+      value = this.parseExpression();
+    }
+    return {
+      type: 'ReturnStatement',
+      value
+    };
+  }
+
+  private parseBlock(): Statement[] {
+    this.consume('LBRACE', 'Expected "{"');
+    const statements: Statement[] = [];
+
+    while (!this.check('RBRACE') && !this.isAtEnd()) {
+      const stmt = this.parseStatement();
+      if (stmt) statements.push(stmt);
+    }
+
+    this.consume('RBRACE', 'Expected "}"');
+    return statements;
   }
 
   private parseVariableDeclaration(): VariableDeclaration {
@@ -159,20 +324,18 @@ export class MinimalParser {
 
     this.consume('LPAREN', 'Expected "(" after function name');
 
-    // Parameters (for v0.1, we'll keep it simple - no params or just handle main())
+    // Parse parameters
     const params: string[] = [];
-
     if (!this.check('RPAREN')) {
-      // Parse parameter
-      const param = this.consume('IDENT', 'Expected parameter name').value;
-      params.push(param);
-
-      // For now, ignore multiple params
-      while (this.match('COMMA')) {
-        const extraParam = this.consume('IDENT', 'Expected parameter name').value;
-        params.push(extraParam);
-      }
+      do {
+        const param = this.consume('IDENT', 'Expected parameter name').value;
+        params.push(param);
+      } while (this.match('COMMA'));
     }
+
+    this.consume('RPAREN', 'Expected ")"');
+    this.consume('LBRACE', 'Expected "{"');
+
 
     this.consume('RPAREN', 'Expected ")" after parameters');
     this.consume('LBRACE', 'Expected "{" before function body');

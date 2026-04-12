@@ -6,11 +6,23 @@ import {
     BinaryExpression,
     CallExpression,
     Expression,
+    ForStatement,
     FunctionDeclaration,
+    IfStatement,
     PrintStatement,
     Program,
-    Statement
+    Statement,
+    WhileStatement
 } from './parser_v2';
+
+// Control flow exception types
+class BreakException extends Error {}
+class ContinueException extends Error {}
+class ReturnException extends Error {
+    constructor(public value: any) {
+        super();
+    }
+}
 
 // ANSI color codes
 const COLORS: Record<string, string> = {
@@ -191,7 +203,7 @@ export class MinimalInterpreter {
     this.executeFunction(main, []);
   }
 
-  private executeFunction(func: FunctionDeclaration, args: any[]): void {
+  private executeFunction(func: FunctionDeclaration, args: any[]): any {
     // Create new scope for function
     const prevVariables = new Map(this.context.variables);
 
@@ -201,12 +213,22 @@ export class MinimalInterpreter {
     }
 
     // Execute body
-    for (const stmt of func.body) {
-      this.executeStatement(stmt);
+    try {
+      for (const stmt of func.body) {
+        this.executeStatement(stmt);
+      }
+    } catch (e) {
+      if (e instanceof ReturnException) {
+        // Restore scope before returning
+        this.context.variables = prevVariables;
+        return e.value;
+      }
+      throw e;
     }
 
     // Restore scope
     this.context.variables = prevVariables;
+    return undefined;
   }
 
   private executeStatement(stmt: Statement): void {
@@ -220,10 +242,99 @@ export class MinimalInterpreter {
       case 'VariableDeclaration':
         this.executeVariableDeclaration(stmt);
         break;
+      case 'IfStatement':
+        this.executeIfStatement(stmt);
+        break;
+      case 'WhileStatement':
+        this.executeWhileStatement(stmt);
+        break;
+      case 'ForStatement':
+        this.executeForStatement(stmt);
+        break;
+      case 'BreakStatement':
+        throw new BreakException();
+      case 'ContinueStatement':
+        throw new ContinueException();
+      case 'ReturnStatement':
+        const returnValue = stmt.value ? this.evaluateExpression(stmt.value) : undefined;
+        throw new ReturnException(returnValue);
       default:
         // Skip other statements
         break;
     }
+  }
+
+  private executeIfStatement(stmt: IfStatement): void {
+    const condition = this.evaluateExpression(stmt.condition);
+    if (this.isTruthy(condition)) {
+      this.executeBlock(stmt.thenBranch);
+    } else if (stmt.elseBranch) {
+      this.executeBlock(stmt.elseBranch);
+    }
+  }
+
+  private executeWhileStatement(stmt: WhileStatement): void {
+    while (this.isTruthy(this.evaluateExpression(stmt.condition))) {
+      try {
+        this.executeBlock(stmt.body);
+      } catch (e) {
+        if (e instanceof BreakException) break;
+        if (e instanceof ContinueException) continue;
+        throw e;
+      }
+    }
+  }
+
+  private executeForStatement(stmt: ForStatement): void {
+    // Execute initializer
+    if (stmt.initializer) {
+      if (stmt.initializer.type === 'VariableDeclaration') {
+        this.executeVariableDeclaration(stmt.initializer);
+      } else {
+        this.evaluateExpression(stmt.initializer.expression);
+      }
+    }
+
+    // Loop
+    while (true) {
+      // Check condition
+      if (stmt.condition && !this.isTruthy(this.evaluateExpression(stmt.condition))) {
+        break;
+      }
+
+      try {
+        this.executeBlock(stmt.body);
+      } catch (e) {
+        if (e instanceof BreakException) break;
+        if (e instanceof ContinueException) {
+          // Execute increment and continue
+          if (stmt.increment) {
+            this.evaluateExpression(stmt.increment);
+          }
+          continue;
+        }
+        throw e;
+      }
+
+      // Execute increment
+      if (stmt.increment) {
+        this.evaluateExpression(stmt.increment);
+      }
+    }
+  }
+
+  private executeBlock(statements: Statement[]): void {
+    for (const stmt of statements) {
+      this.executeStatement(stmt);
+    }
+  }
+
+  private isTruthy(value: any): boolean {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'number') return value !== 0;
+    if (typeof value === 'string') return value.length > 0;
+    return true;
   }
 
   private executeVariableDeclaration(stmt: any): void {

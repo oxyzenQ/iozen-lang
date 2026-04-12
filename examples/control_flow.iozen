@@ -1,0 +1,85 @@
+// IOZEN Week 3: Control Flow Demo
+// if/else, while loops, for loops, break, continue
+
+fn main() {
+    print("")
+    print("=== Control Flow Demo ===")
+    print("")
+    
+    // IF/ELSE
+    print("1. IF/ELSE:")
+    let score = 85
+    
+    if (score >= 90) {
+        print("  Grade: A")
+    } else if (score >= 80) {
+        print("  Grade: B")
+    } else if (score >= 70) {
+        print("  Grade: C")
+    } else {
+        print("  Grade: D")
+    }
+    
+    // WHILE loop
+    print("")
+    print("2. WHILE loop (countdown):")
+    let count = 5
+    
+    while (count > 0) {
+        print("  Count: " + count)
+        count = count - 1
+    }
+    
+    // FOR loop simulation with while
+    print("")
+    print("3. FOR loop style (count up):")
+    let i = 0
+    while (i < 5) {
+        print("  i = " + i)
+        i = i + 1
+    }
+    
+    // BREAK demonstration
+    print("")
+    print("4. BREAK demo:")
+    let n = 0
+    while (n < 10) {
+        if (n == 3) {
+            break
+        }
+        print("  n = " + n)
+        n = n + 1
+    }
+    print("  (broke at n=3)")
+    
+    // CONTINUE demonstration
+    print("")
+    print("5. CONTINUE demo (odd numbers only):")
+    let x = 0
+    while (x < 6) {
+        x = x + 1
+        if (x % 2 == 0) {
+            continue
+        }
+        print("  odd: " + x)
+    }
+    
+    // Nested example
+    print("")
+    print("6. Nested loops (multiplication table):")
+    let row = 1
+    while (row <= 3) {
+        let line = ""
+        let col = 1
+        while (col <= 3) {
+            line = line + (row * col) + " "
+            col = col + 1
+        }
+        print("  " + line)
+        row = row + 1
+    }
+    
+    print("")
+    print("=== Demo Complete ===")
+    print("")
+}

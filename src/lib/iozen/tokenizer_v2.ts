@@ -8,6 +8,13 @@ export type TokenType =
   | 'PRINT'        // print
   | 'LET'          // let
   | 'CONST'        // const
+  | 'IF'           // if
+  | 'ELSE'         // else
+  | 'WHILE'        // while
+  | 'FOR'          // for
+  | 'BREAK'        // break
+  | 'CONTINUE'     // continue
+  | 'RETURN'       // return
   | 'IDENT'        // identifier
   | 'STRING'       // "..."
   | 'NUMBER'       // 123
@@ -47,6 +54,13 @@ const KEYWORDS: Record<string, TokenType> = {
   'print': 'PRINT',
   'let': 'LET',
   'const': 'CONST',
+  'if': 'IF',
+  'else': 'ELSE',
+  'while': 'WHILE',
+  'for': 'FOR',
+  'break': 'BREAK',
+  'continue': 'CONTINUE',
+  'return': 'RETURN',
 };
 
 export class MinimalTokenizer {
