@@ -2,7 +2,8 @@
 // Converts IOZEN AST to Intermediate Representation
 
 import type * as AST from '../parser_v2';
-import { IRBuilder, IRValue, createIRBuilder, IRProgram } from './ir';
+import type { IRProgram, IRValue } from './ir';
+import { IRBuilder, createIRBuilder } from './ir';
 
 export class ASTToIR {
   private builder: IRBuilder;
@@ -49,8 +50,8 @@ export class ASTToIR {
     // Add parameters
     for (let i = 0; i < func.params.length; i++) {
       const paramName = func.params[i];
-      const paramType = func.paramTypes && func.paramTypes[i] 
-        ? this.mapType(func.paramTypes[i]) 
+      const paramType = func.paramTypes && func.paramTypes[i]
+        ? this.mapType(func.paramTypes[i])
         : 'ptr';
       this.builder.addParam(paramName, paramType);
       this.variableTypes.set(paramName, paramType);
@@ -106,14 +107,14 @@ export class ASTToIR {
   private genVariableDeclaration(stmt: AST.VariableDeclaration): string {
     const type = this.mapType(stmt.typeAnnotation);
     const value = this.genExpression(stmt.initializer);
-    
+
     this.builder.addLocal(stmt.name, type);
     this.variableTypes.set(stmt.name, type);
-    
+
     if (value) {
       this.builder.emitStore(stmt.name, value);
     }
-    
+
     return stmt.name;
   }
 

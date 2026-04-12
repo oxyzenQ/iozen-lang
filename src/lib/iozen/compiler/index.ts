@@ -68,6 +68,7 @@ export function compileToC(source: string): string {
 }
 
 // Re-export compiler modules
-export { IRBuilder, createIRBuilder, IRProgram, IRFunction, IRInstruction } from './ir';
 export { astToIR, ASTToIR } from './ast-to-ir';
-export { generateC, CBackend } from './c-backend';
+export { CBackend, generateC } from './c-backend';
+export { createIRBuilder, IRBuilder } from './ir';
+export type { IRFunction, IRInstruction, IRProgram, IRValue } from './ir';

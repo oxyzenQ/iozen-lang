@@ -1,6 +1,6 @@
 // C Backend - Converts IOZEN IR to C Code
 
-import { IRProgram, IRFunction, IRInstruction, IRValue } from './ir';
+import type { IRFunction, IRInstruction, IRProgram, IRValue } from './ir';
 
 export class CBackend {
   private output: string[] = [];
@@ -13,6 +13,29 @@ export class CBackend {
     this.indent = 0;
     this.stringLiterals.clear();
     this.stringCounter = 0;
+
+    // Phase 1: Pre-scan all functions to collect string literals
+    // We need to know all strings before we can emit forward declarations
+    const tempOutput: string[] = [];
+    const tempIndent = 0;
+
+    // Save current state
+    const savedOutput = this.output;
+    const savedIndent = this.indent;
+
+    // Process all functions to a temp buffer to collect strings
+    this.output = [];
+    this.indent = 1; // Function body indentation
+    for (const func of program.functions) {
+      this.emitFunction(func);
+    }
+    const functionBodies = this.output.join('\n');
+
+    // Restore state for actual emission
+    this.output = savedOutput;
+    this.indent = savedIndent;
+
+    // Phase 2: Emit in correct order
 
     // Header
     this.emitLine('#include <stdio.h>');
@@ -54,18 +77,7 @@ export class CBackend {
     this.emitLine('} iz_array_t;');
     this.emitLine('');
 
-    // Forward declarations
-    this.emitLine('// Forward declarations');
-    for (const func of program.functions) {
-      this.emitFunctionDecl(func);
-    }
-    this.emitLine('');
-
-    // Built-in functions
-    this.emitBuiltins();
-    this.emitLine('');
-
-    // String literals
+    // String literals (collected in Phase 1)
     if (this.stringLiterals.size > 0) {
       this.emitLine('// String literals');
       for (const [id, str] of this.stringLiterals) {
@@ -74,10 +86,28 @@ export class CBackend {
       this.emitLine('');
     }
 
-    // Function implementations
+    // Forward declarations for functions
+    this.emitLine('// Forward declarations');
     for (const func of program.functions) {
-      this.emitFunction(func);
+      this.emitFunctionDecl(func);
     }
+    this.emitLine('');
+
+    // Forward declarations for string literals (defined at end)
+    if (this.stringLiterals.size > 0) {
+      this.emitLine('// String literal forward declarations');
+      for (const id of this.stringLiterals.keys()) {
+        this.emitLine(`extern const char* ${id};`);
+      }
+      this.emitLine('');
+    }
+
+    // Built-in functions
+    this.emitBuiltins();
+    this.emitLine('');
+
+    // Function implementations (use pre-generated bodies)
+    this.output.push(functionBodies);
 
     return this.output.join('\n');
   }
@@ -91,7 +121,7 @@ export class CBackend {
   private emitFunction(func: IRFunction) {
     const params = func.params.map(p => `iz_value_t ${p.name}`).join(', ');
     const returnType = func.returnType === 'void' ? 'void' : 'iz_value_t';
-    
+
     this.emitLine(`${returnType} ${func.name}(${params}) {`);
     this.indent++;
 
