@@ -1,0 +1,33 @@
+// IOZEN Fastfetch v2.0 - Week 2 Features
+// - Colors
+// - More system info
+// - String functions
+// - Variables
+
+fn main() {
+    // Define colors
+    let title_color = "brightCyan"
+    let label_color = "cyan"
+    let value_color = "white"
+    
+    // ASCII art box header
+    print("")
+    print(color(title_color, "  ╭─────────────── System Information ───────────────╮"))
+    print(color(label_color, "  │                                                  │"))
+    
+    // System info with colored labels
+    print(color(label_color, "  │  OS:       ") + color(value_color, get_os()))
+    print(color(label_color, "  │  Host:     ") + color(value_color, get_hostname()))
+    print(color(label_color, "  │  User:     ") + color(value_color, get_user()))
+    print(color(label_color, "  │  Shell:    ") + color(value_color, get_shell()))
+    print(color(label_color, "  │  CPU:      ") + color(value_color, get_cpu()))
+    print(color(label_color, "  │  RAM:      ") + color(value_color, get_ram()))
+    print(color(label_color, "  │  Disk:     ") + color(value_color, get_disk()))
+    print(color(label_color, "  │  Display:  ") + color(value_color, get_resolution()))
+    print(color(label_color, "  │  Uptime:   ") + color(value_color, get_uptime()))
+    
+    // Footer
+    print(color(label_color, "  │                                                  │"))
+    print(color(title_color, "  ╰──────────────────────────────────────────────────╯"))
+    print("")
+}

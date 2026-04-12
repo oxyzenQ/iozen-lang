@@ -2,10 +2,12 @@
 // Target: Recognize basic tokens for IOZEN v0.1
 // NO OVERENGINEERING - just what we need for fastfetch
 
-export type TokenType = 
+export type TokenType =
   | 'FN'           // fn
   | 'MAIN'         // main
   | 'PRINT'        // print
+  | 'LET'          // let
+  | 'CONST'        // const
   | 'IDENT'        // identifier
   | 'STRING'       // "..."
   | 'NUMBER'       // 123
@@ -14,6 +16,17 @@ export type TokenType =
   | 'LBRACE'       // {
   | 'RBRACE'       // }
   | 'PLUS'         // +
+  | 'MINUS'        // -
+  | 'STAR'         // *
+  | 'SLASH'        // /
+  | 'PERCENT'      // %
+  | 'EQ'           // =
+  | 'EQEQ'         // ==
+  | 'BANGEQ'       // !=
+  | 'LT'           // <
+  | 'GT'           // >
+  | 'LTEQ'         // <=
+  | 'GTEQ'         // >=
   | 'COMMA'        // ,
   | 'NEWLINE'      // \n
   | 'EOF'          // end of file
@@ -32,6 +45,8 @@ const KEYWORDS: Record<string, TokenType> = {
   'fn': 'FN',
   'main': 'MAIN',
   'print': 'PRINT',
+  'let': 'LET',
+  'const': 'CONST',
 };
 
 export class MinimalTokenizer {
@@ -87,6 +102,24 @@ export class MinimalTokenizer {
       return this.identifier(startLine, startCol);
     }
 
+    // Two-character operators
+    if (char === '=' && this.peekNext() === '=') {
+      this.advance(); this.advance();
+      return { type: 'EQEQ', value: '==', line: startLine, column: startCol };
+    }
+    if (char === '!' && this.peekNext() === '=') {
+      this.advance(); this.advance();
+      return { type: 'BANGEQ', value: '!=', line: startLine, column: startCol };
+    }
+    if (char === '<' && this.peekNext() === '=') {
+      this.advance(); this.advance();
+      return { type: 'LTEQ', value: '<=', line: startLine, column: startCol };
+    }
+    if (char === '>' && this.peekNext() === '=') {
+      this.advance(); this.advance();
+      return { type: 'GTEQ', value: '>=', line: startLine, column: startCol };
+    }
+
     // Single-character tokens
     switch (char) {
       case '(': this.advance(); return { type: 'LPAREN', value: '(', line: startLine, column: startCol };
@@ -94,15 +127,22 @@ export class MinimalTokenizer {
       case '{': this.advance(); return { type: 'LBRACE', value: '{', line: startLine, column: startCol };
       case '}': this.advance(); return { type: 'RBRACE', value: '}', line: startLine, column: startCol };
       case '+': this.advance(); return { type: 'PLUS', value: '+', line: startLine, column: startCol };
+      case '-': this.advance(); return { type: 'MINUS', value: '-', line: startLine, column: startCol };
+      case '*': this.advance(); return { type: 'STAR', value: '*', line: startLine, column: startCol };
+      case '/': this.advance(); return { type: 'SLASH', value: '/', line: startLine, column: startCol };
+      case '%': this.advance(); return { type: 'PERCENT', value: '%', line: startLine, column: startCol };
+      case '=': this.advance(); return { type: 'EQ', value: '=', line: startLine, column: startCol };
+      case '<': this.advance(); return { type: 'LT', value: '<', line: startLine, column: startCol };
+      case '>': this.advance(); return { type: 'GT', value: '>', line: startLine, column: startCol };
       case ',': this.advance(); return { type: 'COMMA', value: ',', line: startLine, column: startCol };
-      case '\n': 
+      case '\n':
         this.advance();
         this.line++;
         this.column = 1;
         return { type: 'NEWLINE', value: '\n', line: startLine, column: startCol };
     }
 
-    // Unknown character - skip for Day 2
+    // Unknown character - skip
     this.advance();
     return { type: 'SKIP', value: char, line: startLine, column: startCol };
   }
@@ -125,7 +165,7 @@ export class MinimalTokenizer {
 
   private number(line: number, col: number): Token {
     let value = '';
-    
+
     while (!this.isAtEnd() && this.isDigit(this.peek())) {
       value += this.advance();
     }
@@ -135,7 +175,7 @@ export class MinimalTokenizer {
 
   private identifier(line: number, col: number): Token {
     let value = '';
-    
+
     while (!this.isAtEnd() && this.isAlphaNumeric(this.peek())) {
       value += this.advance();
     }
@@ -146,7 +186,7 @@ export class MinimalTokenizer {
 
   private comment(line: number, col: number): Token {
     let value = '';
-    
+
     while (!this.isAtEnd() && this.peek() !== '\n') {
       value += this.advance();
     }

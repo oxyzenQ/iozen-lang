@@ -27,10 +27,18 @@ export interface ExpressionStatement {
   expression: Expression;
 }
 
+export interface VariableDeclaration {
+  type: 'VariableDeclaration';
+  name: string;
+  initializer: Expression;
+  isConst: boolean;
+}
+
 export type Statement =
   | FunctionDeclaration
   | PrintStatement
-  | ExpressionStatement;
+  | ExpressionStatement
+  | VariableDeclaration;
 
 export type Expression =
   | StringLiteral
@@ -97,6 +105,11 @@ export class MinimalParser {
 
     if (this.isAtEnd()) return null;
 
+    // Variable declaration (let or const)
+    if (this.check('LET') || this.check('CONST')) {
+      return this.parseVariableDeclaration();
+    }
+
     // Function declaration
     if (this.check('FN')) {
       return this.parseFunctionDeclaration();
@@ -109,6 +122,25 @@ export class MinimalParser {
 
     // Expression statement
     return this.parseExpressionStatement();
+  }
+
+  private parseVariableDeclaration(): VariableDeclaration {
+    const isConst = this.check('CONST');
+    this.advance(); // consume let or const
+
+    const name = this.consume('IDENT', 'Expected variable name').value;
+    this.consume('EQ', 'Expected "=" after variable name');
+    const initializer = this.parseExpression();
+
+    // Skip optional newline
+    this.match('NEWLINE');
+
+    return {
+      type: 'VariableDeclaration',
+      name,
+      initializer,
+      isConst
+    };
   }
 
   private parseFunctionDeclaration(): FunctionDeclaration {
@@ -191,14 +223,65 @@ export class MinimalParser {
   }
 
   private parseExpression(): Expression {
-    return this.parseAdditive();
+    return this.parseEquality();
   }
 
-  private parseAdditive(): Expression {
+  private parseEquality(): Expression {
+    let left = this.parseComparison();
+
+    while (this.match('EQEQ', 'BANGEQ')) {
+      const operator = this.previous().value;
+      const right = this.parseComparison();
+      left = {
+        type: 'BinaryExpression',
+        operator,
+        left,
+        right
+      };
+    }
+
+    return left;
+  }
+
+  private parseComparison(): Expression {
+    let left = this.parseTerm();
+
+    while (this.match('LT', 'GT', 'LTEQ', 'GTEQ')) {
+      const operator = this.previous().value;
+      const right = this.parseTerm();
+      left = {
+        type: 'BinaryExpression',
+        operator,
+        left,
+        right
+      };
+    }
+
+    return left;
+  }
+
+  private parseTerm(): Expression {
+    let left = this.parseFactor();
+
+    while (this.match('PLUS', 'MINUS')) {
+      const operator = this.previous().value;
+      const right = this.parseFactor();
+      left = {
+        type: 'BinaryExpression',
+        operator,
+        left,
+        right
+      };
+    }
+
+    return left;
+  }
+
+  private parseFactor(): Expression {
     let left = this.parsePrimary();
 
-    while (this.match('PLUS')) {
-      const operator = '+';
+    while (this.match('STAR', 'SLASH', 'PERCENT')) {
+      const operator = this.previous().value;
       const right = this.parsePrimary();
       left = {
         type: 'BinaryExpression',
