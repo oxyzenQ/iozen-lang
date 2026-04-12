@@ -1,0 +1,114 @@
+// IOZEN Week 5: Utility Functions Demo
+// Array methods, String methods, Type conversion, Random, Date, File I/O
+
+fn main() {
+    print("")
+    print("=== Week 5: Utility Functions Demo ===")
+    print("")
+
+    // ARRAY FUNCTIONS
+    print("1. Array Functions:")
+    let nums = [10, 20, 30]
+    print("  Array: [10, 20, 30]")
+    print("  Length: " + arrayLen(nums))
+
+    // Push items
+    arrayPush(nums, 40)
+    arrayPush(nums, 50)
+    print("  After push: length = " + arrayLen(nums))
+    print("  Items: " + nums[0] + ", " + nums[1] + ", " + nums[2] + ", " + nums[3] + ", " + nums[4])
+
+    // Join array
+    let words = ["Hello", "IOZEN", "World"]
+    print("  Join: " + join(words, " - "))
+
+    // STRING METHODS
+    print("")
+    print("2. String Methods:")
+    let text = "  Hello IOZEN  "
+    print("  Original: '" + text + "'")
+    print("  Trim: '" + trim(text) + "'")
+
+    let sentence = "IOZEN is a programming language"
+    print("  Sentence: " + sentence)
+    print("  Contains 'prog': " + contains(sentence, "prog"))
+    print("  Contains 'java': " + contains(sentence, "java"))
+    print("  Starts with 'IOZEN': " + startsWith(sentence, "IOZEN"))
+    print("  Ends with 'language': " + endsWith(sentence, "language"))
+
+    // Replace and split
+    let original = "IOZEN-is-awesome"
+    print("  Replace '-' with ' ': " + replace(original, "-", " "))
+
+    let csv = "apple,banana,cherry"
+    let fruits = split(csv, ",")
+    print("  Split csv: " + fruits[0] + " | " + fruits[1] + " | " + fruits[2])
+
+    // TYPE CONVERSION
+    print("")
+    print("3. Type Conversion:")
+    let numStr = "42"
+    let floatStr = "3.14159"
+    print("  String to number: " + numStr + " -> " + toNumber(numStr))
+    print("  Parse int: " + floatStr + " -> " + parseInt(floatStr))
+    print("  Parse float: " + floatStr + " -> " + parseFloat(floatStr))
+
+    let number = 123
+    print("  Number to string: " + number + " -> " + str(number))
+
+    // RANDOM NUMBERS
+    print("")
+    print("4. Random Numbers:")
+    print("  Random (0-1): " + random())
+    print("  Random int (1-10): " + randomInt(1, 10))
+    print("  Random int (1-100): " + randomInt(1, 100))
+
+    // Roll a dice
+    let dice = randomInt(1, 6)
+    print("  Dice roll: " + dice)
+
+    // DATE/TIME
+    print("")
+    print("5. Date & Time:")
+    print("  Timestamp: " + now())
+    print("  Date: " + dateString())
+    print("  Time: " + timeString())
+
+    // FILE I/O
+    print("")
+    print("6. File I/O:")
+
+    // Check if file exists
+    let testFile = "/tmp/iozen_test.txt"
+    print("  File exists? " + fileExists(testFile))
+
+    // Write file
+    writeFile(testFile, "Hello from IOZEN!")
+    print("  File written: " + testFile)
+
+    // Check again
+    print("  File exists? " + fileExists(testFile))
+
+    // Read file
+    let content = readFile(testFile)
+    print("  Content: " + content)
+
+    // PRACTICAL EXAMPLE: Data Processing
+    print("")
+    print("7. Practical: CSV Parser")
+
+    let csvData = "Alice,25,Engineer|Bob,30,Designer|Carol,28,Manager"
+    let rows = split(csvData, "|")
+
+    let i = 0
+    while (i < arrayLen(rows)) {
+        let row = rows[i]
+        let fields = split(row, ",")
+        print("  " + fields[0] + " (" + fields[1] + ") - " + fields[2])
+        i = i + 1
+    }
+
+    print("")
+    print("=== Demo Complete ===")
+    print("")
+}

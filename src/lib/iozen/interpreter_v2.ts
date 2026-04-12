@@ -154,7 +154,120 @@ const BUILTINS: Record<string, (...args: any[]) => any> = {
   ceil: (n: number) => Math.ceil(Number(n)),
   abs: (n: number) => Math.abs(Number(n)),
   max: (a: number, b: number) => Math.max(Number(a), Number(b)),
-  min: (a: number, b: number) => Math.min(Number(a), Number(b))
+  min: (a: number, b: number) => Math.min(Number(a), Number(b)),
+
+  // Week 5: Array functions
+  arrayLen: (arr: any[]) => {
+    return Array.isArray(arr) ? arr.length : 0;
+  },
+
+  arrayPush: (arr: any[], item: any) => {
+    if (Array.isArray(arr)) {
+      arr.push(item);
+      return arr;
+    }
+    return [item];
+  },
+
+  // Week 5: String methods
+  contains: (str: string, substr: string) => {
+    return String(str).includes(String(substr));
+  },
+
+  startsWith: (str: string, substr: string) => {
+    return String(str).startsWith(String(substr));
+  },
+
+  endsWith: (str: string, substr: string) => {
+    return String(str).endsWith(String(substr));
+  },
+
+  trim: (str: string) => {
+    return String(str).trim();
+  },
+
+  replace: (str: string, search: string, replace: string) => {
+    return String(str).replace(String(search), String(replace));
+  },
+
+  split: (str: string, separator: string) => {
+    return String(str).split(String(separator));
+  },
+
+  join: (arr: any[], separator: string = ",") => {
+    return Array.isArray(arr) ? arr.join(String(separator)) : String(arr);
+  },
+
+  // Week 5: Type conversion
+  str: (value: any) => {
+    return String(value);
+  },
+
+  toNumber: (value: any) => {
+    const n = Number(value);
+    return isNaN(n) ? 0 : n;
+  },
+
+  parseInt: (value: any) => {
+    return parseInt(String(value), 10) || 0;
+  },
+
+  parseFloat: (value: any) => {
+    return parseFloat(String(value)) || 0;
+  },
+
+  // Week 5: Random functions
+  random: () => {
+    return Math.random();
+  },
+
+  randomInt: (min: number, max: number) => {
+    const mn = Math.ceil(Number(min));
+    const mx = Math.floor(Number(max));
+    return Math.floor(Math.random() * (mx - mn + 1)) + mn;
+  },
+
+  // Week 5: Date/Time functions
+  now: () => {
+    return Date.now();
+  },
+
+  dateString: () => {
+    return new Date().toLocaleDateString();
+  },
+
+  timeString: () => {
+    return new Date().toLocaleTimeString();
+  },
+
+  // Week 5: File I/O (basic)
+  readFile: (path: string) => {
+    try {
+      const fs = require('fs');
+      return fs.readFileSync(String(path), 'utf-8');
+    } catch (e) {
+      return `[error reading file: ${e.message}]`;
+    }
+  },
+
+  writeFile: (path: string, content: string) => {
+    try {
+      const fs = require('fs');
+      fs.writeFileSync(String(path), String(content), 'utf-8');
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  fileExists: (path: string) => {
+    try {
+      const fs = require('fs');
+      return fs.existsSync(String(path));
+    } catch {
+      return false;
+    }
+  }
 };
 
 // Execution context
