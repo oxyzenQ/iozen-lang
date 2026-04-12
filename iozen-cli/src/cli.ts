@@ -167,12 +167,35 @@ async function cmdCompile(args: string[]) {
     process.exit(1);
   }
 
-  // Resolve relative to current working directory (shell CWD)
-  const filePath = resolve(process.cwd(), args[0]);
-  if (!existsSync(filePath)) {
+  // Try multiple locations for the file
+  // 1. As-is (absolute or relative to shell CWD)
+  // 2. In examples/ directory
+  // 3. In project root
+  let filePath = args[0];
+  const possiblePaths = [
+    filePath,                                            // As provided
+    resolve(process.cwd(), filePath),                     // Relative to shell CWD
+    resolve(process.cwd(), 'examples', filePath),          // In examples/ directory
+    resolve(dirname(__dirname), filePath),               // Relative to CLI location
+    resolve(dirname(__dirname), '..', 'examples', filePath) // In examples from CLI
+  ];
+
+  let foundPath: string | null = null;
+  for (const tryPath of possiblePaths) {
+    if (existsSync(tryPath)) {
+      foundPath = tryPath;
+      break;
+    }
+  }
+
+  if (!foundPath) {
     error(`File not found: ${filePath}`);
+    error('Tried locations:');
+    possiblePaths.forEach(p => error(`  - ${p}`));
     process.exit(1);
   }
+
+  filePath = foundPath;
 
   let outputName = basename(filePath, ".iozen");
   let target: 'c' | 'binary' = 'c';
