@@ -1,0 +1,26 @@
+// Test constant folding optimization
+// These should be evaluated at compile time
+
+fn main() {
+    // Basic constant folding
+    let a = 2 + 3           // Should become: 5
+    let b = 10 * 5          // Should become: 50  
+    let c = 100 / 4         // Should become: 25
+    let d = 17 % 5          // Should become: 2
+    
+    // Nested constant folding
+    let e = (2 + 3) * 4     // Should become: 20
+    let f = 10 + 20 + 30    // Should become: 60
+    
+    // String concatenation at compile time
+    let greeting = "Hello, " + "World!"
+    
+    print("Constant folding test:")
+    print("a = 2 + 3 = " + a)
+    print("b = 10 * 5 = " + b)
+    print("c = 100 / 4 = " + c)
+    print("d = 17 % 5 = " + d)
+    print("e = (2 + 3) * 4 = " + e)
+    print("f = 10 + 20 + 30 = " + f)
+    print("greeting = " + greeting)
+}

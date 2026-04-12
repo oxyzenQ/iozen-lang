@@ -239,6 +239,14 @@ export class ASTToIR {
   }
 
   private genBinary(expr: AST.BinaryExpression): string {
+    // Optimization: Constant folding - evaluate constant expressions at compile time
+    const constResult = this.tryConstantFold(expr);
+    if (constResult !== null) {
+      const result = this.builder.newTemp(constResult.type);
+      this.builder.emitConst(result, constResult);
+      return result;
+    }
+
     const left = this.genExpression(expr.left);
     const right = this.genExpression(expr.right);
     const result = this.builder.newTemp('number');
@@ -262,6 +270,56 @@ export class ASTToIR {
     const op = opMap[expr.operator] || 'add';
     this.builder.emitBinary(op, result, left, right);
     return result;
+  }
+
+  // Constant folding optimization: try to evaluate expression at compile time
+  private tryConstantFold(expr: AST.Expression): IRValue | null {
+    if (expr.type !== 'BinaryExpression') return null;
+
+    // Only fold if both operands are constants
+    const left = this.getConstantValue(expr.left);
+    const right = this.getConstantValue(expr.right);
+    if (left === null || right === null) return null;
+
+    // Both are constants - evaluate now
+    const op = expr.operator;
+
+    if (left.type === 'number' && right.type === 'number') {
+      const l = left.value as number;
+      const r = right.value as number;
+      let result: number;
+
+      switch (op) {
+        case '+': result = l + r; break;
+        case '-': result = l - r; break;
+        case '*': result = l * r; break;
+        case '/': result = r !== 0 ? l / r : 0; break;
+        case '%': result = r !== 0 ? l % r : 0; break;
+        default: return null;
+      }
+
+      return { type: 'number', value: result };
+    }
+
+    if (left.type === 'string' && right.type === 'string' && op === '+') {
+      return { type: 'string', value: left.value + right.value };
+    }
+
+    return null;
+  }
+
+  private getConstantValue(expr: AST.Expression): IRValue | null {
+    switch (expr.type) {
+      case 'NumberLiteral':
+        return { type: 'number', value: expr.value };
+      case 'StringLiteral':
+        return { type: 'string', value: expr.value };
+      case 'BinaryExpression':
+        // Recursively try to fold nested expressions
+        return this.tryConstantFold(expr);
+      default:
+        return null;
+    }
   }
 
   private genCall(expr: AST.CallExpression): string {
