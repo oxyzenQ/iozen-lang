@@ -15,6 +15,13 @@ export type TokenType =
   | 'BREAK'        // break
   | 'CONTINUE'     // continue
   | 'RETURN'       // return
+  | 'IMPORT'       // import
+  | 'EXPORT'       // export
+  | 'TRY'          // try
+  | 'CATCH'        // catch
+  | 'FINALLY'      // finally
+  | 'THROW'        // throw
+  | 'FROM'         // from
   | 'IDENT'        // identifier
   | 'STRING'       // "..."
   | 'NUMBER'       // 123
@@ -65,6 +72,13 @@ const KEYWORDS: Record<string, TokenType> = {
   'break': 'BREAK',
   'continue': 'CONTINUE',
   'return': 'RETURN',
+  'import': 'IMPORT',
+  'export': 'EXPORT',
+  'try': 'TRY',
+  'catch': 'CATCH',
+  'finally': 'FINALLY',
+  'throw': 'THROW',
+  'from': 'FROM',
 };
 
 export class MinimalTokenizer {

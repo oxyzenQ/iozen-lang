@@ -1,0 +1,123 @@
+// IOZEN Week 6: Modules & Error Handling Demo
+// import/export and try/catch/finally
+
+fn main() {
+    print("")
+    print("=== Week 6: Modules & Error Handling Demo ===")
+    print("")
+    
+    // 1. Import demo (basic implementation)
+    print("1. Import Statement:")
+    import { helper, utils } from "./lib.iozen"
+    print("  helper = " + helper)
+    print("  utils = " + utils)
+    
+    // 2. Export demo (would be in separate file)
+    print("")
+    print("2. Export Statement:")
+    print("  export fn add(a, b) { ... }")
+    print("  export let PI = 3.14159")
+    
+    // 3. Try/catch - basic
+    print("")
+    print("3. Try/Catch - Basic:")
+    try {
+        print("  Inside try block")
+        let x = 10 / 0
+        print("  Result: " + x)
+    } catch {
+        print("  Caught an error!")
+    }
+    
+    // 4. Try/catch with error parameter
+    print("")
+    print("4. Try/Catch with Error Parameter:")
+    try {
+        print("  Attempting risky operation...")
+        throw "Something went wrong!"
+    } catch (e) {
+        print("  Error caught: " + e)
+    }
+    
+    // 5. Try/catch/finally
+    print("")
+    print("5. Try/Catch/Finally:")
+    try {
+        print("  Try block")
+        let result = 42
+    } catch (err) {
+        print("  Catch block: " + err)
+    } finally {
+        print("  Finally block always runs")
+    }
+    
+    // 6. Nested try/catch
+    print("")
+    print("6. Nested Try/Catch:")
+    try {
+        print("  Outer try")
+        try {
+            print("  Inner try")
+            throw "Inner error"
+        } catch (inner) {
+            print("  Inner catch: " + inner)
+        }
+    } catch (outer) {
+        print("  Outer catch: " + outer)
+    }
+    
+    // 7. Error handling with if/else
+    print("")
+    print("7. Error Handling Pattern:")
+    let success = 0
+    try {
+        let data = "test data"
+        if (length(data) > 0) {
+            success = 1
+        }
+    } catch (e) {
+        success = 0
+    }
+    print("  Operation " + (if (success) "succeeded" else "failed"))
+    
+    // 8. Practical: Safe division
+    print("")
+    print("8. Practical: Safe Division Function")
+    print("  10 / 2 = " + safeDivide(10, 2))
+    print("  10 / 0 = " + safeDivide(10, 0))
+    
+    // 9. Practical: Parse with error handling
+    print("")
+    print("9. Practical: Safe Number Parsing")
+    print("  parseNumber(\"42\") = " + parseNumber("42"))
+    print("  parseNumber(\"abc\") = " + parseNumber("abc"))
+    
+    print("")
+    print("=== Demo Complete ===")
+    print("")
+}
+
+// Safe division with error handling
+fn safeDivide(a, b) {
+    try {
+        if (b == 0) {
+            throw "Division by zero"
+        }
+        return a / b
+    } catch (e) {
+        return "Error: " + e
+    }
+}
+
+// Safe number parsing
+fn parseNumber(str) {
+    try {
+        let num = toNumber(str)
+        if (num == 0 && str != "0") {
+            throw "Invalid number"
+        }
+        return num
+    } catch (e) {
+        return "NaN"
+    }
+}

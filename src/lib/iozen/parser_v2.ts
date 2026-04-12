@@ -68,6 +68,30 @@ export interface ReturnStatement {
   value: Expression | null;
 }
 
+export interface ImportStatement {
+  type: 'ImportStatement';
+  names: string[];
+  path: string;
+}
+
+export interface ExportStatement {
+  type: 'ExportStatement';
+  declaration: FunctionDeclaration | VariableDeclaration | ExpressionStatement;
+}
+
+export interface TryStatement {
+  type: 'TryStatement';
+  tryBody: Statement[];
+  catchParam: string | null;
+  catchBody: Statement[] | null;
+  finallyBody: Statement[] | null;
+}
+
+export interface ThrowStatement {
+  type: 'ThrowStatement';
+  value: Expression;
+}
+
 export type Statement =
   | FunctionDeclaration
   | PrintStatement
@@ -78,7 +102,11 @@ export type Statement =
   | ForStatement
   | BreakStatement
   | ContinueStatement
-  | ReturnStatement;
+  | ReturnStatement
+  | ImportStatement
+  | ExportStatement
+  | TryStatement
+  | ThrowStatement;
 
 export type Expression =
   | StringLiteral
@@ -193,6 +221,26 @@ export class MinimalParser {
       return this.parseReturnStatement();
     }
 
+    // Import statement
+    if (this.check('IMPORT')) {
+      return this.parseImportStatement();
+    }
+
+    // Export statement
+    if (this.check('EXPORT')) {
+      return this.parseExportStatement();
+    }
+
+    // Try-catch-finally statement
+    if (this.check('TRY')) {
+      return this.parseTryStatement();
+    }
+
+    // Throw statement
+    if (this.check('THROW')) {
+      return this.parseThrowStatement();
+    }
+
     // Variable declaration (let or const)
     if (this.check('LET') || this.check('CONST')) {
       return this.parseVariableDeclaration();
@@ -298,6 +346,87 @@ export class MinimalParser {
     }
     return {
       type: 'ReturnStatement',
+      value
+    };
+  }
+
+  private parseImportStatement(): ImportStatement {
+    this.consume('IMPORT', 'Expected "import"');
+    this.consume('LBRACE', 'Expected "{" after import');
+
+    const names: string[] = [];
+    if (!this.check('RBRACE')) {
+      do {
+        names.push(this.consume('IDENT', 'Expected import name').value);
+      } while (this.match('COMMA'));
+    }
+
+    this.consume('RBRACE', 'Expected "}" after import names');
+    this.consume('FROM', 'Expected "from" after import names');
+
+    const path = this.consume('STRING', 'Expected import path').value;
+
+    return {
+      type: 'ImportStatement',
+      names,
+      path
+    };
+  }
+
+  private parseExportStatement(): ExportStatement {
+    this.consume('EXPORT', 'Expected "export"');
+
+    // Export can be: export fn, export let, export const
+    let declaration: FunctionDeclaration | VariableDeclaration | ExpressionStatement;
+
+    if (this.check('FN')) {
+      declaration = this.parseFunctionDeclaration();
+    } else if (this.check('LET') || this.check('CONST')) {
+      declaration = this.parseVariableDeclaration();
+    } else {
+      declaration = { type: 'ExpressionStatement', expression: this.parseExpression() };
+    }
+
+    return {
+      type: 'ExportStatement',
+      declaration
+    };
+  }
+
+  private parseTryStatement(): TryStatement {
+    this.consume('TRY', 'Expected "try"');
+    const tryBody = this.parseBlock();
+
+    let catchParam: string | null = null;
+    let catchBody: Statement[] | null = null;
+
+    if (this.match('CATCH')) {
+      if (this.match('LPAREN')) {
+        catchParam = this.consume('IDENT', 'Expected catch parameter').value;
+        this.consume('RPAREN', 'Expected ")" after catch parameter');
+      }
+      catchBody = this.parseBlock();
+    }
+
+    let finallyBody: Statement[] | null = null;
+    if (this.match('FINALLY')) {
+      finallyBody = this.parseBlock();
+    }
+
+    return {
+      type: 'TryStatement',
+      tryBody,
+      catchParam,
+      catchBody,
+      finallyBody
+    };
+  }
+
+  private parseThrowStatement(): ThrowStatement {
+    this.consume('THROW', 'Expected "throw"');
+    const value = this.parseExpression();
+    return {
+      type: 'ThrowStatement',
       value
     };
   }

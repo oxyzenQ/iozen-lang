@@ -24,6 +24,13 @@ class ReturnException extends Error {
     }
 }
 
+// Error handling for try/catch
+class ThrowException extends Error {
+    constructor(public value: any) {
+        super();
+    }
+}
+
 // ANSI color codes
 const COLORS: Record<string, string> = {
   black: '\x1b[30m',
@@ -371,9 +378,67 @@ export class MinimalInterpreter {
       case 'ReturnStatement':
         const returnValue = stmt.value ? this.evaluateExpression(stmt.value) : undefined;
         throw new ReturnException(returnValue);
+      case 'ImportStatement':
+        this.executeImport(stmt);
+        break;
+      case 'ExportStatement':
+        this.executeExport(stmt);
+        break;
+      case 'TryStatement':
+        this.executeTryCatch(stmt);
+        break;
+      case 'ThrowStatement':
+        const throwValue = this.evaluateExpression(stmt.value);
+        throw new ThrowException(throwValue);
       default:
         // Skip other statements
         break;
+    }
+  }
+
+  private executeImport(stmt: ImportStatement): void {
+    // For now, just mark imports as placeholders
+    // In a real implementation, this would load and parse the module file
+    for (const name of stmt.names) {
+      this.context.setVariable(name, `[imported from ${stmt.path}]`);
+    }
+  }
+
+  private executeExport(stmt: ExportStatement): void {
+    // For now, just execute the declaration
+    // In a real module system, this would mark the declaration as exported
+    this.executeStatement(stmt.declaration);
+  }
+
+  private executeTryCatch(stmt: TryStatement): void {
+    try {
+      this.executeBlock(stmt.tryBody);
+    } catch (e) {
+      if (e instanceof ThrowException) {
+        if (stmt.catchBody) {
+          // Create new scope for catch
+          const prevVariables = new Map(this.context.variables);
+
+          // Set the error parameter if present
+          if (stmt.catchParam) {
+            this.context.setVariable(stmt.catchParam, e.value);
+          }
+
+          try {
+            this.executeBlock(stmt.catchBody);
+          } finally {
+            // Restore scope
+            this.context.variables = prevVariables;
+          }
+        }
+      } else {
+        // Re-throw non-ThrowException errors
+        throw e;
+      }
+    } finally {
+      if (stmt.finallyBody) {
+        this.executeBlock(stmt.finallyBody);
+      }
     }
   }
 
