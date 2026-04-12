@@ -116,6 +116,7 @@ export type Statement =
   | PrintStatement
   | ExpressionStatement
   | VariableDeclaration
+  | AssignmentStatement
   | IfStatement
   | WhileStatement
   | ForStatement
@@ -136,8 +137,7 @@ export type Expression =
   | ArrayLiteral
   | StructLiteral
   | ArrayAccess
-  | FieldAccess
-  | AssignmentExpression;
+  | FieldAccess;
 
 export interface StringLiteral {
   type: 'StringLiteral';
@@ -266,6 +266,18 @@ export class MinimalParser {
       return this.parseVariableDeclaration();
     }
 
+    // Assignment statement (identifier = expression)
+    if (this.check('IDENT')) {
+      const nextPos = this.position + 1;
+      if (nextPos < this.tokens.length && this.tokens[nextPos].type === 'EQ') {
+        const name = this.consume('IDENT', 'Expected variable name').value;
+        this.consume('EQ', 'Expected "=" in assignment');
+        const value = this.parseExpression();
+        this.match('NEWLINE'); // Optional newline
+        return { type: 'AssignmentStatement', name, value };
+      }
+    }
+
     // Function declaration
     if (this.check('FN')) {
       return this.parseFunctionDeclaration();
@@ -364,6 +376,7 @@ export class MinimalParser {
     if (!this.check('NEWLINE') && !this.check('RBRACE')) {
       value = this.parseExpression();
     }
+    this.match('NEWLINE'); // Optional newline
     return {
       type: 'ReturnStatement',
       value
@@ -560,18 +573,6 @@ export class MinimalParser {
   }
 
   private parseExpression(): Expression {
-    // Week 8: Check for assignment (identifier = expression)
-    if (this.check('IDENT')) {
-      // Look ahead to see if this is an assignment
-      const nextPos = this.position + 1;
-      if (nextPos < this.tokens.length && this.tokens[nextPos].type === 'EQ') {
-        const name = this.consume('IDENT', 'Expected variable name').value;
-        this.consume('EQ', 'Expected "=" in assignment');
-        const value = this.parseExpression(); // Right-associative
-        return { type: 'AssignmentExpression', name, value };
-      }
-    }
-
     return this.parseEquality();
   }
 

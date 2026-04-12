@@ -407,6 +407,10 @@ export class MinimalInterpreter {
       case 'VariableDeclaration':
         this.executeVariableDeclaration(stmt);
         break;
+      case 'AssignmentStatement':
+        const assignValue = this.evaluateExpression(stmt.value);
+        this.context.setVariable(stmt.name, assignValue);
+        break;
       case 'IfStatement':
         this.executeIfStatement(stmt);
         break;
@@ -578,11 +582,6 @@ export class MinimalInterpreter {
 
   private evaluateExpression(expr: Expression): any {
     switch (expr.type) {
-      case 'AssignmentExpression':
-        const value = this.evaluateExpression(expr.value);
-        this.context.setVariable(expr.name, value);
-        return value;
-
       case 'StringLiteral':
         return expr.value;
 
