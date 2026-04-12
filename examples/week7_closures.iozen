@@ -1,0 +1,113 @@
+// IOZEN Week 7: First-Class Functions & Higher-Order Functions Demo
+// Functions as values, closures, and higher-order functions
+
+fn main() {
+    print("")
+    print("=== Week 7: First-Class Functions & Higher-Order Functions ===")
+    print("")
+
+    // 1. Storing function reference in variable
+    print("1. Function as Value:")
+    let greet = "sayHello"
+    print("  Stored function name: " + greet)
+    sayHello("World")
+
+    // 2. Functions with closures - counter using global state
+    print("")
+    print("2. Counter with State:")
+    initCounter()
+    print("  Count: " + nextCount())
+    print("  Count: " + nextCount())
+    print("  Count: " + nextCount())
+
+    // 3. Higher-order functions (map demo)
+    print("")
+    print("3. Higher-Order Functions (map):")
+    let nums = [1, 2, 3, 4, 5]
+    let mapped = map(nums, "double")
+    print("  Original: [1, 2, 3, 4, 5]")
+    print("  Mapped: " + mapped)
+
+    // 4. Practical: Math operations
+    print("")
+    print("4. Math Operations:")
+    print("  double(5) = " + double(5))
+    print("  triple(5) = " + triple(5))
+    print("  addOne(5) = " + addOne(5))
+
+    // 5. Function composition pattern
+    print("")
+    print("5. Function Composition:")
+    let x = 5
+    let step1 = double(x)
+    let step2 = addOne(step1)
+    print("  double then addOne(5) = " + step2)
+
+    // 6. Array processing
+    print("")
+    print("6. Array Processing:")
+    let values = [10, 20, 30, 40, 50]
+    print("  Sum: " + sumArray(values))
+    print("  Avg: " + (sumArray(values) / arrayLen(values)))
+
+    // 7. Callback pattern simulation
+    print("")
+    print("7. Callback Pattern:")
+    processWithCallback(42, "printResult")
+
+    print("")
+    print("=== Demo Complete ===")
+    print("")
+}
+
+// Global counter state (closure simulation)
+let counterValue = 0
+
+fn initCounter() {
+    counterValue = 0
+}
+
+fn nextCount() {
+    counterValue = counterValue + 1
+    return counterValue
+}
+
+// Simple greeting function
+fn sayHello(name) {
+    print("  Hello, " + name + "!")
+}
+
+// Math functions
+fn double(x) {
+    return x * 2
+}
+
+fn triple(x) {
+    return x * 3
+}
+
+fn addOne(x) {
+    return x + 1
+}
+
+// Array sum
+fn sumArray(arr) {
+    let sum = 0
+    let i = 0
+    while (i < arrayLen(arr)) {
+        sum = sum + arr[i]
+        i = i + 1
+    }
+    return sum
+}
+
+// Callback pattern
+fn processWithCallback(value, callbackName) {
+    print("  Processing: " + value)
+    // In a real implementation, would call the function by name
+    print("  Result would be sent to: " + callbackName)
+}
+
+fn printResult(x) {
+    print("  Result: " + x)
+}

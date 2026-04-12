@@ -274,8 +274,35 @@ const BUILTINS: Record<string, (...args: any[]) => any> = {
     } catch {
       return false;
     }
+  },
+
+  // Week 7: Higher-order functions
+  map: (arr: any[], fnName: string) => {
+    if (!Array.isArray(arr)) return [];
+    // This is a placeholder - in real implementation, would call user function
+    return arr.map((item, index) => `[mapped:${fnName}(${item})]`);
+  },
+
+  filter: (arr: any[], fnName: string) => {
+    if (!Array.isArray(arr)) return [];
+    // This is a placeholder - in real implementation, would call user function
+    return arr.filter((item, index) => true);
+  },
+
+  reduce: (arr: any[], fnName: string, initial: any) => {
+    if (!Array.isArray(arr)) return initial;
+    // This is a placeholder - in real implementation, would call user function
+    return initial;
   }
 };
+
+// Function value with closure
+class FunctionValue {
+  constructor(
+    public declaration: FunctionDeclaration,
+    public closure: Map<string, any>
+  ) {}
+}
 
 // Execution context
 class ExecutionContext {
@@ -315,40 +342,44 @@ export class MinimalInterpreter {
     }
 
     // Find and execute main
-    const main = this.context.getFunction('main');
-    if (!main) {
+    const mainDecl = this.context.getFunction('main');
+    if (!mainDecl) {
       throw new Error('No main() function found');
     }
 
+    const main = new FunctionValue(mainDecl, new Map());
     this.executeFunction(main, []);
   }
 
-  private executeFunction(func: FunctionDeclaration, args: any[]): any {
-    // Create new scope for function
+  private executeFunction(func: FunctionValue, args: any[]): any {
+    // Save current scope
     const prevVariables = new Map(this.context.variables);
 
+    // Restore captured closure scope (for closures)
+    this.context.variables = new Map(func.closure);
+
     // Set parameters
-    for (let i = 0; i < func.params.length; i++) {
-      this.context.setVariable(func.params[i], args[i]);
+    for (let i = 0; i < func.declaration.params.length; i++) {
+      this.context.setVariable(func.declaration.params[i], args[i]);
     }
 
     // Execute body
+    let returnValue: any = undefined;
     try {
-      for (const stmt of func.body) {
+      for (const stmt of func.declaration.body) {
         this.executeStatement(stmt);
       }
     } catch (e) {
       if (e instanceof ReturnException) {
-        // Restore scope before returning
-        this.context.variables = prevVariables;
-        return e.value;
+        returnValue = e.value;
+      } else {
+        throw e;
       }
-      throw e;
+    } finally {
+      // Restore original scope
+      this.context.variables = prevVariables;
     }
-
-    // Restore scope
-    this.context.variables = prevVariables;
-    return undefined;
+    return returnValue;
   }
 
   private executeStatement(stmt: Statement): void {
@@ -390,6 +421,12 @@ export class MinimalInterpreter {
       case 'ThrowStatement':
         const throwValue = this.evaluateExpression(stmt.value);
         throw new ThrowException(throwValue);
+      case 'FunctionDeclaration':
+        // Create function value with closure (captures current scope)
+        const funcValue = new FunctionValue(stmt, new Map(this.context.variables));
+        this.context.setVariable(stmt.name, funcValue);
+        this.context.setFunction(stmt.name, stmt);
+        break;
       default:
         // Skip other statements
         break;
@@ -627,13 +664,19 @@ export class MinimalInterpreter {
       return builtin(...args);
     }
 
-    // Check for user-defined functions
+    // Check for user-defined functions by name
     const userFunc = this.context.getFunction(expr.callee);
     if (userFunc) {
       const args = expr.arguments.map(arg => this.evaluateExpression(arg));
-      // For Day 4, we don't capture return values from user functions
-      this.executeFunction(userFunc, args);
-      return undefined;
+      const funcValue = new FunctionValue(userFunc, new Map(this.context.variables));
+      return this.executeFunction(funcValue, args);
+    }
+
+    // Check for function values stored in variables (closures)
+    const funcValue = this.context.getVariable(expr.callee);
+    if (funcValue instanceof FunctionValue) {
+      const args = expr.arguments.map(arg => this.evaluateExpression(arg));
+      return this.executeFunction(funcValue, args);
     }
 
     return `[unknown function: ${expr.callee}]`;
