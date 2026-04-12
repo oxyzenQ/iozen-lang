@@ -307,6 +307,64 @@ const BUILTINS: Record<string, (...args: any[]) => any> = {
     if (!Array.isArray(arr)) return initial;
     // This is a placeholder - in real implementation, would call user function
     return initial;
+  },
+
+  // Week 9: Math functions
+  sin: (x: number) => Math.sin(Number(x)),
+  cos: (x: number) => Math.cos(Number(x)),
+  tan: (x: number) => Math.tan(Number(x)),
+  sqrt: (x: number) => Math.sqrt(Number(x)),
+  pow: (base: number, exp: number) => Math.pow(Number(base), Number(exp)),
+  abs: (x: number) => Math.abs(Number(x)),
+  min: (a: number, b: number) => Math.min(Number(a), Number(b)),
+  max: (a: number, b: number) => Math.max(Number(a), Number(b)),
+  floor: (x: number) => Math.floor(Number(x)),
+  ceil: (x: number) => Math.ceil(Number(x)),
+  round: (x: number) => Math.round(Number(x)),
+  pi: () => Math.PI,
+  e: () => Math.E,
+
+  // Week 9: String functions
+  contains: (str: string, substr: string) => String(str).includes(String(substr)),
+  startsWith: (str: string, substr: string) => String(str).startsWith(String(substr)),
+  endsWith: (str: string, substr: string) => String(str).endsWith(String(substr)),
+  trim: (str: string) => String(str).trim(),
+  toUpper: (str: string) => String(str).toUpperCase(),
+  toLower: (str: string) => String(str).toLowerCase(),
+  replace: (str: string, oldStr: string, newStr: string) => String(str).replace(String(oldStr), String(newStr)),
+  repeat: (str: string, count: number) => String(str).repeat(Number(count)),
+  charAt: (str: string, index: number) => String(str).charAt(Number(index)),
+
+  // Week 9: Array functions
+  includes: (arr: any[], item: any) => Array.isArray(arr) ? arr.includes(item) : false,
+  find: (arr: any[], fnName: string) => {
+    if (!Array.isArray(arr)) return null;
+    // Placeholder - would call user function
+    return arr[0] ?? null;
+  },
+  findIndex: (arr: any[], fnName: string) => {
+    if (!Array.isArray(arr)) return -1;
+    // Placeholder - would call user function
+    return 0;
+  },
+  sort: (arr: any[]) => {
+    if (!Array.isArray(arr)) return [];
+    return [...arr].sort((a, b) => {
+      if (typeof a === 'number' && typeof b === 'number') return a - b;
+      return String(a).localeCompare(String(b));
+    });
+  },
+  reverse: (arr: any[]) => {
+    if (!Array.isArray(arr)) return [];
+    return [...arr].reverse();
+  },
+  slice: (arr: any[], start: number, end?: number) => {
+    if (!Array.isArray(arr)) return [];
+    return arr.slice(Number(start), end !== undefined ? Number(end) : undefined);
+  },
+  concat: (arr1: any[], arr2: any[]) => {
+    if (!Array.isArray(arr1) || !Array.isArray(arr2)) return [];
+    return [...arr1, ...arr2];
   }
 };
 
