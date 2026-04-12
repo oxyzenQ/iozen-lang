@@ -10,7 +10,7 @@
 //   iozen ast <file.iozen>        — Show AST output
 // ============================================================
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { Interpreter, Lexer, ParseError, Parser } from "../../src/lib/iozen";
@@ -50,6 +50,9 @@ async function main() {
   switch (command) {
     case "run":
       await cmdRun(args.slice(1));
+      break;
+    case "compile":
+      await cmdCompile(args.slice(1));
       break;
     case "build":
       await cmdBuild(args.slice(1));
@@ -152,6 +155,84 @@ async function cmdRun(args: string[]) {
     } else {
       error(String(e));
     }
+    process.exit(1);
+  }
+}
+
+// Compiler v2.0: Compile IOZEN to C code or binary
+async function cmdCompile(args: string[]) {
+  if (args.length === 0) {
+    error('Usage: iozen compile <file.iozen> [--output <name>] [--target c|binary]');
+    process.exit(1);
+  }
+
+  const filePath = resolve(args[0]);
+  if (!existsSync(filePath)) {
+    error(`File not found: ${filePath}`);
+    process.exit(1);
+  }
+
+  let outputName = basename(filePath, ".iozen");
+  let target: 'c' | 'binary' = 'c';
+
+  // Parse optional arguments
+  for (let i = 1; i < args.length; i++) {
+    if (args[i] === '--output' || args[i] === '-o') {
+      outputName = args[++i];
+    } else if (args[i] === '--target' || args[i] === '-t') {
+      target = args[++i] as 'c' | 'binary';
+    }
+  }
+
+  const outDir = dirname(filePath);
+  const outputPath = join(outDir, `${outputName}.${target === 'c' ? 'c' : 'out'}`);
+
+  try {
+    const source = readFileSync(filePath, 'utf-8');
+
+    log(`${C.cyan}⚙  Compiling ${C.white}${basename(filePath)}${C.reset}`);
+
+    // Compile using the new compiler
+    const { compileToC } = await import('../../src/lib/iozen/compiler');
+    const cCode = compileToC(source);
+
+    // Write output
+    writeFileSync(outputPath, cCode);
+
+    log(`${C.green}  ✔ Generated ${target === 'c' ? 'C code' : 'binary'}: ${outputPath}${C.reset}`);
+
+    if (target === 'binary') {
+      // Compile C to binary using gcc or clang
+      const binPath = join(outDir, outputName);
+      const cc = process.env.CC || 'gcc';
+      const ccArgs = ['-o', binPath, outputPath, '-lm'];
+
+      log(`${C.dim}  🛠  Running: ${cc} ${ccArgs.join(' ')}${C.reset}`);
+
+      const proc = Bun.spawn([cc, ...ccArgs], {
+        cwd: outDir,
+        stdout: 'pipe',
+        stderr: 'pipe',
+      });
+
+      const exitCode = await proc.exited;
+
+      if (exitCode !== 0) {
+        const stderr = await new Response(proc.stderr).text();
+        error(`Compilation failed:\n${stderr}`);
+        process.exit(1);
+      }
+
+      // Clean up .c file if binary compilation succeeded
+      try {
+        unlinkSync(outputPath);
+      } catch { }
+
+      log(`${C.green}  ✔ Binary: ${binPath}${C.reset}`);
+    }
+
+  } catch (e) {
+    error(`Compilation failed: ${e}`);
     process.exit(1);
   }
 }
