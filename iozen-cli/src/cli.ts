@@ -107,7 +107,8 @@ async function cmdRun(args: string[]) {
     process.exit(1);
   }
 
-  const filePath = resolve(args[0]);
+  // Resolve relative to current working directory (shell CWD)
+  const filePath = resolve(process.cwd(), args[0]);
 
   if (!existsSync(filePath)) {
     error(`File not found: ${filePath}`);
@@ -166,7 +167,8 @@ async function cmdCompile(args: string[]) {
     process.exit(1);
   }
 
-  const filePath = resolve(args[0]);
+  // Resolve relative to current working directory (shell CWD)
+  const filePath = resolve(process.cwd(), args[0]);
   if (!existsSync(filePath)) {
     error(`File not found: ${filePath}`);
     process.exit(1);

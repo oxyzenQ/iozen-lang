@@ -10,6 +10,7 @@
     "dev": "bun run iozen-cli/src/cli.ts",
     "iozen": "bun run iozen-cli/src/cli.ts",
     "run": "bun run iozen-cli/src/cli.ts run",
+    "compile": "bun run iozen-cli/src/cli.ts compile",
     "test": "bun run tests/test_all.ts"
   },
   "devDependencies": {
