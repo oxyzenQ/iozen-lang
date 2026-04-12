@@ -1,0 +1,58 @@
+// Week 9: Type Annotations Demo
+// Optional static typing for IOZEN
+
+fn main() {
+    print("")
+    print("=== Week 9: Type Annotations Demo ===")
+    print("")
+    
+    // 1. Variable declarations with types
+    print("1. Typed Variables:")
+    let age: number = 25
+    let name: string = "IOZEN"
+    let isAwesome: bool = true
+    print("  age: " + age + " (number)")
+    print("  name: " + name + " (string)")
+    print("  isAwesome: " + isAwesome + " (bool)")
+    
+    // 2. Untyped variables (still work!)
+    print("")
+    print("2. Untyped Variables (any):")
+    let flexible = "can be anything"
+    flexible = 42
+    print("  flexible = " + flexible)
+    
+    // 3. Function with typed parameters and return
+    print("")
+    print("3. Typed Functions:")
+    let result = add(10, 20)
+    print("  add(10, 20) = " + result)
+    
+    let greeting = greet("World")
+    print("  " + greeting)
+    
+    // 4. Without types (backward compatible)
+    print("")
+    print("4. Untyped Functions (backward compatible):")
+    let oldStyle = legacyAdd(5, 10)
+    print("  legacyAdd(5, 10) = " + oldStyle)
+    
+    print("")
+    print("=== Demo Complete ===")
+    print("")
+}
+
+// Function with type annotations
+fn add(x: number, y: number): number {
+    return x + y
+}
+
+// Function with string types
+fn greet(name: string): string {
+    return "Hello, " + name + "!"
+}
+
+// Function without types (backward compatible)
+fn legacyAdd(a, b) {
+    return a + b
+}

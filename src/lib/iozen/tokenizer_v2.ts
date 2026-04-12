@@ -33,6 +33,7 @@ export type TokenType =
   | 'RBRACKET'     // ]
   | 'DOT'          // .
   | 'COLON'        // :
+  | 'ARROW'        // =>
   | 'PLUS'         // +
   | 'MINUS'        // -
   | 'STAR'         // *
@@ -49,7 +50,14 @@ export type TokenType =
   | 'NEWLINE'      // \n
   | 'EOF'          // end of file
   | 'COMMENT'      // // ...
-  | 'SKIP';        // whitespace
+  | 'SKIP'         // whitespace
+  // Week 9: Type tokens
+  | 'NUMBER_TYPE'  // number
+  | 'STRING_TYPE'  // string
+  | 'BOOL_TYPE'    // bool
+  | 'ANY_TYPE'     // any
+  | 'VOID_TYPE'    // void
+  | 'MATCH';       // match
 
 export interface Token {
   type: TokenType;
@@ -79,6 +87,13 @@ const KEYWORDS: Record<string, TokenType> = {
   'finally': 'FINALLY',
   'throw': 'THROW',
   'from': 'FROM',
+  // Week 9: Type keywords
+  'number': 'NUMBER_TYPE',
+  'string': 'STRING_TYPE',
+  'bool': 'BOOL_TYPE',
+  'any': 'ANY_TYPE',
+  'void': 'VOID_TYPE',
+  'match': 'MATCH',
 };
 
 export class MinimalTokenizer {

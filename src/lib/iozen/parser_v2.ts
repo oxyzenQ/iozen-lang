@@ -26,6 +26,8 @@ export interface FunctionDeclaration {
   type: 'FunctionDeclaration';
   name: string;
   params: string[];
+  paramTypes?: TypeAnnotation[]; // Week 9: Optional param types
+  returnType?: TypeAnnotation; // Week 9: Optional return type
   body: Statement[];
 }
 
@@ -39,11 +41,15 @@ export interface ExpressionStatement {
   expression: Expression;
 }
 
+// Week 9: Type annotations
+export type TypeAnnotation = 'number' | 'string' | 'bool' | 'any' | 'void' | 'array' | 'function' | null;
+
 export interface VariableDeclaration {
   type: 'VariableDeclaration';
   name: string;
   initializer: Expression;
   isConst: boolean;
+  typeAnnotation?: TypeAnnotation; // Week 9: Optional type
 }
 
 // Week 8: Assignment statement for reassigning variables
@@ -482,6 +488,13 @@ export class MinimalParser {
     this.advance(); // consume let or const
 
     const name = this.consume('IDENT', 'Expected variable name').value;
+
+    // Week 9: Optional type annotation
+    let typeAnnotation: TypeAnnotation = null;
+    if (this.match('COLON')) {
+      typeAnnotation = this.parseTypeAnnotation();
+    }
+
     this.consume('EQ', 'Expected "=" after variable name');
     const initializer = this.parseExpression();
 
@@ -492,8 +505,46 @@ export class MinimalParser {
       type: 'VariableDeclaration',
       name,
       initializer,
-      isConst
+      isConst,
+      typeAnnotation
     };
+  }
+
+  // Week 9: Parse type annotation
+  private parseTypeAnnotation(): TypeAnnotation {
+    if (this.check('NUMBER_TYPE')) {
+      this.advance();
+      return 'number';
+    }
+    if (this.check('STRING_TYPE')) {
+      this.advance();
+      return 'string';
+    }
+    if (this.check('BOOL_TYPE')) {
+      this.advance();
+      return 'bool';
+    }
+    if (this.check('ANY_TYPE')) {
+      this.advance();
+      return 'any';
+    }
+    if (this.check('VOID_TYPE')) {
+      this.advance();
+      return 'void';
+    }
+    // Check for array type: number[] or string[]
+    if (this.check('IDENT')) {
+      const typeName = this.peek().value;
+      if (typeName === 'array') {
+        this.advance();
+        return 'array';
+      }
+      if (typeName === 'function') {
+        this.advance();
+        return 'function';
+      }
+    }
+    throw new ParseError(`Expected type annotation`, this.peek().line, this.peek().column);
   }
 
   private parseFunctionDeclaration(): FunctionDeclaration {
@@ -512,16 +563,31 @@ export class MinimalParser {
 
     this.consume('LPAREN', 'Expected "(" after function name');
 
-    // Parse parameters
+    // Parse parameters with optional type annotations
     const params: string[] = [];
+    const paramTypes: TypeAnnotation[] = []; // Week 9: Param types
     if (!this.check('RPAREN')) {
       do {
         const param = this.consume('IDENT', 'Expected parameter name').value;
         params.push(param);
+
+        // Week 9: Optional param type annotation
+        let paramType: TypeAnnotation = null;
+        if (this.match('COLON')) {
+          paramType = this.parseTypeAnnotation();
+        }
+        paramTypes.push(paramType);
       } while (this.match('COMMA'));
     }
 
     this.consume('RPAREN', 'Expected ")" after parameters');
+
+    // Week 9: Optional return type annotation
+    let returnType: TypeAnnotation = null;
+    if (this.match('COLON')) {
+      returnType = this.parseTypeAnnotation();
+    }
+
     this.consume('LBRACE', 'Expected "{" before function body');
 
     // Parse function body
@@ -539,6 +605,8 @@ export class MinimalParser {
       type: 'FunctionDeclaration',
       name,
       params,
+      paramTypes,
+      returnType,
       body
     };
   }
