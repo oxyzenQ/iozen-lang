@@ -1,0 +1,5 @@
+// Test error messages
+fn main() {
+    print("Hello"
+    // Missing closing paren - should show error with line number
+}

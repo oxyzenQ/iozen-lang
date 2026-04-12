@@ -24,6 +24,20 @@ class ReturnException extends Error {
     }
 }
 
+// Week 8: Runtime errors with better messages
+export class RuntimeError extends Error {
+    constructor(
+        message: string,
+        public line?: number,
+        public column?: number
+    ) {
+        super(line !== undefined
+            ? `Runtime Error at line ${line}, column ${column}: ${message}`
+            : `Runtime Error: ${message}`);
+        this.name = 'RuntimeError';
+    }
+}
+
 // Error handling for try/catch
 class ThrowException extends Error {
     constructor(public value: any) {
@@ -564,6 +578,11 @@ export class MinimalInterpreter {
 
   private evaluateExpression(expr: Expression): any {
     switch (expr.type) {
+      case 'AssignmentExpression':
+        const value = this.evaluateExpression(expr.value);
+        this.context.setVariable(expr.name, value);
+        return value;
+
       case 'StringLiteral':
         return expr.value;
 

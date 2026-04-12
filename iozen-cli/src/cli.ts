@@ -126,21 +126,27 @@ async function cmdRun(args: string[]) {
     execute(ast);
 
     log(`${C.green}  ✔ Success${C.reset}`);
-  } catch (e) {
+  } catch (e: any) {
+    // Week 8: Better error messages with source context
+    const { ParseError } = await import('../../src/lib/iozen/parser_v2');
+    const { RuntimeError } = await import('../../src/lib/iozen/interpreter_v2');
+
     if (e instanceof ParseError) {
       const lines = source.split('\n');
-      const lineIdx = e.token.line - 1;
-      error(`Parse error at line ${e.token.line}, column ${e.token.column}: ${e.message}`);
+      const lineNum = e.line;
+      const colNum = e.column;
+      const lineIdx = lineNum - 1;
+
+      error(`Parse error: ${e.message}`);
       if (lineIdx >= 0 && lineIdx < lines.length) {
         const lineContent = lines[lineIdx];
-        process.stderr.write(`${C.dim}  --> Line ${e.token.line}, Column ${e.token.column}${C.reset}\n`);
-        process.stderr.write(`${C.dim}    |${C.reset}\n`);
-        process.stderr.write(`${C.dim}${String(e.token.line).padStart(2)} | ${C.white}${lineContent}${C.reset}\n`);
-        if (e.token.column > 0) {
-          const pad = String(e.token.column).length + 5;
-          process.stderr.write(`${C.dim}${' '.repeat(pad)}|${' '.repeat(e.token.column - 1)}${C.red}^${C.reset}\n`);
-        }
+        process.stderr.write(`${C.dim}  --> ${C.cyan}${basename(filePath)}:${lineNum}:${colNum}${C.reset}\n`);
+        process.stderr.write(`${C.dim}   |${C.reset}\n`);
+        process.stderr.write(`${C.dim}${String(lineNum).padStart(3)}| ${C.white}${lineContent}${C.reset}\n`);
+        process.stderr.write(`${C.dim}   | ${C.red}${'~'.repeat(colNum - 1)}^${C.reset}\n`);
       }
+    } else if (e.name === 'RuntimeError') {
+      error(e.message);
     } else if (e instanceof Error) {
       error(`${e.name}: ${e.message}`);
     } else {

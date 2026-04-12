@@ -4,6 +4,18 @@
 
 import { Token, TokenType } from './tokenizer_v2';
 
+// Week 8: Better error messages
+export class ParseError extends Error {
+  constructor(
+    message: string,
+    public line: number,
+    public column: number
+  ) {
+    super(`${message} at line ${line}, column ${column}`);
+    this.name = 'ParseError';
+  }
+}
+
 // AST Node Types
 export interface Program {
   type: 'Program';
@@ -32,6 +44,13 @@ export interface VariableDeclaration {
   name: string;
   initializer: Expression;
   isConst: boolean;
+}
+
+// Week 8: Assignment statement for reassigning variables
+export interface AssignmentStatement {
+  type: 'AssignmentStatement';
+  name: string;
+  value: Expression;
 }
 
 export interface IfStatement {
@@ -117,7 +136,8 @@ export type Expression =
   | ArrayLiteral
   | StructLiteral
   | ArrayAccess
-  | FieldAccess;
+  | FieldAccess
+  | AssignmentExpression;
 
 export interface StringLiteral {
   type: 'StringLiteral';
@@ -474,7 +494,7 @@ export class MinimalParser {
       this.advance();
       name = 'main';
     } else {
-      throw new Error(`Expected function name. Got ${this.peek().type}`);
+      throw new ParseError(`Expected function name. Got ${this.peek().type}`, this.peek().line, this.peek().column);
     }
 
     this.consume('LPAREN', 'Expected "(" after function name');
@@ -530,6 +550,9 @@ export class MinimalParser {
   private parseExpressionStatement(): ExpressionStatement {
     const expression = this.parseExpression();
 
+    // Skip optional newline after expression
+    this.match('NEWLINE');
+
     return {
       type: 'ExpressionStatement',
       expression
@@ -537,6 +560,18 @@ export class MinimalParser {
   }
 
   private parseExpression(): Expression {
+    // Week 8: Check for assignment (identifier = expression)
+    if (this.check('IDENT')) {
+      // Look ahead to see if this is an assignment
+      const nextPos = this.position + 1;
+      if (nextPos < this.tokens.length && this.tokens[nextPos].type === 'EQ') {
+        const name = this.consume('IDENT', 'Expected variable name').value;
+        this.consume('EQ', 'Expected "=" in assignment');
+        const value = this.parseExpression(); // Right-associative
+        return { type: 'AssignmentExpression', name, value };
+      }
+    }
+
     return this.parseEquality();
   }
 
@@ -651,7 +686,7 @@ export class MinimalParser {
       }
 
       // It's a block - but we're in expression context, this is an error
-      throw new Error('Unexpected "{" in expression context');
+      throw new ParseError('Unexpected "{" in expression context', this.peek().line, this.peek().column);
     }
 
     // Parenthesized expression
@@ -717,7 +752,7 @@ export class MinimalParser {
               arguments: args
             };
           } else {
-            throw new Error('Complex call expressions not supported');
+            throw new ParseError('Complex call expressions not supported', this.peek().line, this.peek().column);
           }
         } else {
           break;
@@ -727,9 +762,7 @@ export class MinimalParser {
       return expr;
     }
 
-    throw new Error(`Unexpected token: ${this.peek().type}`);
-
-    throw new Error(`Unexpected token: ${this.peek().type} at line ${this.peek().line}`);
+    throw new ParseError(`Unexpected token: ${this.peek().type}`, this.peek().line, this.peek().column);
   }
 
   // Helper methods
@@ -767,7 +800,7 @@ export class MinimalParser {
 
   private consume(type: TokenType, message: string): Token {
     if (this.check(type)) return this.advance();
-    throw new Error(`${message}. Got ${this.peek().type} at line ${this.peek().line}`);
+    throw new ParseError(`${message}. Got ${this.peek().type}`, this.peek().line, this.peek().column);
   }
 }
 
