@@ -22,6 +22,10 @@ export type TokenType =
   | 'RPAREN'       // )
   | 'LBRACE'       // {
   | 'RBRACE'       // }
+  | 'LBRACKET'     // [
+  | 'RBRACKET'     // ]
+  | 'DOT'          // .
+  | 'COLON'        // :
   | 'PLUS'         // +
   | 'MINUS'        // -
   | 'STAR'         // *
@@ -140,6 +144,10 @@ export class MinimalTokenizer {
       case ')': this.advance(); return { type: 'RPAREN', value: ')', line: startLine, column: startCol };
       case '{': this.advance(); return { type: 'LBRACE', value: '{', line: startLine, column: startCol };
       case '}': this.advance(); return { type: 'RBRACE', value: '}', line: startLine, column: startCol };
+      case '[': this.advance(); return { type: 'LBRACKET', value: '[', line: startLine, column: startCol };
+      case ']': this.advance(); return { type: 'RBRACKET', value: ']', line: startLine, column: startCol };
+      case '.': this.advance(); return { type: 'DOT', value: '.', line: startLine, column: startCol };
+      case ':': this.advance(); return { type: 'COLON', value: ':', line: startLine, column: startCol };
       case '+': this.advance(); return { type: 'PLUS', value: '+', line: startLine, column: startCol };
       case '-': this.advance(); return { type: 'MINUS', value: '-', line: startLine, column: startCol };
       case '*': this.advance(); return { type: 'STAR', value: '*', line: startLine, column: startCol };

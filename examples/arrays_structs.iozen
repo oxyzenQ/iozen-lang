@@ -1,0 +1,96 @@
+// IOZEN Week 4: Arrays & Structs Demo
+// Compound data types - making IOZEN more useful!
+
+fn main() {
+    print("")
+    print("=== Arrays & Structs Demo ===")
+    print("")
+    
+    // ARRAYS
+    print("1. Arrays:")
+    
+    // Array literal
+    let numbers = [1, 2, 3, 4, 5]
+    print("  numbers = [1, 2, 3, 4, 5]")
+    
+    // Array access
+    print("  numbers[0] = " + numbers[0])
+    print("  numbers[2] = " + numbers[2])
+    print("  numbers[4] = " + numbers[4])
+    
+    // String array
+    let fruits = ["apple", "banana", "cherry"]
+    print("")
+    print("  fruits = [\"apple\", \"banana\", \"cherry\"]")
+    print("  fruits[0] = " + fruits[0])
+    print("  fruits[1] = " + fruits[1])
+    
+    // Mixed array (any types)
+    let mixed = [1, "hello", 3.14]
+    print("")
+    print("  mixed = [1, \"hello\", 3.14]")
+    print("  mixed[1] = " + mixed[1])
+    
+    // STRUCTS
+    print("")
+    print("2. Structs (Objects):")
+    
+    // Struct literal
+    let person = { name: "Alice", age: 30, city: "NYC" }
+    print("  person = { name: \"Alice\", age: 30, city: \"NYC\" }")
+    
+    // Field access
+    print("  person.name = " + person.name)
+    print("  person.age = " + person.age)
+    print("  person.city = " + person.city)
+    
+    // Nested struct
+    let user = {
+        username: "dev123",
+        profile: { bio: "I code in IOZEN!", followers: 42 },
+        active: 1
+    }
+    print("")
+    print("  user.profile.bio = " + user.profile.bio)
+    print("  user.profile.followers = " + user.profile.followers)
+    
+    // Array of structs
+    let team = [
+        { name: "Alice", role: "Lead" },
+        { name: "Bob", role: "Dev" },
+        { name: "Carol", role: "Designer" }
+    ]
+    print("")
+    print("3. Array of Structs:")
+    print("  team[0].name = " + team[0].name)
+    print("  team[1].role = " + team[1].role)
+    print("  team[2].name = " + team[2].name)
+    
+    // System info as struct
+    let system = {
+        os: get_os(),
+        cpu: get_cpu(),
+        ram: get_ram(),
+        uptime: get_uptime()
+    }
+    print("")
+    print("4. System Info Struct:")
+    print("  system.os = " + system.os)
+    print("  system.cpu = " + system.cpu)
+    print("  system.ram = " + system.ram)
+    print("  system.uptime = " + system.uptime)
+    
+    // Combining arrays and loops
+    print("")
+    print("5. Array + Loop:")
+    let items = ["first", "second", "third"]
+    let i = 0
+    while (i < 3) {
+        print("  items[" + i + "] = " + items[i])
+        i = i + 1
+    }
+    
+    print("")
+    print("=== Demo Complete ===")
+    print("")
+}

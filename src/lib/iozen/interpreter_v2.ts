@@ -364,6 +364,31 @@ export class MinimalInterpreter {
       case 'CallExpression':
         return this.evaluateCall(expr);
 
+      case 'ArrayLiteral':
+        return expr.elements.map(e => this.evaluateExpression(e));
+
+      case 'StructLiteral':
+        const obj: Record<string, any> = {};
+        for (const field of expr.fields) {
+          obj[field.name] = this.evaluateExpression(field.value);
+        }
+        return obj;
+
+      case 'ArrayAccess':
+        const arr = this.evaluateExpression(expr.array);
+        const idx = this.evaluateExpression(expr.index);
+        if (Array.isArray(arr)) {
+          return arr[idx] ?? `[index out of bounds: ${idx}]`;
+        }
+        return `[not an array]`;
+
+      case 'FieldAccess':
+        const obj2 = this.evaluateExpression(expr.object);
+        if (obj2 && typeof obj2 === 'object' && expr.field in obj2) {
+          return obj2[expr.field];
+        }
+        return `[field not found: ${expr.field}]`;
+
       default:
         return `[unknown expression]`;
     }

@@ -85,7 +85,11 @@ export type Expression =
   | NumberLiteral
   | Identifier
   | BinaryExpression
-  | CallExpression;
+  | CallExpression
+  | ArrayLiteral
+  | StructLiteral
+  | ArrayAccess
+  | FieldAccess;
 
 export interface StringLiteral {
   type: 'StringLiteral';
@@ -113,6 +117,28 @@ export interface CallExpression {
   type: 'CallExpression';
   callee: string;
   arguments: Expression[];
+}
+
+export interface ArrayLiteral {
+  type: 'ArrayLiteral';
+  elements: Expression[];
+}
+
+export interface StructLiteral {
+  type: 'StructLiteral';
+  fields: { name: string; value: Expression }[];
+}
+
+export interface ArrayAccess {
+  type: 'ArrayAccess';
+  array: Expression;
+  index: Expression;
+}
+
+export interface FieldAccess {
+  type: 'FieldAccess';
+  object: Expression;
+  field: string;
 }
 
 export class MinimalParser {
@@ -333,10 +359,6 @@ export class MinimalParser {
       } while (this.match('COMMA'));
     }
 
-    this.consume('RPAREN', 'Expected ")"');
-    this.consume('LBRACE', 'Expected "{"');
-
-
     this.consume('RPAREN', 'Expected ")" after parameters');
     this.consume('LBRACE', 'Expected "{" before function body');
 
@@ -460,59 +482,123 @@ export class MinimalParser {
   private parsePrimary(): Expression {
     // String literal
     if (this.match('STRING')) {
-      return {
-        type: 'StringLiteral',
-        value: this.previous().value
-      };
+      return { type: 'StringLiteral', value: this.previous().value };
     }
 
     // Number literal
     if (this.match('NUMBER')) {
-      return {
-        type: 'NumberLiteral',
-        value: parseInt(this.previous().value)
-      };
+      return { type: 'NumberLiteral', value: parseFloat(this.previous().value) };
     }
 
-    // Identifier or function call
-    if (this.match('IDENT')) {
-      const name = this.previous().value;
+    // Array literal: [1, 2, 3]
+    if (this.match('LBRACKET')) {
+      const elements: Expression[] = [];
 
-      // Check if it's a function call
-      if (this.match('LPAREN')) {
-        const args: Expression[] = [];
-
-        if (!this.check('RPAREN')) {
-          args.push(this.parseExpression());
-          while (this.match('COMMA')) {
-            args.push(this.parseExpression());
-          }
-        }
-
-        this.consume('RPAREN', 'Expected ")" after arguments');
-
-        return {
-          type: 'CallExpression',
-          callee: name,
-          arguments: args
-        };
+      if (!this.check('RBRACKET')) {
+        do {
+          elements.push(this.parseExpression());
+        } while (this.match('COMMA'));
       }
 
-      // Just an identifier
-      return {
-        type: 'Identifier',
-        name
-      };
+      this.consume('RBRACKET', 'Expected "]" after array elements');
+      return { type: 'ArrayLiteral', elements };
     }
 
-    // Keywords that can be identifiers (like main)
-    if (this.check('MAIN')) {
-      this.advance();
-      return {
-        type: 'Identifier',
-        name: 'main'
-      };
+    // Struct literal: { name: "John", age: 30 }
+    if (this.match('LBRACE')) {
+      // Check if this is a struct literal (has colons) or a block
+      if (this.check('IDENT') && this.peekNext('COLON')) {
+        const fields: { name: string; value: Expression }[] = [];
+
+        do {
+          const fieldName = this.consume('IDENT', 'Expected field name').value;
+          this.consume('COLON', 'Expected ":" after field name');
+          const fieldValue = this.parseExpression();
+          fields.push({ name: fieldName, value: fieldValue });
+        } while (this.match('COMMA'));
+
+        this.consume('RBRACE', 'Expected "}" after struct fields');
+        return { type: 'StructLiteral', fields };
+      }
+
+      // It's a block - but we're in expression context, this is an error
+      throw new Error('Unexpected "{" in expression context');
     }
+
+    // Parenthesized expression
+    if (this.match('LPAREN')) {
+      const expr = this.parseExpression();
+      this.consume('RPAREN', 'Expected ")" after expression');
+      return expr;
+    }
+
+    // Function call, array access, field access, or identifier
+    if (this.check('IDENT')) {
+      let expr: Expression = { type: 'Identifier', name: this.advance().value };
+
+      // Handle chaining: arr[0].field or obj.method()
+      while (true) {
+        if (this.match('LBRACKET')) {
+          // Array access: arr[index]
+          const index = this.parseExpression();
+          this.consume('RBRACKET', 'Expected "]" after index');
+          expr = { type: 'ArrayAccess', array: expr, index };
+        } else if (this.match('DOT')) {
+          // Field access: obj.field
+          const fieldName = this.consume('IDENT', 'Expected field name after "."').value;
+
+          if (this.match('LPAREN')) {
+            // Method call: obj.method(args)
+            const args: Expression[] = [];
+            if (!this.check('RPAREN')) {
+              do {
+                args.push(this.parseExpression());
+              } while (this.match('COMMA'));
+            }
+            this.consume('RPAREN', 'Expected ")" after arguments');
+
+            // For now, method calls become regular calls with object as first arg
+            // Or we could create a MethodCall expression type
+            // Simpler: just create a CallExpression with special handling
+            expr = {
+              type: 'CallExpression',
+              callee: fieldName,
+              arguments: [expr, ...args]
+            };
+          } else {
+            // Simple field access
+            expr = { type: 'FieldAccess', object: expr, field: fieldName };
+          }
+        } else if (this.match('LPAREN')) {
+          // Regular function call
+          const args: Expression[] = [];
+          if (!this.check('RPAREN')) {
+            do {
+              args.push(this.parseExpression());
+            } while (this.match('COMMA'));
+          }
+          this.consume('RPAREN', 'Expected ")" after arguments');
+
+          // If expr was an identifier, use its name as callee
+          // Otherwise, this is a complex call expression (not supported yet)
+          if (expr.type === 'Identifier') {
+            expr = {
+              type: 'CallExpression',
+              callee: expr.name,
+              arguments: args
+            };
+          } else {
+            throw new Error('Complex call expressions not supported');
+          }
+        } else {
+          break;
+        }
+      }
+
+      return expr;
+    }
+
+    throw new Error(`Unexpected token: ${this.peek().type}`);
 
     throw new Error(`Unexpected token: ${this.peek().type} at line ${this.peek().line}`);
   }
