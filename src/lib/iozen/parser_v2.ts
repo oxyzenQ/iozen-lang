@@ -338,14 +338,17 @@ export class MinimalParser {
     this.consume('FOR', 'Expected "for"');
     this.consume('LPAREN', 'Expected "(" after "for"');
 
+    // Part 1: Initializer (optional)
     let initializer: VariableDeclaration | ExpressionStatement | null = null;
     if (this.check('LET') || this.check('CONST')) {
       initializer = this.parseVariableDeclaration();
-    } else if (!this.check('SEMICOLON')) {
-      initializer = this.parseExpressionStatement();
+    } else if (!this.check('SEMICOLON') && !this.check('RPAREN')) {
+      // Expression as initializer
+      const expr = this.parseExpression();
+      initializer = { type: 'ExpressionStatement', expression: expr };
     }
 
-    // Simple for with expression only (for x in 0..10 style)
+    // Simple for with just expression: for (x) { ... }
     if (this.check('RPAREN')) {
       this.advance();
       const body = this.parseBlock();
@@ -358,10 +361,23 @@ export class MinimalParser {
       };
     }
 
-    // C-style for loop
+    // C-style for loop: for (init; cond; inc) { ... }
+    // After initializer, expect semicolon
+    if (this.check('SEMICOLON')) {
+      this.advance(); // consume ;
+    }
+
+    // Part 2: Condition (optional)
     let condition: Expression | null = null;
-    if (!this.check('IDENT') || !this.peekNext('RPAREN')) {
+    if (!this.check('SEMICOLON')) {
       condition = this.parseExpression();
+    }
+    this.consume('SEMICOLON', 'Expected ";" after for condition');
+
+    // Part 3: Increment (optional)
+    let increment: Expression | null = null;
+    if (!this.check('RPAREN')) {
+      increment = this.parseExpression();
     }
     this.consume('RPAREN', 'Expected ")" after for clause');
 
@@ -371,7 +387,7 @@ export class MinimalParser {
       type: 'ForStatement',
       initializer,
       condition,
-      increment: null,
+      increment,
       body
     };
   }
@@ -861,6 +877,11 @@ export class MinimalParser {
 
   private peek(): Token {
     return this.tokens[this.position];
+  }
+
+  private peekNext(expectedType: TokenType): boolean {
+    if (this.isAtEnd()) return false;
+    return this.tokens[this.position].type === expectedType;
   }
 
   private previous(): Token {

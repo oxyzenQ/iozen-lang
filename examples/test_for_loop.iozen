@@ -1,0 +1,22 @@
+// Test for loop compilation
+fn main() {
+    print("=== For Loop Test ===")
+    
+    // Basic for loop
+    print("Counting 0 to 4:")
+    for (let i = 0; i < 5; i = i + 1) {
+        print("i = " + i)
+    }
+    
+    // Sum with for loop
+    print("")
+    print("Summing 1 to 10:")
+    let sum = 0
+    for (let j = 1; j <= 10; j = j + 1) {
+        sum = sum + j
+    }
+    print("Sum = " + sum)
+    
+    print("")
+    print("=== Test Complete ===")
+}

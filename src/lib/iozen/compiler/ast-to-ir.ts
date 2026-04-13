@@ -183,8 +183,43 @@ export class ASTToIR {
   }
 
   private genFor(stmt: AST.ForStatement): string | undefined {
-    // For now, desugar to while
-    // TODO: Proper for loop with initializer, condition, increment
+    // Desugar for loop to: init; while (cond) { body; increment; }
+
+    // 1. Initializer (if present)
+    if (stmt.initializer) {
+      if (stmt.initializer.type === 'VariableDeclaration') {
+        this.genVariableDeclaration(stmt.initializer);
+      } else {
+        this.genExpression(stmt.initializer.expression);
+      }
+    }
+
+    // 2. While loop structure
+    const startLabel = this.builder.newLabel('for');
+    const bodyLabel = this.builder.newLabel('for_body');
+    const endLabel = this.builder.newLabel('for_end');
+
+    // Check condition
+    this.builder.emitLabel(startLabel);
+    if (stmt.condition) {
+      const cond = this.genExpression(stmt.condition);
+      this.builder.emit({ op: 'if', src1: cond, label: bodyLabel, comment: `if ${cond} goto ${bodyLabel}` });
+    }
+    this.builder.emitGoto(endLabel);
+
+    // Body
+    this.builder.emitLabel(bodyLabel);
+    for (const s of stmt.body) {
+      this.generateStatement(s);
+    }
+
+    // 3. Increment (if present)
+    if (stmt.increment) {
+      this.genExpression(stmt.increment);
+    }
+    this.builder.emitGoto(startLabel);
+
+    this.builder.emitLabel(endLabel);
     return undefined;
   }
 
