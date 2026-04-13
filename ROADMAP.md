@@ -1,10 +1,23 @@
 # IOZEN Language Roadmap 🗺️
 
-> **Current Status: Compiler v2.0 - NATIVE CODE GENERATION** 🚀
+> **Current Status: Week 12 Complete - Package Manager Basics DONE!** 🎉
 
 ---
 
 ## ✅ COMPLETED PHASES
+
+### Week 11-12: Standard Library & Package Manager ✅
+```
+✅ String Methods         - split(), join(), substring(), indexOf()
+✅ Math Library            - sin(), cos(), sqrt(), pow(), abs()
+✅ File I/O               - readFile(), writeFile(), exists()
+✅ JSON Support           - parseJSON(), stringify()
+✅ Package Manager        - iozen init, install, list
+✅ iozen.json Format      - Dependencies, version, entry point
+✅ Local Registry         - .iozen_registry/ support
+```
+
+**Achievement: Full package system with iozen.json!** 🎉
 
 ### Phase 1: Core Interpreter (Weeks 1-4) ✅
 ```
@@ -60,16 +73,18 @@
 
 ### Phase 6: Standard Library & I/O
 ```
-⏳ File I/O Operations    - readFile, writeFile
-⏳ String Methods         - split, join, replace
-⏳ Math Library           - sin, cos, sqrt, pow
+✅ File I/O Operations    - readFile, writeFile
+✅ String Methods         - split, join, replace
+✅ Math Library           - sin, cos, sqrt, pow
+✅ JSON Support           - parseJSON, stringify
 ⏳ Date/Time              - Current time, formatting
 ⏳ Random Numbers         - Random generation
 ```
 
 ### Phase 7: Development Tools
 ```
-⏳ Package Manager        - iozen install, publish
+✅ Package Manager        - iozen init, install, list
+⏳ Package Publishing     - Publish to registry
 ⏳ LSP Server            - IDE autocomplete, goto-def
 ⏳ Debugger              - Breakpoints, step-through
 ⏳ Formatter             - Code auto-formatting
@@ -102,12 +117,12 @@
 |----------|----------|--------|
 | **Core Language** | 95% | ✅ Near Complete |
 | **Compiler** | 80% | ✅ Working |
-| **Standard Library** | 20% | ⏳ Started |
-| **Dev Tools** | 10% | ⏳ Planned |
+| **Standard Library** | 60% | ✅ File I/O, Math, JSON Done |
+| **Dev Tools** | 40% | ✅ Package Manager Done |
 | **Advanced Compiler** | 5% | ⏳ Planned |
-| **Ecosystem** | 0% | 📋 Future |
+| **Ecosystem** | 10% | 📋 Started |
 
-**Overall: ~60% Complete to v1.0 Release**
+**Overall: ~65% Complete to v1.0 Release**
 
 ---
 
@@ -194,7 +209,7 @@
 - ✅ Core language working
 - ✅ Compiler producing binaries
 - ✅ Basic standard library
-- ⏳ Package manager basics
+- ✅ Package manager basics (iozen init, install, list)
 - ⏳ Documentation complete
 
 ### Nice to Have (v1.1)
@@ -207,15 +222,17 @@
 
 ## 📝 NOTES
 
-- **Current Focus**: Standard library & tooling
+- **Current Focus**: Documentation & language refinements
 - **Blockers**: None - all systems working
-- **Strengths**: Solid foundation, working compiler
-- **Next Big Win**: Package manager + ecosystem
+- **Strengths**: Solid foundation, working compiler, package manager done
+- **Next Big Win**: Complete documentation for v1.0
 
 ---
 
-**We are 60% to v1.0 Release!** 🎉
+**We are 65% to v1.0 Release!** 🎉
 
-**Compiler is DONE and WORKING!** Major milestone achieved! 🚀
+**Package Manager is DONE!** Major milestone achieved! 🚀
+
+**Compiler + Package Manager = Ecosystem Ready!**
 
 Mau fokus ke mana sekarang? 😄

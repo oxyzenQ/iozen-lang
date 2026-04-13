@@ -341,7 +341,17 @@ async function cmdInit(args: string[]) {
 
   await mkdir(projectDir, { recursive: true });
 
-  // Create main.iozen
+  // Use PackageManager to initialize project with iozen.json
+  const { createPackageManager } = await import('../../src/lib/iozen/package_manager');
+  const pm = createPackageManager(projectDir);
+  const manifest = pm.init(projectName, {
+    version: '0.1.0',
+    description: `A IOZEN project`,
+    license: 'MIT',
+    main: 'main.iozen',
+  });
+
+  // Overwrite the default index.iozen with our main.iozen template
   const mainCode = `# ${projectName} — IOZEN Project
 # Created with IOZEN CLI v${VERSION}
 
@@ -357,34 +367,54 @@ print x attach " + " attach y attach " = " attach x + y
 `;
   await writeFile(join(projectDir, "main.iozen"), mainCode);
 
+  // Remove the default index.iozen if it was created
+  try {
+    const { unlinkSync } = await import('node:fs');
+    unlinkSync(join(projectDir, "index.iozen"));
+  } catch { /* ignore */ }
+
   // Create README
   const readme = `# ${projectName}
 
-A IOZEN project.
+${manifest.description}
 
 ## Run
 
 \`\`\`bash
-iozen run main.iozen
+iozen run ${manifest.main}
+\`\`\`
+
+## Install dependencies
+
+\`\`\`bash
+iozen install <package-name>
 \`\`\`
 
 ## Build (requires local Bun)
 
 \`\`\`bash
-iozen build main.iozen --output ${projectName}
+iozen build ${manifest.main} --output ${projectName}
 ./${projectName}
 \`\`\`
+
+## Project Structure
+
+- \`${manifest.main}\` - Entry point
+- \`iozen.json\` - Project manifest
+- \`iozen_modules/\` - Installed packages
 `;
   await writeFile(join(projectDir, "README.md"), readme);
 
   log(`${C.green}  ✔ Project "${projectName}" created!${C.reset}`);
   log(`${C.white}  ${projectDir}/${C.reset}`);
-  log(`${C.dim}  └── main.iozen${C.reset}`);
+  log(`${C.dim}  └── iozen.json${C.reset}`);
+  log(`${C.dim}  └── ${manifest.main}${C.reset}`);
   log(`${C.dim}  └── README.md${C.reset}`);
+  log(`${C.dim}  └── iozen_modules/${C.reset}`);
   log("");
   log(`${C.cyan}  Next:${C.reset}`);
   log(`  cd ${projectName}`);
-  log(`  iozen run main.iozen`);
+  log(`  iozen run ${manifest.main}`);
 }
 
 function cmdVersion() {
@@ -538,16 +568,26 @@ async function cmdSSA(args: string[]) {
 }
 
 async function cmdInstall(args: string[]) {
+  const { createPackageManager } = await import('../../src/lib/iozen/package_manager');
   const pm = createPackageManager(process.cwd());
+
+  // Check if we're in a project with iozen.json
+  if (!pm.hasManifest()) {
+    error('No iozen.json found. Run "iozen init <project>" first.');
+    process.exit(1);
+  }
 
   if (args.length === 0) {
     // Install all dependencies from iozen.json
-    log(`${C.cyan}Installing dependencies...${C.reset}`);
+    log(`${C.cyan}📦 Installing dependencies from iozen.json...${C.reset}`);
     const installed = pm.installAll();
     if (installed.length === 0) {
-      log('No dependencies to install.');
+      log(`${C.dim}No dependencies to install.${C.reset}`);
     } else {
-      log(`Installed ${installed.length} package(s).`);
+      log(`${C.green}✓${C.reset} Installed ${installed.length} package(s):`);
+      for (const pkg of installed) {
+        log(`  ${C.green}•${C.reset} ${pkg.name}@${C.green}${pkg.version}${C.reset}`);
+      }
     }
     return;
   }
@@ -556,29 +596,49 @@ async function cmdInstall(args: string[]) {
   const packageName = args[0];
   const version = args[1]; // optional version
 
-  log(`${C.cyan}Installing ${packageName}...${C.reset}`);
+  log(`${C.cyan}📦 Installing ${C.white}${packageName}${C.cyan}...${C.reset}`);
   const pkg = pm.install(packageName, version);
 
   if (pkg) {
-    log(`${C.green}✓${C.reset} ${pkg.name}@${pkg.version}`);
+    log(`${C.green}✓${C.reset} ${pkg.name}@${C.green}${pkg.version}${C.reset}`);
+    log(`${C.dim}  Location: ${pkg.path}${C.reset}`);
   } else {
     error(`Failed to install ${packageName}`);
+    log(`${C.dim}Note: Package not found in local registry (.iozen_registry/)${C.reset}`);
     process.exit(1);
   }
 }
 
 async function cmdList(args: string[]) {
+  const { createPackageManager } = await import('../../src/lib/iozen/package_manager');
   const pm = createPackageManager(process.cwd());
+
+  // Show project info if manifest exists
+  const manifest = pm.readManifest();
+  if (manifest) {
+    log(`${C.cyan}📋 Project: ${C.white}${manifest.name}${C.cyan}@${manifest.version}${C.reset}`);
+    if (manifest.description) {
+      log(`${C.dim}   ${manifest.description}${C.reset}`);
+    }
+    log('');
+  }
+
   const packages = pm.list();
 
   if (packages.length === 0) {
-    log('No packages installed.');
+    log(`${C.dim}No packages installed in iozen_modules/${C.reset}`);
+    if (manifest && manifest.dependencies && Object.keys(manifest.dependencies).length > 0) {
+      log(`${C.yellow}⚠ Dependencies in iozen.json but not installed. Run: iozen install${C.reset}`);
+    }
     return;
   }
 
-  log(`${C.cyan}Installed packages:${C.reset}`);
+  log(`${C.cyan}📦 Installed packages:${C.reset}`);
   for (const pkg of packages) {
-    log(`  ${pkg.name}@${C.green}${pkg.version}${C.reset}`);
+    const isDep = manifest?.dependencies?.[pkg.name];
+    const isDevDep = manifest?.devDependencies?.[pkg.name];
+    const marker = isDep ? '(dep)' : isDevDep ? '(dev)' : '';
+    log(`  ${C.green}•${C.reset} ${pkg.name}@${C.green}${pkg.version}${C.reset} ${C.dim}${marker}${C.reset}`);
   }
 }
 
@@ -783,19 +843,22 @@ function printBanner(): void {
 function printUsage(): void {
   log(`${C.bold}Usage:${C.reset}`);
   log(`  iozen run <file.iozen>        Execute a IOZEN program`);
-  log(`  iozen eval <code>            Execute inline IOZEN code`);
+  log(`  iozen eval <code>             Execute inline IOZEN code`);
   log(`  iozen build <file.iozen>      Compile to standalone binary`);
   log(`  iozen repl                    Interactive shell (REPL)`);
-  log(`  iozen init <project>         Create new IOZEN project`);
+  log(`  iozen init <project>          Create new IOZEN project`);
+  log(`  iozen install [pkg]           Install dependencies or package`);
+  log(`  iozen list                    List installed packages`);
   log(`  iozen tokens <file.iozen>     Show token output`);
   log(`  iozen ast <file.iozen>        Show AST output`);
-  log(`  iozen version                Show version info`);
-  log(`  iozen help                   Show this help`);
+  log(`  iozen version                 Show version info`);
+  log(`  iozen help                    Show this help`);
   log("");
   log(`${C.bold}Examples:${C.reset}`);
   log(`  ${C.dim}iozen repl${C.reset}`);
   log(`  ${C.dim}iozen init hello_world${C.reset}`);
   log(`  ${C.dim}cd hello_world${C.reset}`);
+  log(`  ${C.dim}iozen install${C.reset}`);
   log(`  ${C.dim}iozen run main.iozen${C.reset}`);
   log("");
   log(`${C.dim}Like Rust's flow:${C.reset}`);
