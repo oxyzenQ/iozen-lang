@@ -1,0 +1,5 @@
+# Example 01: Hello World
+# The classic first program
+
+print "Hello, World!"
+print "Welcome to IOZEN!"

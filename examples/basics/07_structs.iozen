@@ -1,0 +1,49 @@
+# Example 07: Structs
+# Defining and using custom data types
+
+# Define a Person type
+type Person is
+    name as text
+    age as integer
+    email as text
+end
+
+# Create a Person instance
+create var person1 as Person
+assign person1.name with value "Alice Johnson"
+assign person1.age with value 30
+assign person1.email with value "alice@example.com"
+
+# Print person info
+print "Name: " attach person1.name
+print "Age: " attach person1.age
+print "Email: " attach person1.email
+
+# Create another person
+create var person2 as Person
+assign person2.name with value "Bob Smith"
+assign person2.age with value 25
+assign person2.email with value "bob@example.com"
+
+print ""
+print "Second person:"
+print "Name: " attach person2.name attach " (" attach person2.age attach " years old)"
+
+# Point type for coordinates
+type Point is
+    x as decimal
+    y as decimal
+end
+
+# Create points
+create var p1 as Point
+assign p1.x with value 3.5
+assign p1.y with value 4.2
+
+create var p2 as Point
+assign p2.x with value 1.0
+assign p2.y with value 2.0
+
+print ""
+print "Point 1: (" attach p1.x attach ", " attach p1.y attach ")"
+print "Point 2: (" attach p2.x attach ", " attach p2.y attach ")"

@@ -1,0 +1,22 @@
+# Example 02: Variables and Types
+# Demonstrates variable declaration and basic types
+
+# Integer
+create variable age as integer with value 25
+print "Age: " attach age
+
+# Decimal
+create variable pi as decimal with value 3.14159
+print "Pi: " attach pi
+
+# Text (String)
+create variable name as text with value "IOZEN Developer"
+print "Name: " attach name
+
+# Boolean
+create variable isActive as boolean with value true
+print "Active: " attach isActive
+
+# Variable reassignment
+assign age with value 26
+print "New age: " attach age

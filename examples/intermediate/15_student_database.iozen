@@ -1,0 +1,90 @@
+# Example 15: Student Database
+# Simple student record management
+
+type Student is
+    id as integer
+    name as text
+    grades as array of integer
+end
+
+function createStudent takes id as integer, name as text returns Student
+    create var s as Student
+    assign s.id with value id
+    assign s.name with value name
+    assign s.grades with values []
+    return s
+end
+
+function addGrade takes s as Student, grade as integer returns nothing
+    array_push s.grades grade
+end
+
+function averageGrade takes s as Student returns decimal
+    if array_length s.grades == 0 then
+        return 0.0
+    end
+    
+    create var sum as integer with value 0
+    for g in s.grades do
+        assign sum with value sum + g
+    end
+    
+    return to_decimal sum / to_decimal array_length s.grades
+end
+
+function printStudent takes s as Student returns nothing
+    print "ID: " attach s.id
+    print "Name: " attach s.name
+    print "Grades: "
+    for g in s.grades do
+        print "  " attach g
+    end
+    print "Average: " attach averageGrade s
+    print ""
+end
+
+# Create students
+create var students as array of Student with values []
+
+create var alice as Student with value createStudent 1 "Alice Johnson"
+addGrade alice 85
+addGrade alice 92
+addGrade alice 78
+
+
+create var bob as Student with value createStudent 2 "Bob Smith"
+addGrade bob 75
+addGrade bob 88
+addGrade bob 82
+addGrade bob 91
+
+create var carol as Student with value createStudent 3 "Carol White"
+addGrade carol 95
+addGrade carol 98
+addGrade carol 92
+
+# Add to array
+array_push students alice
+array_push students bob
+array_push students carol
+
+# Print all students
+print "=== Student Database ==="
+print ""
+
+for s in students do
+    printStudent s
+end
+
+# Find top student
+print "=== Top Student ==="
+create var topStudent as Student with value students[0]
+
+for s in students do
+    if averageGrade s > averageGrade topStudent then
+        assign topStudent with value s
+    end
+end
+
+print "Top student: " attach topStudent.name
+print "Average: " attach averageGrade topStudent

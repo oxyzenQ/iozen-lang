@@ -1,0 +1,18 @@
+# Example 08: Modules
+# Using external modules
+
+# Import the math utilities module
+use "08_modules_math"
+
+# Use functions from the module
+print "Using math module:"
+print "Square of 4: " attach square 4
+print "Cube of 3: " attach cube 3
+print "Max of 10 and 5: " attach max 10 5
+print "Min of 10 and 5: " attach min 10 5
+
+# Use in calculations
+create var x as integer with value 5
+print ""
+print "x = " attach x
+print "x squared + x cubed = " attach square x + cube x

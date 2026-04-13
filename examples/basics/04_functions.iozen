@@ -1,0 +1,33 @@
+# Example 04: Functions
+# Defining and calling functions
+
+# Simple function with no parameters
+function sayHello returns nothing
+    print "Hello from function!"
+end
+
+# Function with parameters
+function greet takes name as text returns nothing
+    print "Hello, " attach name attach "!"
+end
+
+# Function with return value
+function add takes x as integer, y as integer returns integer
+    return x + y
+end
+
+# Function with decimal calculation
+function calculateArea takes radius as decimal returns decimal
+    return 3.14159 * radius * radius
+end
+
+# Call the functions
+sayHello
+greet "Alice"
+greet "Bob"
+
+create var sum as integer with value add 5 3
+print "5 + 3 = " attach sum
+
+create var area as decimal with value calculateArea 5.0
+print "Area of circle (r=5): " attach area

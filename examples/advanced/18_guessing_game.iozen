@@ -1,0 +1,64 @@
+# Example 18: Number Guessing Game
+# Simple guessing game with limited attempts
+
+function playGame takes secret as integer returns nothing
+    create var attempts as integer with value 5
+    create var won as boolean with value false
+    
+    print "I'm thinking of a number between 1 and 100."
+    print "You have " attach attempts attach " attempts."
+    print ""
+    
+    # Simulated guesses (in real game, would get user input)
+    create var guesses as array of integer with values [50, 25, 37, 42]
+    create var guessIndex as integer with value 0
+    
+    while attempts > 0 and not won repeat
+        if guessIndex >= array_length guesses then
+            print "No more guesses in simulation!"
+            break
+        end
+        
+        create var guess as integer with value guesses[guessIndex]
+        assign guessIndex with value guessIndex + 1
+        
+        print "Attempt " attach (6 - attempts) attach ": You guessed " attach guess
+        
+        if guess == secret then
+            print "Congratulations! You guessed it!"
+            assign won with value true
+        otherwise if guess < secret then
+            print "Too low! Try higher."
+        otherwise
+            print "Too high! Try lower."
+        end
+        
+        assign attempts with value attempts - 1
+        
+        if not won and attempts > 0 then
+            print "You have " attach attempts attach " attempts remaining."
+        end
+        
+        print ""
+    end
+    
+    if not won then
+        print "Game Over! The number was: " attach secret
+    end
+end
+
+# Play the game
+print "=== Number Guessing Game ==="
+print ""
+
+# Secret number (in real game, would be random)
+create var secretNumber as integer with value 42
+
+playGame secretNumber
+
+# Play again with different number
+print ""
+print "=== Round 2 ==="
+print ""
+
+playGame 75

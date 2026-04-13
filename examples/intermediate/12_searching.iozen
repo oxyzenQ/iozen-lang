@@ -1,0 +1,68 @@
+# Example 12: Searching Algorithms
+# Linear and binary search
+
+function linearSearch takes arr as array of integer, target as integer returns integer
+    create var i as integer with value 0
+    while i < array_length arr repeat
+        if arr[i] == target then
+            return i
+        end
+        assign i with value i + 1
+    end
+    return -1
+end
+
+function binarySearch takes arr as array of integer, target as integer returns integer
+    create var left as integer with value 0
+    create var right as integer with value array_length arr - 1
+    
+    while left <= right repeat
+        create var mid as integer with value left + (right - left) / 2
+        
+        if arr[mid] == target then
+            return mid
+        end
+        
+        if arr[mid] < target then
+            assign left with value mid + 1
+        otherwise
+            assign right with value mid - 1
+        end
+    end
+    
+    return -1
+end
+
+# Test array (sorted for binary search)
+create var sortedArr as array of integer with values [2, 5, 8, 12, 16, 23, 38, 56, 72, 91]
+
+print "Array:"
+for x in sortedArr do
+    print x
+end
+
+# Linear search tests
+print ""
+print "Linear Search Tests:"
+create var targets as array of integer with values [23, 91, 100]
+
+for t in targets do
+    create var result as integer with value linearSearch sortedArr t
+    if result != -1 then
+        print "Found " attach t attach " at index " attach result
+    otherwise
+        print t attach " not found"
+    end
+end
+
+# Binary search tests
+print ""
+print "Binary Search Tests:"
+for t in targets do
+    create var result as integer with value binarySearch sortedArr t
+    if result != -1 then
+        print "Found " attach t attach " at index " attach result
+    otherwise
+        print t attach " not found"
+    end
+end

@@ -1,0 +1,60 @@
+# Example 17: File Logger
+# Demonstrates file I/O operations
+
+function logMessage takes message as text, level as text returns nothing
+    create var timestamp as text with value "2024-01-15 10:30:00"
+    create var entry as text with value "[" attach timestamp attach "] [" attach level attach "] " attach message attach "\n"
+    
+    appendFile "app.log" entry
+    print "Logged: " attach message
+end
+
+function readLog returns text
+    if fileExists "app.log" then
+        return readFile "app.log"
+    end
+    return ""
+end
+
+function clearLog returns nothing
+    writeFile "app.log" ""
+    print "Log cleared"
+end
+
+# Main program
+print "=== File Logger Demo ==="
+print ""
+
+# Clear existing log
+print "Clearing existing log..."
+clearLog
+
+# Log some messages
+print "Logging messages..."
+logMessage "Application started" "INFO"
+logMessage "User logged in" "INFO"
+logMessage "Invalid password attempt" "WARNING"
+logMessage "Processing data" "INFO"
+logMessage "Operation completed successfully" "INFO"
+
+print ""
+print "=== Log Contents ==="
+create var logContent as text with value readLog
+print logContent
+
+print ""
+print "=== Configuration File Demo ==="
+create var config as text with value "# IOZEN Configuration File
+name=MyApplication
+version=1.0.0
+debug=false
+log_level=INFO
+"
+
+writeFile "config.ini" config
+print "Configuration saved to config.ini"
+
+if fileExists "config.ini" then
+    print "Config file contents:"
+    print readFile "config.ini"
+end

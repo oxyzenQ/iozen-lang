@@ -1,0 +1,58 @@
+# Example 05: Control Flow
+# if/else, while loops, for loops
+
+# If/else statement
+create variable score as integer with value 85
+
+if score >= 90 then
+    print "Grade: A"
+otherwise if score >= 80 then
+    print "Grade: B"
+otherwise if score >= 70 then
+    print "Grade: C"
+otherwise if score >= 60 then
+    print "Grade: D"
+otherwise
+    print "Grade: F"
+end
+
+# While loop
+print ""
+print "Counting from 1 to 5:"
+create var i as integer with value 1
+while i <= 5 repeat
+    print i
+    assign i with value i + 1
+end
+
+# For loop with range
+print ""
+print "For loop from 1 to 5:"
+for n from 1 to 5 do
+    print n
+end
+
+# Break and continue example
+print ""
+print "Odd numbers from 1 to 10 (using continue):"
+for num from 1 to 10 do
+    if num mod 2 == 0 then
+        continue
+    end
+    print num
+end
+
+# Nested if example
+create variable age as integer with value 20
+create variable hasLicense as boolean with value true
+
+print ""
+if age >= 18 then
+    if hasLicense then
+        print "You can drive"
+    otherwise
+        print "You need a license first"
+    end
+otherwise
+    print "Too young to drive"
+end

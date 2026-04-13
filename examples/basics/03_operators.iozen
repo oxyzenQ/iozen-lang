@@ -1,0 +1,32 @@
+# Example 03: Operators
+# Arithmetic, comparison, and logical operators
+
+# Arithmetic
+create variable a as integer with value 10
+create variable b as integer with value 3
+
+print "a = " attach a
+print "b = " attach b
+print "a + b = " attach a + b
+print "a - b = " attach a - b
+print "a * b = " attach a * b
+print "a / b = " attach a / b
+print "a mod b = " attach a mod b
+
+# String concatenation with attach
+create variable firstName as text with value "John"
+create variable lastName as text with value "Doe"
+print "Full name: " attach firstName attach " " attach lastName
+
+# Comparison
+print ""
+print "a == b: " attach a == b
+print "a != b: " attach a != b
+print "a > b: " attach a > b
+print "a < b: " attach a < b
+
+# Logical
+print ""
+print "true and false: " attach true and false
+print "true or false: " attach true or false
+print "not true: " attach not true

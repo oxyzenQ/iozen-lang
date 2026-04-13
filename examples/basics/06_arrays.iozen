@@ -1,0 +1,42 @@
+# Example 06: Arrays
+# Working with arrays
+
+# Create an array
+create variable numbers as array of integer with values [10, 20, 30, 40, 50]
+
+# Print array length
+print "Array length: " attach array_length numbers
+
+# Access elements by index
+print "First element: " attach numbers[0]
+print "Third element: " attach numbers[2]
+print "Last element: " attach numbers[4]
+
+# Iterate through array with for...in
+print ""
+print "All elements:"
+for num in numbers do
+    print num
+end
+
+# Add element with array_push
+array_push numbers 60
+print ""
+print "After push, length: " attach array_length numbers
+print "New last element: " attach numbers[5]
+
+# Working with text arrays
+create variable fruits as array of text with values ["Apple", "Banana", "Cherry"]
+print ""
+print "Fruits:"
+for fruit in fruits do
+    print fruit
+end
+
+# Calculate sum of array
+print ""
+create var sum as integer with value 0
+for n in numbers do
+    assign sum with value sum + n
+end
+print "Sum of numbers: " attach sum

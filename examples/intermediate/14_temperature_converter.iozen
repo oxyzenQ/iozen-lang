@@ -1,0 +1,54 @@
+# Example 14: Temperature Converter
+# Convert between Celsius, Fahrenheit, and Kelvin
+
+function celsiusToFahrenheit takes c as decimal returns decimal
+    return c * 9.0 / 5.0 + 32.0
+end
+
+function fahrenheitToCelsius takes f as decimal returns decimal
+    return (f - 32.0) * 5.0 / 9.0
+end
+
+function celsiusToKelvin takes c as decimal returns decimal
+    return c + 273.15
+end
+
+function kelvinToCelsius takes k as decimal returns decimal
+    return k - 273.15
+end
+
+function fahrenheitToKelvin takes f as decimal returns decimal
+    return celsiusToKelvin fahrenheitToCelsius f
+end
+
+function kelvinToFahrenheit takes k as decimal returns decimal
+    return celsiusToFahrenheit kelvinToCelsius k
+end
+
+# Temperature conversion table
+print "=== Temperature Conversion Table ==="
+print ""
+print "Celsius    Fahrenheit    Kelvin"
+print "----------------------------------------"
+
+for c from -20 to 40 step 10 do
+    create var f as decimal with value celsiusToFahrenheit c
+    create var k as decimal with value celsiusToKelvin c
+    
+    # Print formatted (simplified)
+    print c attach "°C       " attach f attach "°F      " attach k attach "K"
+end
+
+print ""
+print "=== Specific Conversions ==="
+print ""
+
+# Specific conversions
+create var bodyTempC as decimal with value 37.0
+print "Body temperature: " attach bodyTempC attach "°C = " attach celsiusToFahrenheit bodyTempC attach "°F"
+
+create var waterBoilingF as decimal with value 212.0
+print "Water boiling: " attach waterBoilingF attach "°F = " attach fahrenheitToCelsius waterBoilingF attach "°C"
+
+create var absoluteZeroK as decimal with value 0.0
+print "Absolute zero: " attach absoluteZeroK attach "K = " attach kelvinToCelsius absoluteZeroK attach "°C"

@@ -1,0 +1,66 @@
+# Example 13: Calculator
+# A simple calculator with multiple operations
+
+function add takes a as decimal, b as decimal returns decimal
+    return a + b
+end
+
+function subtract takes a as decimal, b as decimal returns decimal
+    return a - b
+end
+
+function multiply takes a as decimal, b as decimal returns decimal
+    return a * b
+end
+
+function divide takes a as decimal, b as decimal returns decimal
+    if b == 0.0 then
+        print "Error: Division by zero!"
+        return 0.0
+    end
+    return a / b
+end
+
+function power takes base as decimal, exp as integer returns decimal
+    create var result as decimal with value 1.0
+    create var i as integer with value 0
+    
+    while i < exp repeat
+        assign result with value result * base
+        assign i with value i + 1
+    end
+    
+    return result
+end
+
+function factorial takes n as integer returns integer
+    if n <= 1 then
+        return 1
+    end
+    return n * factorial (n - 1)
+end
+
+# Calculator demonstration
+print "=== IOZEN Calculator ==="
+print ""
+
+create var x as decimal with value 10.0
+create var y as decimal with value 3.0
+
+print "x = " attach x
+print "y = " attach y
+print ""
+
+print "Addition: x + y = " attach add x y
+print "Subtraction: x - y = " attach subtract x y
+print "Multiplication: x * y = " attach multiply x y
+print "Division: x / y = " attach divide x y
+print ""
+
+print "Power: 2^10 = " attach power 2.0 10
+print "Factorial: 5! = " attach factorial 5
+print ""
+
+# Division by zero handling
+print "Testing error handling:"
+print "10 / 0 = " attach divide 10.0 0.0

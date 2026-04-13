@@ -1,0 +1,62 @@
+# Example 11: Sorting Algorithms
+# Bubble sort implementation
+
+function bubbleSort takes arr as array of integer returns array of integer
+    create var n as integer with value array_length arr
+    create var i as integer with value 0
+    
+    while i < n - 1 repeat
+        create var j as integer with value 0
+        while j < n - i - 1 repeat
+            if arr[j] > arr[j + 1] then
+                # Swap elements
+                create var temp as integer with value arr[j]
+                assign arr[j] with value arr[j + 1]
+                assign arr[j + 1] with value temp
+            end
+            assign j with value j + 1
+        end
+        assign i with value i + 1
+    end
+    
+    return arr
+end
+
+function printArray takes arr as array of integer, label as text returns nothing
+    print label attach ": "
+    for x in arr do
+        print x
+    end
+end
+
+# Test sorting
+create var numbers as array of integer with values [64, 34, 25, 12, 22, 11, 90, 5]
+
+print "Before sorting:"
+for n in numbers do
+    print n
+end
+
+assign numbers with value bubbleSort numbers
+
+print ""
+print "After sorting:"
+for n in numbers do
+    print n
+end
+
+# Test with different data
+print ""
+create var scores as array of integer with values [85, 92, 78, 95, 88, 73, 91]
+print "Student scores (unsorted):"
+for s in scores do
+    print s
+end
+
+assign scores with value bubbleSort scores
+
+print ""
+print "Student scores (sorted):"
+for s in scores do
+    print s
+end

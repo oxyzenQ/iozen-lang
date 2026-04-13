@@ -1,0 +1,55 @@
+# Example 10: Prime Numbers
+# Finding and checking prime numbers
+
+function isPrime takes n as integer returns boolean
+    if n < 2 then
+        return false
+    end
+    
+    if n == 2 then
+        return true
+    end
+    
+    if n mod 2 == 0 then
+        return false
+    end
+    
+    create var i as integer with value 3
+    while i * i <= n repeat
+        if n mod i == 0 then
+            return false
+        end
+        assign i with value i + 2
+    end
+    
+    return true
+end
+
+# Check if numbers are prime
+create var testNumbers as array of integer with values [1, 2, 3, 4, 5, 10, 13, 17, 20, 97]
+
+print "Prime number checks:"
+for n in testNumbers do
+    if isPrime n then
+        print n attach " is prime"
+    otherwise
+        print n attach " is not prime"
+    end
+end
+
+# Find all primes up to 100
+print ""
+print "Prime numbers from 1 to 100:"
+create var count as integer with value 0
+create var primes as array of integer with values []
+
+for n from 2 to 100 do
+    if isPrime n then
+        print n
+        array_push primes n
+        assign count with value count + 1
+    end
+end
+
+print ""
+print "Total primes found: " attach count

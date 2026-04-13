@@ -1,0 +1,29 @@
+# Math Utilities Module
+# Example module demonstrating exports
+
+export function square takes x as integer returns integer
+    return x * x
+end
+
+export function cube takes x as integer returns integer
+    return x * x * x
+end
+
+export function max takes a as integer, b as integer returns integer
+    if a > b then
+        return a
+    end
+    return b
+end
+
+export function min takes a as integer, b as integer returns integer
+    if a < b then
+        return a
+    end
+    return b
+end
+
+# This function is not exported (private)
+function helper takes x as integer returns integer
+    return x + 1
+end

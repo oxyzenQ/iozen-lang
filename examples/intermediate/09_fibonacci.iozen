@@ -1,0 +1,43 @@
+# Example 09: Fibonacci Sequence
+# Recursive and iterative approaches
+
+# Recursive Fibonacci
+function fibonacciRecursive takes n as integer returns integer
+    if n <= 1 then
+        return n
+    end
+    return fibonacciRecursive (n - 1) + fibonacciRecursive (n - 2)
+end
+
+# Iterative Fibonacci (more efficient)
+function fibonacciIterative takes n as integer returns integer
+    if n <= 1 then
+        return n
+    end
+    
+    create var prev as integer with value 0
+    create var curr as integer with value 1
+    create var i as integer with value 2
+    
+    while i <= n repeat
+        create var next as integer with value prev + curr
+        assign prev with value curr
+        assign curr with value next
+        assign i with value i + 1
+    end
+    
+    return curr
+end
+
+# Print first 15 Fibonacci numbers
+print "Fibonacci Sequence (first 15):"
+print "Recursive method:"
+for i from 0 to 14 do
+    print "F(" attach i attach ") = " attach fibonacciRecursive i
+end
+
+print ""
+print "Iterative method:"
+for i from 0 to 14 do
+    print "F(" attach i attach ") = " attach fibonacciIterative i
+end

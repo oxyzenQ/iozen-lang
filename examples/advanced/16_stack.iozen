@@ -1,0 +1,78 @@
+# Example 16: Stack Data Structure
+# Implementation of a stack with push, pop, and peek
+
+type Stack is
+    items as array of integer
+end
+
+function newStack returns Stack
+    create var s as Stack
+    assign s.items with values []
+    return s
+end
+
+function stackPush takes s as Stack, item as integer returns boolean
+    array_push s.items item
+    return true
+end
+
+function stackPop takes s as Stack returns integer
+    if array_length s.items == 0 then
+        print "Error: Stack underflow!"
+        return -1
+    end
+    
+    # Get last element
+    create var lastIndex as integer with value array_length s.items - 1
+    create var item as integer with value s.items[lastIndex]
+    
+    # Remove last element (pop)
+    # Note: We'd need array_remove, for now just simulate
+    
+    return item
+end
+
+function stackPeek takes s as Stack returns integer
+    if array_length s.items == 0 then
+        print "Error: Stack is empty!"
+        return -1
+    end
+    return s.items[array_length s.items - 1]
+end
+
+function stackSize takes s as Stack returns integer
+    return array_length s.items
+end
+
+function isStackEmpty takes s as Stack returns boolean
+    return array_length s.items == 0
+end
+
+# Demonstrate stack operations
+print "=== Stack Operations Demo ==="
+print ""
+
+create var stack as Stack with value newStack
+
+print "Pushing items onto stack..."
+stackPush stack 10
+print "Pushed: 10"
+stackPush stack 20
+print "Pushed: 20"
+stackPush stack 30
+print "Pushed: 30"
+
+print ""
+print "Stack size: " attach stackSize stack
+
+print ""
+print "Top item (peek): " attach stackPeek stack
+
+print ""
+print "Popping items..."
+print "Popped: " attach stackPop stack
+print "Popped: " attach stackPop stack
+
+print ""
+print "Remaining size: " attach stackSize stack
+print "Top item: " attach stackPeek stack
