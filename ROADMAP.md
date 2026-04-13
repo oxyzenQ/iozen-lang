@@ -189,50 +189,108 @@
 
 ---
 
-## 🗓️ TIMELINE ESTIMATE
+## 🗓️ ACCELERATED TIMELINE (Updated April 2026)
 
-| Phase | Estimate | Status |
-|-------|----------|--------|
-| Core Language | 4 weeks | ✅ Done |
-| Advanced Features | 3 weeks | ✅ Done |
-| Type System | 2 weeks | ✅ Done |
-| **Compiler v2.0** | **4 weeks** | **✅ DONE** |
-| **Standard Library** | **3 weeks** | **🔄 Current** |
-| **Dev Tools** | **4 weeks** | **⏳ Planned** |
-| **v1.0 Release** | **Target: June 2026** | **🎯 On Track** |
+### ✅ Phase 1: Core Foundation (Week 1-8) - DONE
+| Week | Task | Status |
+|------|------|--------|
+| 1-4 | Interpreter (lexer, parser, runtime) | ✅ DONE |
+| 5-6 | Modules, Arrays, Structs | ✅ DONE |
+| 7-8 | Closures, Type Parser | ✅ DONE |
+
+### 🚀 Phase 2: Compiler Sprint (Week 9-12) - DONE (Early!)
+| Week | Task | Status | Note |
+|------|------|--------|------|
+| 9-10 | **Compiler v2.0** | ✅ DONE | **3 months → 2 weeks!** 🚀 |
+| 11 | Standard Library (String, Math, JSON) | ✅ DONE | |
+| 12 | Package Manager | ✅ DONE | iozen.json, init, install, list |
+
+### 📚 Phase 3: v1.0 Release Sprint (Week 13-16) - CURRENT
+| Week | Task | Target Date |
+|------|------|-------------|
+| 13-14 | **Documentation Sprint** | April 27 - May 10 |
+| 15 | Polish & Bug Fixes | May 11 - May 17 |
+| 16 | **v1.0 Release** 🎉 | **June 1, 2026** |
+
+### 📈 Post-v1.0 Roadmap (Month 7-12 becomes v1.x)
+| Version | Timeline | Features |
+|---------|----------|----------|
+| **v1.0** | **June 2026** | Core language, compiler, package manager, docs |
+| **v1.1** | July-Aug 2026 | Struct field access, closures in compiler, exceptions |
+| **v1.2** | Sep-Oct 2026 | LSP Server, formatter, debugger |
+| **v1.3** | Nov-Dec 2026 | Async/await, FFI, additional stdlib |
+
+### 🎯 Year 2: v2.0 Advanced (2027)
+| Version | Timeline | Features |
+|---------|----------|----------|
+| **v2.0** | Q2 2027 | LLVM backend, WASM target, advanced optimizations |
+| **v2.1** | Q3 2027 | Borrow checker, memory safety, formal verification |
+| **v2.2** | Q4 2027 | JIT compilation, profile-guided optimization |
 
 ---
 
-## 🚀 READY FOR v1.0?
+## 🚀 v1.0 MVP Checklist
 
-### Must Have (MVP)
+### Must Have (v1.0 - June 2026) 🎯
 - ✅ Core language working
-- ✅ Compiler producing binaries
-- ✅ Basic standard library
-- ✅ Package manager basics (iozen init, install, list)
-- ⏳ Documentation complete
+- ✅ Compiler producing native binaries
+- ✅ Basic standard library (File I/O, Math, JSON, Strings)
+- ✅ Package manager basics
+- ⏳ **Documentation complete** (Week 13-14)
 
-### Nice to Have (v1.1)
-- LLVM backend
-- LSP server
-- Advanced optimizations
-- WebAssembly target
+### v1.1 - Language Polish (July-Aug 2026)
+- 🔄 Struct field access (person.name)
+- 🔄 Exception handling (try/catch)
+- 🔄 Closures in compiled code
+- 🔄 Package publishing to registry
+
+### v1.2 - Dev Tools (Sep-Oct 2026)
+- 📋 LSP Server (autocomplete, goto-def)
+- 📋 Code formatter
+- 📋 Debugger with breakpoints
+- 📋 Linter/static analysis
+
+### v1.3 - Advanced Features (Nov-Dec 2026)
+- 📋 Async/await concurrency
+- 📋 FFI (call C libraries)
+- 📋 Extended stdlib (Date/Time, Random, Network)
 
 ---
 
-## 📝 NOTES
+## � Year 2: v2.0 Vision (2027)
 
-- **Current Focus**: Documentation & language refinements
-- **Blockers**: None - all systems working
-- **Strengths**: Solid foundation, working compiler, package manager done
-- **Next Big Win**: Complete documentation for v1.0
+### What "Month 7-12, Year 2" Became:
+```
+Original Plan (2025 roadmap):
+- Month 7-12: Type checking, borrow checker
+- Year 2: LLVM, advanced features
+
+NEW Reality:
+- ✅ Month 4-6: Already DONE! (we're here now)
+- 📋 v1.x (Month 7-12): Iterative improvements
+- 🚀 v2.0 (Year 2): LLVM + advanced compiler
+```
+
+### v2.0 Goals (2027):
+1. **LLVM Backend** - Better than C codegen
+2. **WebAssembly Target** - Run in browser
+3. **Self-Hosted** - IOZEN compiler written in IOZEN
+4. **Advanced Type System** - Full borrow checker
+5. **Enterprise Ready** - IDE support, debugging, profiling
 
 ---
 
-**We are 65% to v1.0 Release!** 🎉
+## 📝 CURRENT FOCUS
 
-**Package Manager is DONE!** Major milestone achieved! 🚀
+- **Week 13-14**: Documentation sprint (PRIORITY #1)
+- **Blockers**: None
+- **Strengths**: 3 months ahead of schedule! 🚀
+- **Next Big Win**: v1.0 Release June 2026
 
-**Compiler + Package Manager = Ecosystem Ready!**
+---
 
-Mau fokus ke mana sekarang? 😄
+**We are 65% to v1.0, but 85% of core work is DONE!** 🎉
+
+**The remaining 15% is documentation & polish.**
+
+**v1.0 June 2026 is REALISTIC!** �
