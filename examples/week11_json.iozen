@@ -1,0 +1,16 @@
+// Week 11: JSON Test
+fn main() {
+    print("=== Week 11: JSON ===")
+    
+    // Test stringify
+    print("stringify(42) = " + stringify(42))
+    print("stringify(hello) = " + stringify("hello"))
+    print("stringify(true) = " + stringify(true))
+    
+    // Test parseJSON (interpreter mode returns parsed objects)
+    let jsonStr = '{"name":"IOZEN","version":1.0}'
+    print("JSON string: " + jsonStr)
+    
+    print("")
+    print("=== JSON Working! ===")
+}

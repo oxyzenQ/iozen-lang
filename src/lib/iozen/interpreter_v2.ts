@@ -324,6 +324,46 @@ const BUILTINS: Record<string, (...args: any[]) => any> = {
   pi: () => Math.PI,
   e: () => Math.E,
 
+  // Week 11: JSON functions
+  parseJSON: (str: string) => {
+    try {
+      return JSON.parse(String(str));
+    } catch (e) {
+      return null;
+    }
+  },
+  stringify: (value: unknown) => {
+    try {
+      return JSON.stringify(value);
+    } catch (e) {
+      return 'null';
+    }
+  },
+
+  // Week 11: File I/O functions
+  readFile: (path: string) => {
+    try {
+      return require('fs').readFileSync(String(path), 'utf-8');
+    } catch (e) {
+      return null;
+    }
+  },
+  writeFile: (path: string, content: string) => {
+    try {
+      require('fs').writeFileSync(String(path), String(content));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+  exists: (path: string) => {
+    try {
+      return require('fs').existsSync(String(path));
+    } catch (e) {
+      return false;
+    }
+  },
+
   // Week 9: String functions
   contains: (str: string, substr: string) => String(str).includes(String(substr)),
   startsWith: (str: string, substr: string) => String(str).startsWith(String(substr)),
@@ -334,6 +374,18 @@ const BUILTINS: Record<string, (...args: any[]) => any> = {
   replace: (str: string, oldStr: string, newStr: string) => String(str).replace(String(oldStr), String(newStr)),
   repeat: (str: string, count: number) => String(str).repeat(Number(count)),
   charAt: (str: string, index: number) => String(str).charAt(Number(index)),
+
+  // Week 11: New string methods
+  split: (str: string, separator: string) => String(str).split(String(separator)),
+  join: (arr: string[], separator: string) => Array.isArray(arr) ? arr.join(String(separator)) : "",
+  substring: (str: string, start: number, end?: number) => {
+    const s = String(str);
+    const st = Number(start);
+    const en = end !== undefined ? Number(end) : s.length;
+    return s.substring(st, en);
+  },
+  indexOf: (str: string, search: string) => String(str).indexOf(String(search)),
+  lastIndexOf: (str: string, search: string) => String(str).lastIndexOf(String(search)),
 
   // Week 9: Array functions
   includes: (arr: any[], item: any) => Array.isArray(arr) ? arr.includes(item) : false,

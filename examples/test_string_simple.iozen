@@ -1,0 +1,24 @@
+// Simple string test
+fn main() {
+    print("=== Simple String Test ===")
+    
+    // Test 1: Just split
+    print("Test 1: split")
+    let text = "a,b,c"
+    let fruits = split(text, ",")
+    print("Split done")
+    
+    // Test 2: Just join
+    print("Test 2: join")
+    let words = ["Hello", "World"]
+    let sentence = join(words, " ")
+    print("Join done: " + sentence)
+    
+    // Test 3: Just indexOf
+    print("Test 3: indexOf")
+    let str = "Hello, World!"
+    let idx = indexOf(str, "World")
+    print("indexOf done: " + idx)
+    
+    print("=== Done ===")
+}

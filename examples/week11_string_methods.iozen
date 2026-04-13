@@ -1,0 +1,45 @@
+// Week 11: New String Methods Test
+fn main() {
+    print("=== Week 11: String Methods ===")
+    
+    // split()
+    print("")
+    print("Test 1: split()")
+    let text = "apple,banana,cherry"
+    let fruits = split(text, ",")
+    print("Split result:")
+    let i = 0
+    while (i < arrayLen(fruits)) {
+        print("  [" + i + "] = " + fruits[i])
+        i = i + 1
+    }
+    
+    // join()
+    print("")
+    print("Test 2: join()")
+    let words = ["Hello", "World", "IOZEN"]
+    let sentence = join(words, " ")
+    print("Joined: " + sentence)
+    
+    // substring()
+    print("")
+    print("Test 3: substring()")
+    let str = "Hello, World!"
+    print("substring(0, 5): " + substring(str, 0, 5))
+    print("substring(7): " + substring(str, 7))
+    
+    // indexOf()
+    print("")
+    print("Test 4: indexOf()")
+    print("indexOf('World'): " + indexOf(str, "World"))
+    print("indexOf('xyz'): " + indexOf(str, "xyz"))
+    
+    // lastIndexOf()
+    print("")
+    print("Test 5: lastIndexOf()")
+    let repeatStr = "abc abc abc"
+    print("lastIndexOf('abc'): " + lastIndexOf(repeatStr, "abc"))
+    
+    print("")
+    print("=== All String Methods Working! ===")
+}

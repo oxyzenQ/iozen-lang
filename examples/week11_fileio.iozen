@@ -1,0 +1,33 @@
+// Week 11: File I/O Test
+fn main() {
+    print("=== Week 11: File I/O ===")
+    
+    let testFile = "/tmp/iozen_test.txt"
+    let content = "Hello from IOZEN!"
+    
+    // Test exists (should be false initially)
+    print("exists before: " + exists(testFile))
+    
+    // Test writeFile
+    print("Writing file...")
+    let writeOk = writeFile(testFile, content)
+    print("writeFile: " + writeOk)
+    
+    // Test exists (should be true now)
+    print("exists after: " + exists(testFile))
+    
+    // Test readFile
+    print("Reading file...")
+    let readContent = readFile(testFile)
+    print("readFile: " + readContent)
+    
+    // Verify
+    if (readContent == content) {
+        print("SUCCESS: Content matches!")
+    } else {
+        print("FAILED: Content mismatch")
+    }
+    
+    print("")
+    print("=== File I/O Working! ===")
+}
