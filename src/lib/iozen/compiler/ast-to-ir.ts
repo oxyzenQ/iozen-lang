@@ -8,6 +8,7 @@ import { IRBuilder, createIRBuilder } from './ir';
 export class ASTToIR {
   private builder: IRBuilder;
   private variableTypes: Map<string, IRValue['type']> = new Map();
+  private loopLabels: { start: string; end: string }[] = [];
 
   constructor() {
     this.builder = createIRBuilder();
@@ -86,9 +87,9 @@ export class ASTToIR {
       case 'ReturnStatement':
         return this.genReturn(stmt);
       case 'BreakStatement':
+        return this.genBreak();
       case 'ContinueStatement':
-        // TODO: Implement loop control flow
-        return undefined;
+        return this.genContinue();
       case 'ExpressionStatement':
         return this.genExpression(stmt.expression);
       case 'TryStatement':
@@ -167,6 +168,9 @@ export class ASTToIR {
     const bodyLabel = this.builder.newLabel('while_body');
     const endLabel = this.builder.newLabel('while_end');
 
+    // Push loop labels for break/continue
+    this.loopLabels.push({ start: startLabel, end: endLabel });
+
     this.builder.emitLabel(startLabel);
     const cond = this.genExpression(stmt.condition);
     this.builder.emit({ op: 'if', src1: cond, label: bodyLabel, comment: `if ${cond} goto ${bodyLabel}` });
@@ -179,6 +183,9 @@ export class ASTToIR {
     this.builder.emitGoto(startLabel);
 
     this.builder.emitLabel(endLabel);
+
+    // Pop loop labels
+    this.loopLabels.pop();
     return undefined;
   }
 
@@ -198,6 +205,9 @@ export class ASTToIR {
     const startLabel = this.builder.newLabel('for');
     const bodyLabel = this.builder.newLabel('for_body');
     const endLabel = this.builder.newLabel('for_end');
+
+    // Push loop labels for break/continue
+    this.loopLabels.push({ start: startLabel, end: endLabel });
 
     // Check condition
     this.builder.emitLabel(startLabel);
@@ -220,6 +230,9 @@ export class ASTToIR {
     this.builder.emitGoto(startLabel);
 
     this.builder.emitLabel(endLabel);
+
+    // Pop loop labels
+    this.loopLabels.pop();
     return undefined;
   }
 
@@ -230,6 +243,24 @@ export class ASTToIR {
     } else {
       this.builder.emitRet();
     }
+    return undefined;
+  }
+
+  private genBreak(): string | undefined {
+    if (this.loopLabels.length === 0) {
+      throw new Error('Break statement outside of loop');
+    }
+    const labels = this.loopLabels[this.loopLabels.length - 1];
+    this.builder.emitGoto(labels.end);
+    return undefined;
+  }
+
+  private genContinue(): string | undefined {
+    if (this.loopLabels.length === 0) {
+      throw new Error('Continue statement outside of loop');
+    }
+    const labels = this.loopLabels[this.loopLabels.length - 1];
+    this.builder.emitGoto(labels.start);
     return undefined;
   }
 

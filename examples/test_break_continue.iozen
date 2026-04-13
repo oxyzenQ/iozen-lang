@@ -1,0 +1,42 @@
+// Test break and continue statements
+fn main() {
+    print("=== Break/Continue Test ===")
+    
+    // Test break
+    print("")
+    print("Test 1: Break at 5")
+    let i = 0
+    while (i < 10) {
+        if (i == 5) {
+            break
+        }
+        print("i = " + i)
+        i = i + 1
+    }
+    print("Broke at i = " + i)
+    
+    // Test continue
+    print("")
+    print("Test 2: Continue at odd numbers")
+    let j = 0
+    while (j < 5) {
+        j = j + 1
+        if (j % 2 == 1) {
+            continue
+        }
+        print("Even j = " + j)
+    }
+    
+    // Test break in for loop
+    print("")
+    print("Test 3: Break in for loop")
+    for (let k = 0; k < 100; k = k + 1) {
+        if (k == 3) {
+            break
+        }
+        print("k = " + k)
+    }
+    
+    print("")
+    print("=== Test Complete ===")
+}
