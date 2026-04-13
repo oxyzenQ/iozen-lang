@@ -129,8 +129,11 @@ export class MinimalTokenizer {
     const startCol = this.column;
     const char = this.peek();
 
-    // Comments
+    // Comments (both // and # styles)
     if (char === '/' && this.peekNext() === '/') {
+      return this.comment(startLine, startCol);
+    }
+    if (char === '#') {
       return this.comment(startLine, startCol);
     }
 
@@ -237,6 +240,16 @@ export class MinimalTokenizer {
 
   private comment(line: number, col: number): Token {
     let value = '';
+
+    // Skip the comment marker(s)
+    if (this.peek() === '/') {
+      // Skip //
+      this.advance();
+      this.advance();
+    } else if (this.peek() === '#') {
+      // Skip #
+      this.advance();
+    }
 
     while (!this.isAtEnd() && this.peek() !== '\n') {
       value += this.advance();

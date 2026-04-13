@@ -353,17 +353,17 @@ async function cmdInit(args: string[]) {
 
   // Overwrite the default index.iozen with our main.iozen template
   const mainCode = `# ${projectName} — IOZEN Project
-# Created with IOZEN CLI v${VERSION}
+# Created with IOZEN CLI ${VERSION}
 
-print "Hello, World from ${projectName}!"
+print("Hello, World from ${projectName}!")
 
 create variable version as text with value "${VERSION}"
-print "Running on IOZEN v" attach version
+print("Running on IOZEN version " attach version)
 
 # Try writing your own code below:
 create variable x as integer with value 10
 create variable y as integer with value 20
-print x attach " + " attach y attach " = " attach x + y
+print(x attach " + " attach y attach " = " attach x + y)
 `;
   await writeFile(join(projectDir, "main.iozen"), mainCode);
 
