@@ -1,6 +1,6 @@
 {
   "name": "iozen-lang",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "IOZEN — Safe, expressive systems programming language with natural syntax",
   "license": "MIT",
   "bin": {
