@@ -1,0 +1,39 @@
+// Test array operations compilation
+fn main() {
+    print("=== Array Operations Test ===")
+    
+    // Array literal
+    print("Test 1: Array literal")
+    let arr = [1, 2, 3, 4, 5]
+    print("Array created with 5 elements")
+    
+    // Array index access
+    print("")
+    print("Test 2: Array index access")
+    print("arr[0] = " + arr[0])
+    print("arr[2] = " + arr[2])
+    print("arr[4] = " + arr[4])
+    
+    // Array assignment
+    print("")
+    print("Test 3: Array assignment")
+    arr[0] = 100
+    print("After arr[0] = 100:")
+    print("arr[0] = " + arr[0])
+    
+    // Array length
+    print("")
+    print("Test 4: Array length")
+    print("Length of arr: " + arrayLen(arr))
+    
+    // Array push
+    print("")
+    print("Test 5: Array push")
+    arr = push(arr, 6)
+    arr = push(arr, 7)
+    print("After push, length: " + arrayLen(arr))
+    print("New elements: " + arr[5] + ", " + arr[6])
+    
+    print("")
+    print("=== Test Complete ===")
+}

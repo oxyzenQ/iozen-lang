@@ -396,9 +396,16 @@ export class ASTToIR {
   }
 
   private genArrayLiteral(expr: AST.ArrayLiteral): string {
-    // TODO: Proper array literal handling
+    // Create array and push all elements
     const result = this.builder.newTemp('ptr');
     this.builder.emit({ op: 'array', dest: result, comment: 'array literal' });
+
+    // Push each element
+    for (const elem of expr.elements) {
+      const elemValue = this.genExpression(elem);
+      this.builder.emit({ op: 'array_push', src1: result, src2: elemValue, comment: `push ${elemValue} to ${result}` });
+    }
+
     return result;
   }
 
