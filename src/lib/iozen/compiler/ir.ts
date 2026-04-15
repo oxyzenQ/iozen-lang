@@ -11,6 +11,7 @@ export type IROp =
   | 'call' | 'ret'
   | 'label' | 'goto' | 'if' | 'if_not'
   | 'print' | 'array' | 'array_push' | 'index' | 'field'
+  | 'struct_alloc' | 'field_store'
   | 'phi';
 
 export interface IRValue {
@@ -39,10 +40,16 @@ export interface IRFunction {
   labels: Set<string>;
 }
 
+export interface IRStructDef {
+  name: string;
+  fields: { name: string; type: IRValue['type'] }[];
+}
+
 export interface IRProgram {
   functions: IRFunction[];
   globals: Map<string, { type: IRValue['type']; init?: any }>;
   strings: Map<string, string>; // String literals for deduplication
+  structs: Map<string, IRStructDef>; // Struct type definitions
 }
 
 // IR Builder for constructing IR
@@ -53,7 +60,8 @@ export class IRBuilder {
   private program: IRProgram = {
     functions: [],
     globals: new Map(),
-    strings: new Map()
+    strings: new Map(),
+    structs: new Map()
   };
 
   newFunction(name: string, returnType: IRValue['type'] = 'void'): IRFunction {
@@ -145,6 +153,18 @@ export class IRBuilder {
     this.emit({ op: 'print', src1: value, comment: `print ${value}` });
   }
 
+  emitFieldLoad(dest: string, obj: string, field: string) {
+    this.emit({ op: 'field', dest, src1: obj, label: field, comment: `${dest} = ${obj}.${field}` });
+  }
+
+  emitFieldStore(obj: string, field: string, value: string) {
+    this.emit({ op: 'field_store', src1: obj, label: field, src2: value, comment: `${obj}.${field} = ${value}` });
+  }
+
+  emitStructAlloc(dest: string, structName: string) {
+    this.emit({ op: 'struct_alloc', dest, src1: structName, comment: `${dest} = alloc ${structName}` });
+  }
+
   getProgram(): IRProgram {
     return this.program;
   }
@@ -153,7 +173,8 @@ export class IRBuilder {
     this.program = {
       functions: [],
       globals: new Map(),
-      strings: new Map()
+      strings: new Map(),
+      structs: new Map()
     };
     this.currentFunction = null;
     this.tempCounter = 0;

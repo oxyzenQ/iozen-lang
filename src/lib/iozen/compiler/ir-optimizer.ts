@@ -490,6 +490,10 @@ export class IROptimizer {
           markUsed(inst.src2); break;
         case 'array_push':
           markUsed(inst.src1); markUsed(inst.src2); break;
+        case 'field':
+          markUsed(inst.src1); break;
+        case 'field_store':
+          markUsed(inst.src1); markUsed(inst.src2); break;
         default: break;
       }
     }
@@ -564,6 +568,7 @@ export class IROptimizer {
       case 'label': case 'goto': case 'if': case 'if_not':
       case 'ret': case 'print': case 'call': case 'store':
       case 'array': case 'array_push':
+      case 'struct_alloc': case 'field_store':
         return true;
       default:
         return false;

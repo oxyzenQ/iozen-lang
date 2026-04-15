@@ -63,7 +63,8 @@ export type TokenType =
   | 'PIPEPIPE'     // ||
   | 'TRUE'         // true
   | 'FALSE'        // false
-  | 'BANG';        // !
+  | 'BANG'         // !
+  | 'STRUCT';      // struct
 
 export interface Token {
   type: TokenType;
@@ -102,6 +103,7 @@ const KEYWORDS: Record<string, TokenType> = {
   'match': 'MATCH',
   'true': 'TRUE',
   'false': 'FALSE',
+  'struct': 'STRUCT',
 };
 
 export class MinimalTokenizer {

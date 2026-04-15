@@ -1,6 +1,6 @@
 // C Backend - Converts IOZEN IR to C Code
 
-import type { IRFunction, IRInstruction, IRProgram, IRValue } from './ir';
+import type { IRFunction, IRInstruction, IRProgram, IRValue, IRStructDef } from './ir';
 
 // C reserved keywords that might conflict with IOZEN identifiers
 const C_KEYWORDS = new Set([
@@ -93,6 +93,28 @@ export class CBackend {
     this.emitLine('  int capacity;');
     this.emitLine('} iz_array_t;');
     this.emitLine('');
+
+    // Generic struct type (dynamic fields)
+    this.emitLine('typedef struct iz_struct_field {');
+    this.emitLine('  char* name;');
+    this.emitLine('  iz_value_t value;');
+    this.emitLine('  struct iz_struct_field* next;');
+    this.emitLine('} iz_struct_field_t;');
+    this.emitLine('');
+    this.emitLine('typedef struct iz_struct {');
+    this.emitLine('  char* type_name;');
+    this.emitLine('  iz_struct_field_t* fields;');
+    this.emitLine('} iz_struct_t;');
+    this.emitLine('');
+
+    // Named struct C typedefs
+    if (program.structs.size > 0) {
+      this.emitLine('// Named struct type forward declarations');
+      for (const [name, def] of program.structs) {
+        this.emitLine(`typedef struct iz_${name} iz_${name}_t;`);
+      }
+      this.emitLine('');
+    }
 
     // String literals (collected in Phase 1)
     if (this.stringLiterals.size > 0) {
@@ -448,7 +470,28 @@ export class CBackend {
         break;
 
       case 'field':
-        // TODO: Struct field access
+        // Struct field load: dest = obj.field
+        if (inst.dest && inst.src1 && inst.label) {
+          this.output.push(`${indent}{`);
+          this.output.push(`${indent}  iz_struct_t* __s = ${this.emitOperand(inst.src1)}.data.structure;`);
+          this.output.push(`${indent}  iz_value_t __fv = iz_struct_get(__s, "${inst.label}");`);
+          this.output.push(`${indent}  ${inst.dest} = __fv;`);
+          this.output.push(`${indent}}`);
+        }
+        break;
+
+      case 'field_store':
+        // Struct field store: obj.field = value
+        if (inst.src1 && inst.label && inst.src2) {
+          this.output.push(`${indent}iz_struct_set(${this.emitOperand(inst.src1)}.data.structure, "${inst.label}", ${this.emitOperand(inst.src2)});`);
+        }
+        break;
+
+      case 'struct_alloc':
+        // Allocate a new struct: dest = struct_alloc(typeName)
+        if (inst.dest && inst.src1) {
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_STRUCT, .data.structure = iz_struct_new("${inst.src1}") };`);
+        }
         break;
 
       case 'phi':
@@ -483,6 +526,9 @@ export class CBackend {
     this.emitLine('      break;');
     this.emitLine('    case IZ_BOOL:');
     this.emitLine('      printf("%s\\n", value.data.boolean ? "true" : "false");');
+    this.emitLine('      break;');
+    this.emitLine('    case IZ_STRUCT:');
+    this.emitLine('      printf("<%s struct>\\n", value.data.structure ? value.data.structure->type_name : "?");');
     this.emitLine('      break;');
     this.emitLine('    default:');
     this.emitLine('      printf("null\\n");');
@@ -792,6 +838,43 @@ export class CBackend {
     this.emitLine('    strcpy(buf, "null");');
     this.emitLine('  }');
     this.emitLine('  return (iz_value_t){ .type = IZ_STRING, .data.string = buf };');
+    this.emitLine('}');
+    this.emitLine('');
+
+    // Struct operations
+    this.emitLine('// Struct operations (dynamic field map)');
+    this.emitLine('iz_struct_t* iz_struct_new(const char* type_name) {');
+    this.emitLine('  iz_struct_t* s = malloc(sizeof(iz_struct_t));');
+    this.emitLine('  s->type_name = strdup(type_name);');
+    this.emitLine('  s->fields = NULL;');
+    this.emitLine('  return s;');
+    this.emitLine('}');
+    this.emitLine('');
+    this.emitLine('void iz_struct_set(iz_struct_t* s, const char* field_name, iz_value_t value) {');
+    this.emitLine('  if (!s) return;');
+    this.emitLine('  iz_struct_field_t* f = s->fields;');
+    this.emitLine('  while (f) {');
+    this.emitLine('    if (strcmp(f->name, field_name) == 0) {');
+    this.emitLine('      f->value = value;');
+    this.emitLine('      return;');
+    this.emitLine('    }');
+    this.emitLine('    f = f->next;');
+    this.emitLine('  }');
+    this.emitLine('  f = malloc(sizeof(iz_struct_field_t));');
+    this.emitLine('  f->name = strdup(field_name);');
+    this.emitLine('  f->value = value;');
+    this.emitLine('  f->next = s->fields;');
+    this.emitLine('  s->fields = f;');
+    this.emitLine('}');
+    this.emitLine('');
+    this.emitLine('iz_value_t iz_struct_get(iz_struct_t* s, const char* field_name) {');
+    this.emitLine('  if (!s) return (iz_value_t){ .type = IZ_NULL };');
+    this.emitLine('  iz_struct_field_t* f = s->fields;');
+    this.emitLine('  while (f) {');
+    this.emitLine('    if (strcmp(f->name, field_name) == 0) return f->value;');
+    this.emitLine('    f = f->next;');
+    this.emitLine('  }');
+    this.emitLine('  return (iz_value_t){ .type = IZ_NULL };');
     this.emitLine('}');
     this.emitLine('');
 

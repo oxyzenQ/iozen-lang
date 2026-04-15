@@ -123,6 +123,8 @@ export type Statement =
   | ExpressionStatement
   | VariableDeclaration
   | AssignmentStatement
+  | FieldAssignment
+  | StructDeclaration
   | IfStatement
   | WhileStatement
   | ForStatement
@@ -201,6 +203,7 @@ export interface ArrayLiteral {
 
 export interface StructLiteral {
   type: 'StructLiteral';
+  name: string;  // struct type name (e.g., "Point")
   fields: { name: string; value: Expression }[];
 }
 
@@ -214,6 +217,19 @@ export interface FieldAccess {
   type: 'FieldAccess';
   object: Expression;
   field: string;
+}
+
+export interface FieldAssignment {
+  type: 'FieldAssignment';
+  object: Expression;
+  field: string;
+  value: Expression;
+}
+
+export interface StructDeclaration {
+  type: 'StructDeclaration';
+  name: string;
+  fields: { name: string; typeName: string }[];
 }
 
 export class MinimalParser {
@@ -311,6 +327,33 @@ export class MinimalParser {
         this.match('NEWLINE'); // Optional newline
         return { type: 'AssignmentStatement', name, value };
       }
+      // Field assignment: expr.field = value
+      // Look ahead for IDENT DOT IDENT EQ
+      if (nextPos < this.tokens.length && this.tokens[nextPos].type === 'DOT') {
+        const dotNext = nextPos + 1;
+        if (dotNext < this.tokens.length && this.tokens[dotNext].type === 'IDENT') {
+          const eqPos = dotNext + 1;
+          if (eqPos < this.tokens.length && this.tokens[eqPos].type === 'EQ') {
+            const objName = this.consume('IDENT', 'Expected object name').value;
+            this.consume('DOT', 'Expected "."');
+            const fieldName = this.consume('IDENT', 'Expected field name').value;
+            this.consume('EQ', 'Expected "=" in field assignment');
+            const value = this.parseExpression();
+            this.match('NEWLINE');
+            return {
+              type: 'FieldAssignment',
+              object: { type: 'Identifier', name: objName },
+              field: fieldName,
+              value
+            };
+          }
+        }
+      }
+    }
+
+    // Struct declaration
+    if (this.check('STRUCT')) {
+      return this.parseStructDeclaration();
     }
 
     // Function declaration
@@ -528,6 +571,49 @@ export class MinimalParser {
     return {
       type: 'ThrowStatement',
       value
+    };
+  }
+
+  private parseStructDeclaration(): StructDeclaration {
+    this.consume('STRUCT', 'Expected "struct"');
+    const name = this.consume('IDENT', 'Expected struct name').value;
+    this.consume('LBRACE', 'Expected "{" after struct name');
+
+    const fields: { name: string; typeName: string }[] = [];
+    while (!this.check('RBRACE') && !this.isAtEnd()) {
+      // Skip optional newlines
+      while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
+      if (this.check('RBRACE') || this.isAtEnd()) break;
+
+      const fieldName = this.consume('IDENT', 'Expected field name').value;
+      this.consume('COLON', 'Expected ":" after field name');
+      // Parse type annotation
+      let typeName = 'any';
+      if (this.check('NUMBER_TYPE')) {
+        this.advance();
+        typeName = 'number';
+      } else if (this.check('STRING_TYPE')) {
+        this.advance();
+        typeName = 'string';
+      } else if (this.check('BOOL_TYPE')) {
+        this.advance();
+        typeName = 'bool';
+      } else if (this.check('IDENT')) {
+        typeName = this.advance().value; // Could be a struct type name
+      } else {
+        throw new ParseError(`Expected type after field "${fieldName}"`, this.peek().line, this.peek().column);
+      }
+      fields.push({ name: fieldName, typeName });
+      // Skip optional comma or newline
+      this.match('COMMA');
+      this.match('NEWLINE');
+    }
+
+    this.consume('RBRACE', 'Expected "}" after struct fields');
+    return {
+      type: 'StructDeclaration',
+      name,
+      fields
     };
   }
 
@@ -838,7 +924,7 @@ export class MinimalParser {
       return { type: 'ArrayLiteral', elements };
     }
 
-    // Struct literal: { name: "John", age: 30 }
+    // Anonymous struct literal: { name: "John", age: 30 }
     if (this.match('LBRACE')) {
       // Check if this is a struct literal (has colons) or a block
       if (this.check('IDENT') && this.peekNext('COLON')) {
@@ -852,7 +938,7 @@ export class MinimalParser {
         } while (this.match('COMMA'));
 
         this.consume('RBRACE', 'Expected "}" after struct fields');
-        return { type: 'StructLiteral', fields };
+        return { type: 'StructLiteral', name: '', fields };
       }
 
       // It's a block - but we're in expression context, this is an error
@@ -877,6 +963,21 @@ export class MinimalParser {
           const index = this.parseExpression();
           this.consume('RBRACKET', 'Expected "]" after index');
           expr = { type: 'ArrayAccess', array: expr, index };
+        } else if (this.match('LBRACE') && expr.type === 'Identifier') {
+          // Named struct instantiation: Point { x: 10, y: 20 }
+          if (this.check('IDENT') && this.peekNext('COLON')) {
+            const fields: { name: string; value: Expression }[] = [];
+            do {
+              const fieldName = this.consume('IDENT', 'Expected field name').value;
+              this.consume('COLON', 'Expected ":" after field name');
+              const fieldValue = this.parseExpression();
+              fields.push({ name: fieldName, value: fieldValue });
+            } while (this.match('COMMA'));
+            this.consume('RBRACE', 'Expected "}" after struct fields');
+            expr = { type: 'StructLiteral', name: expr.name, fields };
+          } else {
+            throw new ParseError('Expected field: value in struct literal', this.peek().line, this.peek().column);
+          }
         } else if (this.match('DOT')) {
           // Field access: obj.field
           const fieldName = this.consume('IDENT', 'Expected field name after "."').value;
@@ -965,8 +1066,9 @@ export class MinimalParser {
   }
 
   private peekNext(expectedType: TokenType): boolean {
-    if (this.isAtEnd()) return false;
-    return this.tokens[this.position].type === expectedType;
+    const nextPos = this.position + 1;
+    if (nextPos >= this.tokens.length) return false;
+    return this.tokens[nextPos].type === expectedType;
   }
 
   private previous(): Token {

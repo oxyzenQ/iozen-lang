@@ -2,12 +2,13 @@
 // Converts IOZEN AST to Intermediate Representation
 
 import type * as AST from '../parser_v2';
-import type { IRProgram, IRValue } from './ir';
+import type { IRProgram, IRValue, IRStructDef } from './ir';
 import { IRBuilder, createIRBuilder } from './ir';
 
 export class ASTToIR {
   private builder: IRBuilder;
   private variableTypes: Map<string, IRValue['type']> = new Map();
+  private structDefs: Map<string, { fields: { name: string; typeName: string }[] }> = new Map();
   private loopLabels: { start: string; end: string }[] = [];
 
   constructor() {
@@ -17,10 +18,20 @@ export class ASTToIR {
   generate(program: AST.Program): IRProgram {
     this.builder.reset();
     this.variableTypes.clear();
+    this.structDefs.clear();
 
     // Process all statements at program level
     for (const stmt of program.body) {
       this.processGlobalStatement(stmt);
+    }
+
+    // Register struct definitions in IR program
+    for (const [name, def] of this.structDefs) {
+      const irDef: IRStructDef = {
+        name,
+        fields: def.fields.map(f => ({ name: f.name, type: this.mapType(f.typeName) }))
+      };
+      this.builder.getProgram().structs.set(name, irDef);
     }
 
     return this.builder.getProgram();
@@ -36,6 +47,10 @@ export class ASTToIR {
         const type = this.mapType(stmt.typeAnnotation);
         this.variableTypes.set(stmt.name, type);
         // Globals will be initialized in main or as statics
+        break;
+      case 'StructDeclaration':
+        // Register struct definition for type tracking
+        this.structDefs.set(stmt.name, { fields: stmt.fields });
         break;
       default:
         // Other global statements go into main function
@@ -100,6 +115,8 @@ export class ASTToIR {
       case 'ExportStatement':
         // TODO: Module system
         return undefined;
+      case 'FieldAssignment':
+        return this.genFieldAssignment(stmt as AST.FieldAssignment);
       default:
         return undefined;
     }
@@ -477,9 +494,16 @@ export class ASTToIR {
   }
 
   private genStructLiteral(expr: AST.StructLiteral): string {
-    // TODO: Proper struct literal handling
+    // Allocate struct
     const result = this.builder.newTemp('ptr');
-    this.builder.emit({ op: 'load', dest: result, comment: 'struct literal' });
+    this.builder.emitStructAlloc(result, expr.name || '__anon');
+
+    // Store each field
+    for (const field of expr.fields) {
+      const value = this.genExpression(field.value);
+      this.builder.emitFieldStore(result, field.name, value);
+    }
+
     return result;
   }
 
@@ -494,8 +518,15 @@ export class ASTToIR {
   private genFieldAccess(expr: AST.FieldAccess): string {
     const obj = this.genExpression(expr.object);
     const result = this.builder.newTemp('ptr');
-    this.builder.emit({ op: 'field', dest: result, src1: obj, comment: `${result} = ${obj}.${expr.field}` });
+    this.builder.emitFieldLoad(result, obj, expr.field);
     return result;
+  }
+
+  private genFieldAssignment(stmt: AST.FieldAssignment): string {
+    const obj = this.genExpression(stmt.object);
+    const value = this.genExpression(stmt.value);
+    this.builder.emitFieldStore(obj, stmt.field, value);
+    return obj;
   }
 
   private mapType(type: string | null | undefined): IRValue['type'] {
@@ -508,7 +539,11 @@ export class ASTToIR {
       case 'array': return 'ptr';
       case 'function': return 'ptr';
       case 'any': return 'ptr';
-      default: return 'ptr';
+      default: {
+        // Check if it's a known struct type
+        if (this.structDefs.has(type)) return 'ptr';
+        return 'ptr';
+      }
     }
   }
 
@@ -550,6 +585,7 @@ export class ASTToIR {
         return 'ptr';
       }
       case 'ArrayLiteral': return 'ptr';
+      case 'StructLiteral': return 'ptr';
       default: return 'ptr';
     }
   }
