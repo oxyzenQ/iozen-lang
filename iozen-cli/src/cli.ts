@@ -12,7 +12,7 @@
 
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, isAbsolute } from "node:path";
 import { Interpreter, Lexer, ParseError, Parser } from "../../src/lib/iozen";
 
 // ---- ANSI Colors (no external dependency) ----
@@ -33,7 +33,7 @@ const C = {
 };
 
 // ---- Version ----
-const VERSION = "0.1.0";
+const VERSION = "1.1.0";
 
 // ---- Main Entry ----
 async function main() {
@@ -218,42 +218,41 @@ async function cmdCompile(args: string[]) {
     log(`${C.cyan}⚙  Compiling ${C.white}${basename(filePath)}${C.reset}`);
 
     // Compile using the new compiler
-    const { compileToC } = await import('../../src/lib/iozen/compiler');
-    const cCode = compileToC(source);
-
-    // Write output
-    writeFileSync(outputPath, cCode);
-
-    log(`${C.green}  ✔ Generated ${target === 'c' ? 'C code' : 'binary'}: ${outputPath}${C.reset}`);
+    const { compile } = await import('../../src/lib/iozen/compiler');
 
     if (target === 'binary') {
-      // Compile C to binary using gcc or clang
-      const binPath = join(outDir, outputName);
-      const cc = process.env.CC || 'gcc';
-      const ccArgs = ['-o', binPath, outputPath, '-lm'];
+      // Full pipeline: IOZEN → C → Binary
+      const binPath = isAbsolute(outputName) ? outputName : join(outDir, outputName);
+      const result = compile(source, { target: 'binary', outputFile: binPath });
 
-      log(`${C.dim}  🛠  Running: ${cc} ${ccArgs.join(' ')}${C.reset}`);
-
-      const proc = Bun.spawn([cc, ...ccArgs], {
-        cwd: outDir,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-
-      const exitCode = await proc.exited;
-
-      if (exitCode !== 0) {
-        const stderr = await new Response(proc.stderr).text();
-        error(`Compilation failed:\n${stderr}`);
+      if (!result.success) {
+        for (const err of result.errors) {
+          error(err);
+        }
         process.exit(1);
       }
 
-      // Clean up .c file if binary compilation succeeded
-      try {
-        unlinkSync(outputPath);
-      } catch { }
+      // Also save the C code for debugging
+      const cPath = isAbsolute(outputName) ? `${outputName}.c` : join(outDir, `${outputName}.c`);
+      if (result.output) {
+        writeFileSync(cPath, result.output);
+        log(`${C.dim}  💾 C source saved: ${cPath}${C.reset}`);
+      }
 
-      log(`${C.green}  ✔ Binary: ${binPath}${C.reset}`);
+      log(`${C.green}  ✔ Binary: ${result.binaryPath}${C.reset}`);
+    } else {
+      // C output only
+      const result = compile(source, { target: 'c' });
+
+      if (!result.success) {
+        for (const err of result.errors) {
+          error(err);
+        }
+        process.exit(1);
+      }
+
+      writeFileSync(outputPath, result.output || '');
+      log(`${C.green}  ✔ Generated C code: ${outputPath}${C.reset}`);
     }
 
   } catch (e) {

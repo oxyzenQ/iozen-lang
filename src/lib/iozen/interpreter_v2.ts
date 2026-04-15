@@ -698,6 +698,21 @@ export class MinimalInterpreter {
       case 'NumberLiteral':
         return expr.value;
 
+      case 'BooleanLiteral':
+        return expr.value;
+
+      case 'UnaryExpression':
+        const operand = this.evaluateExpression(expr.operand);
+        if (expr.operator === '-') return -Number(operand);
+        if (expr.operator === '!') return !this.isTruthy(operand);
+        return `[unsupported unary: ${expr.operator}]`;
+
+      case 'LogicalExpression':
+        const lval = this.evaluateExpression(expr.left);
+        if (expr.operator === '&&') return this.isTruthy(lval) ? this.evaluateExpression(expr.right) : lval;
+        if (expr.operator === '||') return this.isTruthy(lval) ? lval : this.evaluateExpression(expr.right);
+        return `[unsupported logical: ${expr.operator}]`;
+
       case 'Identifier':
         return this.context.getVariable(expr.name) ?? `[unknown:${expr.name}]`;
 

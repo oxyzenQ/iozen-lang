@@ -47,6 +47,7 @@ export type TokenType =
   | 'LTEQ'         // <=
   | 'GTEQ'         // >=
   | 'COMMA'        // ,
+  | 'SEMICOLON'    // ;
   | 'NEWLINE'      // \n
   | 'EOF'          // end of file
   | 'COMMENT'      // // ...
@@ -57,7 +58,12 @@ export type TokenType =
   | 'BOOL_TYPE'    // bool
   | 'ANY_TYPE'     // any
   | 'VOID_TYPE'    // void
-  | 'MATCH';       // match
+  | 'MATCH'        // match
+  | 'AMPAMP'       // &&
+  | 'PIPEPIPE'     // ||
+  | 'TRUE'         // true
+  | 'FALSE'        // false
+  | 'BANG';        // !
 
 export interface Token {
   type: TokenType;
@@ -94,6 +100,8 @@ const KEYWORDS: Record<string, TokenType> = {
   'any': 'ANY_TYPE',
   'void': 'VOID_TYPE',
   'match': 'MATCH',
+  'true': 'TRUE',
+  'false': 'FALSE',
 };
 
 export class MinimalTokenizer {
@@ -153,6 +161,14 @@ export class MinimalTokenizer {
     }
 
     // Two-character operators
+    if (char === '&' && this.peekNext() === '&') {
+      this.advance(); this.advance();
+      return { type: 'AMPAMP', value: '&&', line: startLine, column: startCol };
+    }
+    if (char === '|' && this.peekNext() === '|') {
+      this.advance(); this.advance();
+      return { type: 'PIPEPIPE', value: '||', line: startLine, column: startCol };
+    }
     if (char === '=' && this.peekNext() === '=') {
       this.advance(); this.advance();
       return { type: 'EQEQ', value: '==', line: startLine, column: startCol };
@@ -189,6 +205,9 @@ export class MinimalTokenizer {
       case '<': this.advance(); return { type: 'LT', value: '<', line: startLine, column: startCol };
       case '>': this.advance(); return { type: 'GT', value: '>', line: startLine, column: startCol };
       case ',': this.advance(); return { type: 'COMMA', value: ',', line: startLine, column: startCol };
+      case ';': this.advance(); return { type: 'SEMICOLON', value: ';', line: startLine, column: startCol };
+      case '!': this.advance(); return { type: 'BANG', value: '!', line: startLine, column: startCol };
+      case '=': this.advance(); return { type: 'EQ', value: '=', line: startLine, column: startCol };
       case '\n':
         this.advance();
         this.line++;
@@ -204,26 +223,40 @@ export class MinimalTokenizer {
   private string(line: number, col: number): Token {
     let value = '';
     this.advance(); // consume opening "
-
     while (!this.isAtEnd() && this.peek() !== '"') {
-      value += this.advance();
+      if (this.peek() === '\\') {
+        this.advance(); // consume backslash
+        const next = this.advance();
+        switch (next) {
+          case 'n': value += '\n'; break;
+          case 't': value += '\t'; break;
+          case '"': value += '"'; break;
+          case '\\': value += '\\'; break;
+          default: value += '\\' + next; break;
+        }
+      } else {
+        value += this.advance();
+      }
     }
-
     if (this.isAtEnd()) {
       throw new Error(`Unterminated string at line ${line}, col ${col}`);
     }
-
     this.advance(); // consume closing "
     return { type: 'STRING', value, line, column: col };
   }
 
   private number(line: number, col: number): Token {
     let value = '';
-
     while (!this.isAtEnd() && this.isDigit(this.peek())) {
       value += this.advance();
     }
-
+    // Handle decimal point
+    if (!this.isAtEnd() && this.peek() === '.' && this.isDigit(this.peekNext())) {
+      value += this.advance(); // consume '.'
+      while (!this.isAtEnd() && this.isDigit(this.peek())) {
+        value += this.advance();
+      }
+    }
     return { type: 'NUMBER', value, line, column: col };
   }
 

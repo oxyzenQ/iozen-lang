@@ -2,6 +2,21 @@
 
 import type { IRFunction, IRInstruction, IRProgram, IRValue } from './ir';
 
+// C reserved keywords that might conflict with IOZEN identifiers
+const C_KEYWORDS = new Set([
+  'auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do',
+  'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if',
+  'inline', 'int', 'long', 'register', 'restrict', 'return', 'short',
+  'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef', 'union',
+  'unsigned', 'void', 'volatile', 'while', '_Bool', '_Complex', '_Imaginary',
+]);
+
+/** Mangle an IOZEN identifier to a safe C identifier */
+function mangleName(name: string): string {
+  if (C_KEYWORDS.has(name)) return `iz_${name}`;
+  return name;
+}
+
 export class CBackend {
   private output: string[] = [];
   private indent = 0;
@@ -43,6 +58,7 @@ export class CBackend {
     this.emitLine('#include <string.h>');
     this.emitLine('#include <math.h>');
     this.emitLine('#include <stdbool.h>');
+    this.emitLine('#include <sys/stat.h>');
     this.emitLine('');
 
     // IOZEN Value Type (union for dynamic typing)
@@ -109,20 +125,51 @@ export class CBackend {
     // Function implementations (use pre-generated bodies)
     this.output.push(functionBodies);
 
+    // Auto-generate main() if not present
+    if (!program.functions.some(f => f.name === 'main')) {
+      this.emitLine('');
+      this.emitLine('// Auto-generated main entry point');
+      this.emitLine('int main(void) {');
+      this.indent++;
+      // Call all user-defined functions as potential entry points
+      for (const func of program.functions) {
+        this.emitLine(`${mangleName(func.name)}();`);
+      }
+      this.emitLine('return 0;');
+      this.indent--;
+      this.emitLine('}');
+      this.emitLine('');
+    }
+
     return this.output.join('\n');
   }
 
+  private isMainFunction(func: IRFunction): boolean {
+    return func.name === 'main';
+  }
+
+  private hasMainFunction(program: IRProgram): boolean {
+    return program.functions.some(f => f.name === 'main');
+  }
+
   private emitFunctionDecl(func: IRFunction) {
-    const params = func.params.map(p => `iz_value_t ${p.name}`).join(', ');
-    const returnType = func.returnType === 'void' ? 'void' : 'iz_value_t';
-    this.emitLine(`${returnType} ${func.name}(${params});`);
+    if (this.isMainFunction(func)) {
+      this.emitLine(`int ${mangleName(func.name)}(void);`);
+    } else {
+      const params = func.params.map(p => `iz_value_t ${p.name}`).join(', ');
+      const returnType = func.returnType === 'void' ? 'void' : 'iz_value_t';
+      this.emitLine(`${returnType} ${mangleName(func.name)}(${params});`);
+    }
   }
 
   private emitFunction(func: IRFunction) {
-    const params = func.params.map(p => `iz_value_t ${p.name}`).join(', ');
-    const returnType = func.returnType === 'void' ? 'void' : 'iz_value_t';
-
-    this.emitLine(`${returnType} ${func.name}(${params}) {`);
+    if (this.isMainFunction(func)) {
+      this.emitLine(`int ${mangleName(func.name)}(void) {`);
+    } else {
+      const params = func.params.map(p => `iz_value_t ${p.name}`).join(', ');
+      const returnType = func.returnType === 'void' ? 'void' : 'iz_value_t';
+      this.emitLine(`${returnType} ${mangleName(func.name)}(${params}) {`);
+    }
     this.indent++;
 
     // Local variable declarations
@@ -141,14 +188,38 @@ export class CBackend {
       this.emitInstruction(inst);
     }
 
-    // Ensure return if void and no explicit return
-    if (func.returnType === 'void' && !this.hasExplicitReturn(func)) {
+    // Ensure proper return
+    if (this.isMainFunction(func) && !this.hasExplicitReturn(func)) {
+      this.emitLine('return 0;');
+    } else if (func.returnType === 'void' && !this.hasExplicitReturn(func)) {
       this.emitLine('return;');
     }
 
     this.indent--;
     this.emitLine('}');
     this.emitLine('');
+  }
+
+  /** Convert an IR operand (string variable name or IRValue object) to C code */
+  private emitOperand(operand: any): string {
+    if (typeof operand === 'string') {
+      return operand;
+    }
+    if (operand && typeof operand === 'object' && operand.type) {
+      switch (operand.type) {
+        case 'number':
+          return `(iz_value_t){ .type = IZ_NUMBER, .data.number = ${operand.value} }`;
+        case 'string': {
+          const strId = this.addStringLiteral(String(operand.value));
+          return `(iz_value_t){ .type = IZ_STRING, .data.string = (char*)${strId} }`;
+        }
+        case 'bool':
+          return `(iz_value_t){ .type = IZ_BOOL, .data.boolean = ${operand.value} }`;
+        default:
+          return `(iz_value_t){ .type = IZ_NULL }`;
+      }
+    }
+    return String(operand);
   }
 
   private emitInstruction(inst: IRInstruction) {
@@ -179,13 +250,13 @@ export class CBackend {
 
       case 'load':
         if (inst.dest && inst.src1) {
-          this.output.push(`${indent}${inst.dest} = ${inst.src1};`);
+          this.output.push(`${indent}${inst.dest} = ${this.emitOperand(inst.src1)};`);
         }
         break;
 
       case 'store':
         if (inst.src1 && inst.src2) {
-          this.output.push(`${indent}${inst.src1} = ${inst.src2};`);
+          this.output.push(`${indent}${inst.src1} = ${this.emitOperand(inst.src2)};`);
         }
         break;
 
@@ -193,33 +264,73 @@ export class CBackend {
       case 'sub':
       case 'mul':
       case 'div':
-      case 'mod':
-        const cOp = { add: '+', sub: '-', mul: '*', div: '/', mod: '%' }[inst.op];
+      case 'mod': {
         if (inst.dest && inst.src1 && inst.src2) {
-          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_NUMBER, .data.number = ${inst.src1}.data.number ${cOp} ${inst.src2}.data.number };`);
+          const left = this.emitOperand(inst.src1);
+          const right = this.emitOperand(inst.src2);
+          if (inst.op === 'mod') {
+            // C modulo requires integer operands
+            this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_NUMBER, .data.number = (int)${left}.data.number % (int)${right}.data.number };`);
+          } else {
+            const cOp = { add: '+', sub: '-', mul: '*', div: '/' }[inst.op];
+            this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_NUMBER, .data.number = ${left}.data.number ${cOp} ${right}.data.number };`);
+          }
+        }
+        break;
+      }
+
+      case 'eq':
+        if (inst.dest && inst.src1 && inst.src2) {
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = iz_value_equals(${this.emitOperand(inst.src1)}, ${this.emitOperand(inst.src2)}) };`);
         }
         break;
 
-      case 'eq':
       case 'ne':
+        if (inst.dest && inst.src1 && inst.src2) {
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = !iz_value_equals(${this.emitOperand(inst.src1)}, ${this.emitOperand(inst.src2)}) };`);
+        }
+        break;
+
       case 'lt':
       case 'le':
       case 'gt':
-      case 'ge':
-        const cmpOp = { eq: '==', ne: '!=', lt: '<', le: '<=', gt: '>', ge: '>=' }[inst.op];
+      case 'ge': {
+        const cmpOp = { lt: '<', le: '<=', gt: '>', ge: '>=' }[inst.op];
         if (inst.dest && inst.src1 && inst.src2) {
-          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = ${inst.src1}.data.number ${cmpOp} ${inst.src2}.data.number };`);
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = ${this.emitOperand(inst.src1)}.data.number ${cmpOp} ${this.emitOperand(inst.src2)}.data.number };`);
         }
         break;
+      }
+
+      case 'and':
+      case 'or': {
+        const logOp = inst.op === 'and' ? '&&' : '||';
+        if (inst.dest && inst.src1 && inst.src2) {
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = ${this.emitOperand(inst.src1)}.data.boolean ${logOp} ${this.emitOperand(inst.src2)}.data.boolean };`);
+        }
+        break;
+      }
 
       case 'not':
         if (inst.dest && inst.src1) {
-          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = !${inst.src1}.data.boolean };`);
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_BOOL, .data.boolean = !${this.emitOperand(inst.src1)}.data.boolean };`);
         }
         break;
 
-      case 'call':
-        const args = inst.args?.map(a => String(a)).join(', ') || '';
+      case 'neg':
+        if (inst.dest && inst.src1) {
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_NUMBER, .data.number = -${this.emitOperand(inst.src1)}.data.number };`);
+        }
+        break;
+
+      case 'concat':
+        if (inst.dest && inst.src1 && inst.src2) {
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_STRING, .data.string = iz_string_concat(${this.emitOperand(inst.src1)}.data.type == IZ_STRING ? ${this.emitOperand(inst.src1)}.data.string : "", ${this.emitOperand(inst.src2)}.data.type == IZ_STRING ? ${this.emitOperand(inst.src2)}.data.string : "") };`);
+        }
+        break;
+
+      case 'call': {
+        const args = inst.args?.map(a => this.emitOperand(a)).join(', ') || '';
         // Map IOZEN built-in names to C wrapper functions (handle iz_value_t)
         const builtinMap: Record<string, string> = {
           // String functions
@@ -252,27 +363,34 @@ export class CBackend {
           'parseJSON': 'iz_parseJSON_wrapper',
           'stringify': 'iz_stringify_wrapper'
         };
-        const funcName = builtinMap[String(inst.src1)] || String(inst.src1);
+        const funcName = builtinMap[String(inst.src1)] || mangleName(String(inst.src1));
         if (inst.dest) {
           this.output.push(`${indent}${inst.dest} = ${funcName}(${args});`);
         } else {
           this.output.push(`${indent}${funcName}(${args});`);
         }
         break;
+      }
 
       case 'ret':
         if (inst.src1) {
-          this.output.push(`${indent}return ${inst.src1};`);
+          this.output.push(`${indent}return ${this.emitOperand(inst.src1)};`);
         } else {
           this.output.push(`${indent}return;`);
         }
         break;
 
-      case 'if':
+      case 'if': {
         if (inst.src1 && inst.label) {
-          this.output.push(`${indent}if (${inst.src1}.data.boolean) goto ${inst.label};`);
+          const cond = this.emitOperand(inst.src1);
+          // If the condition is already a C literal, we need to wrap it
+          const condExpr = typeof inst.src1 === 'object' && inst.src1.type === 'bool'
+            ? `${cond}.data.boolean`
+            : `${cond}.data.boolean`;
+          this.output.push(`${indent}if (${condExpr}) goto ${inst.label};`);
         }
         break;
+      }
 
       case 'goto':
         if (inst.label) {
@@ -282,7 +400,7 @@ export class CBackend {
 
       case 'print':
         if (inst.src1) {
-          this.output.push(`${indent}iz_print(${inst.src1});`);
+          this.output.push(`${indent}iz_print(${this.emitOperand(inst.src1)});`);
         }
         break;
 
@@ -292,9 +410,15 @@ export class CBackend {
         }
         break;
 
+      case 'array_push':
+        if (inst.src1 && inst.src2) {
+          this.output.push(`${indent}iz_array_push(${this.emitOperand(inst.src1)}.data.array, ${this.emitOperand(inst.src2)});`);
+        }
+        break;
+
       case 'index':
         if (inst.dest && inst.src1 && inst.src2) {
-          this.output.push(`${indent}${inst.dest} = iz_array_get(${inst.src1}.data.array, ${inst.src2}.data.number);`);
+          this.output.push(`${indent}${inst.dest} = iz_array_get(${this.emitOperand(inst.src1)}.data.array, ${this.emitOperand(inst.src2)}.data.number);`);
         }
         break;
 
@@ -309,6 +433,19 @@ export class CBackend {
   }
 
   private emitBuiltins() {
+    // Value equality helper
+    this.emitLine('bool iz_value_equals(iz_value_t a, iz_value_t b) {');
+    this.emitLine('  if (a.type != b.type) return false;');
+    this.emitLine('  switch (a.type) {');
+    this.emitLine('    case IZ_NUMBER: return a.data.number == b.data.number;');
+    this.emitLine('    case IZ_STRING: return strcmp(a.data.string, b.data.string) == 0;');
+    this.emitLine('    case IZ_BOOL: return a.data.boolean == b.data.boolean;');
+    this.emitLine('    case IZ_NULL: return true;');
+    this.emitLine('    default: return false;');
+    this.emitLine('  }');
+    this.emitLine('}');
+    this.emitLine('');
+
     // Print function
     this.emitLine('// Built-in: print');
     this.emitLine('void iz_print(iz_value_t value) {');
@@ -636,10 +773,13 @@ export class CBackend {
   }
 
   private emitLine(line: string) {
-    const indent = line.startsWith('#') || line.startsWith('//') || line.includes(':') || line === ''
-      ? ''
-      : '  '.repeat(this.indent);
-    this.output.push(`${indent}${line}`);
+    // Don't indent preprocessor directives, labels, or empty lines
+    if (line === '' || line.startsWith('#') || line.startsWith('//') || 
+        (line.endsWith(':') && !line.includes('('))) {
+      this.output.push(line);
+    } else {
+      this.output.push('  '.repeat(this.indent) + line);
+    }
   }
 
   private addStringLiteral(str: string): string {

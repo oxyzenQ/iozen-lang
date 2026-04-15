@@ -137,13 +137,34 @@ export type Statement =
 export type Expression =
   | StringLiteral
   | NumberLiteral
+  | BooleanLiteral
   | Identifier
   | BinaryExpression
+  | LogicalExpression
+  | UnaryExpression
   | CallExpression
   | ArrayLiteral
   | StructLiteral
   | ArrayAccess
   | FieldAccess;
+
+export interface BooleanLiteral {
+  type: 'BooleanLiteral';
+  value: boolean;
+}
+
+export interface LogicalExpression {
+  type: 'LogicalExpression';
+  operator: '&&' | '||';
+  left: Expression;
+  right: Expression;
+}
+
+export interface UnaryExpression {
+  type: 'UnaryExpression';
+  operator: '-' | '!';
+  operand: Expression;
+}
 
 export interface StringLiteral {
   type: 'StringLiteral';
@@ -219,9 +240,13 @@ export class MinimalParser {
     };
   }
 
+  private skipTerminators() {
+    while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
+  }
+
   private parseStatement(): Statement | null {
-    // Skip newlines
-    while (this.match('NEWLINE')) {}
+    // Skip newlines and semicolons
+    while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
 
     if (this.isAtEnd()) return null;
 
@@ -237,10 +262,14 @@ export class MinimalParser {
     }
     if (this.check('BREAK')) {
       this.advance();
+      this.match('NEWLINE');
+      this.match('SEMICOLON');
       return { type: 'BreakStatement' };
     }
     if (this.check('CONTINUE')) {
       this.advance();
+      this.match('NEWLINE');
+      this.match('SEMICOLON');
       return { type: 'ContinueStatement' };
     }
     if (this.check('RETURN')) {
@@ -308,7 +337,12 @@ export class MinimalParser {
 
     let elseBranch: Statement[] | null = null;
     if (this.match('ELSE')) {
-      elseBranch = this.parseBlock();
+      if (this.check('IF')) {
+        // else if → wrap nested if as single-statement else branch
+        elseBranch = [this.parseIfStatement()];
+      } else {
+        elseBranch = this.parseBlock();
+      }
     }
 
     return {
@@ -375,9 +409,19 @@ export class MinimalParser {
     this.consume('SEMICOLON', 'Expected ";" after for condition');
 
     // Part 3: Increment (optional)
+    // Parse as statement to support assignments (e.g., i = i + 1)
     let increment: Expression | null = null;
     if (!this.check('RPAREN')) {
-      increment = this.parseExpression();
+      // Try to parse as assignment statement, then extract the expression
+      const stmt = this.parseStatement();
+      if (stmt && stmt.type === 'AssignmentStatement') {
+        // Wrap assignment as expression-like for the IR generator
+        increment = stmt.value;
+        // Store the assignment target in a way the IR generator can use
+        (increment as any).__assignTarget = stmt.name;
+      } else if (stmt && stmt.type === 'ExpressionStatement') {
+        increment = stmt.expression;
+      }
     }
     this.consume('RPAREN', 'Expected ")" after for clause');
 
@@ -395,10 +439,11 @@ export class MinimalParser {
   private parseReturnStatement(): ReturnStatement {
     this.consume('RETURN', 'Expected "return"');
     let value: Expression | null = null;
-    if (!this.check('NEWLINE') && !this.check('RBRACE')) {
+    if (!this.check('NEWLINE') && !this.check('RBRACE') && !this.check('SEMICOLON')) {
       value = this.parseExpression();
     }
     this.match('NEWLINE'); // Optional newline
+    this.match('SEMICOLON'); // Optional semicolon
     return {
       type: 'ReturnStatement',
       value
@@ -491,6 +536,10 @@ export class MinimalParser {
     const statements: Statement[] = [];
 
     while (!this.check('RBRACE') && !this.isAtEnd()) {
+      // Skip optional statement terminators (newlines and semicolons)
+      while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
+      if (this.check('RBRACE') || this.isAtEnd()) break;
+
       const stmt = this.parseStatement();
       if (stmt) statements.push(stmt);
     }
@@ -609,6 +658,10 @@ export class MinimalParser {
     // Parse function body
     const body: Statement[] = [];
     while (!this.check('RBRACE') && !this.isAtEnd()) {
+      // Skip optional statement terminators
+      while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
+      if (this.check('RBRACE') || this.isAtEnd()) break;
+
       const stmt = this.parseStatement();
       if (stmt) {
         body.push(stmt);
@@ -657,7 +710,24 @@ export class MinimalParser {
   }
 
   private parseExpression(): Expression {
-    return this.parseEquality();
+    return this.parseLogical();
+  }
+
+  private parseLogical(): Expression {
+    let left = this.parseEquality();
+
+    while (this.match('AMPAMP', 'PIPEPIPE')) {
+      const operator = this.previous().value as '&&' | '||';
+      const right = this.parseEquality();
+      left = {
+        type: 'LogicalExpression',
+        operator,
+        left,
+        right
+      };
+    }
+
+    return left;
   }
 
   private parseEquality(): Expression {
@@ -729,6 +799,14 @@ export class MinimalParser {
   }
 
   private parsePrimary(): Expression {
+    // Boolean literals
+    if (this.match('TRUE')) {
+      return { type: 'BooleanLiteral', value: true };
+    }
+    if (this.match('FALSE')) {
+      return { type: 'BooleanLiteral', value: false };
+    }
+
     // String literal
     if (this.match('STRING')) {
       return { type: 'StringLiteral', value: this.previous().value };
@@ -737,6 +815,13 @@ export class MinimalParser {
     // Number literal
     if (this.match('NUMBER')) {
       return { type: 'NumberLiteral', value: parseFloat(this.previous().value) };
+    }
+
+    // Unary expressions: -x, !x
+    if (this.match('MINUS', 'BANG')) {
+      const operator = this.previous().value as '-' | '!';
+      const operand = this.parsePrimary();
+      return { type: 'UnaryExpression', operator, operand };
     }
 
     // Array literal: [1, 2, 3]

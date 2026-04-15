@@ -225,7 +225,14 @@ export class ASTToIR {
 
     // 3. Increment (if present)
     if (stmt.increment) {
-      this.genExpression(stmt.increment);
+      // Check for assignment increment (e.g., i = i + 1)
+      const assignTarget = (stmt.increment as any).__assignTarget;
+      if (assignTarget) {
+        const value = this.genExpression(stmt.increment);
+        this.builder.emitStore(assignTarget, value);
+      } else {
+        this.genExpression(stmt.increment);
+      }
     }
     this.builder.emitGoto(startLabel);
 
@@ -276,6 +283,17 @@ export class ASTToIR {
         this.builder.emitConst(strTemp, { type: 'string', value: expr.value });
         return strTemp;
 
+      case 'BooleanLiteral':
+        const boolTemp = this.builder.newTemp('bool');
+        this.builder.emitConst(boolTemp, { type: 'bool', value: (expr as any).value });
+        return boolTemp;
+
+      case 'UnaryExpression':
+        return this.genUnary(expr as any);
+
+      case 'LogicalExpression':
+        return this.genLogical(expr as any);
+
       case 'Identifier':
         const idTemp = this.builder.newTemp(this.variableTypes.get(expr.name) || 'ptr');
         this.builder.emitLoad(idTemp, expr.name);
@@ -315,9 +333,10 @@ export class ASTToIR {
 
     const left = this.genExpression(expr.left);
     const right = this.genExpression(expr.right);
-    const result = this.builder.newTemp('number');
+    const isComparison = ['==', '!=', '<', '<=', '>', '>='].includes(expr.operator);
+    const result = this.builder.newTemp(isComparison ? 'bool' : 'number');
 
-    const opMap: Record<string, 'add' | 'sub' | 'mul' | 'div' | 'mod' | 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge' | 'and' | 'or'> = {
+    const opMap: Record<string, 'add' | 'sub' | 'mul' | 'div' | 'mod' | 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge'> = {
       '+': 'add',
       '-': 'sub',
       '*': 'mul',
@@ -329,12 +348,30 @@ export class ASTToIR {
       '<=': 'le',
       '>': 'gt',
       '>=': 'ge',
-      '&&': 'and',
-      '||': 'or'
     };
 
     const op = opMap[expr.operator] || 'add';
     this.builder.emitBinary(op, result, left, right);
+    return result;
+  }
+
+  private genUnary(expr: any): string {
+    const operand = this.genExpression(expr.operand);
+    const result = this.builder.newTemp(expr.operator === '!' ? 'bool' : 'number');
+    if (expr.operator === '-') {
+      this.builder.emit({ op: 'neg', dest: result, src1: operand, comment: `${result} = -${operand}` });
+    } else if (expr.operator === '!') {
+      this.builder.emit({ op: 'not', dest: result, src1: operand, comment: `${result} = !${operand}` });
+    }
+    return result;
+  }
+
+  private genLogical(expr: any): string {
+    const left = this.genExpression(expr.left);
+    const right = this.genExpression(expr.right);
+    const result = this.builder.newTemp('bool');
+    const op = expr.operator === '&&' ? 'and' : 'or';
+    this.builder.emit({ op: op as any, dest: result, src1: left, src2: right, comment: `${result} = ${left} ${expr.operator} ${right}` });
     return result;
   }
 

@@ -5,6 +5,7 @@ import { parse } from '../parser_v2';
 import { tokenize } from '../tokenizer_v2';
 import { astToIR } from './ast-to-ir';
 import { generateC } from './c-backend';
+import { IROptimizer } from './ir-optimizer';
 
 export interface CompileOptions {
   target: 'c' | 'binary';
@@ -32,6 +33,12 @@ export function compile(source: string, options: CompileOptions): CompileResult 
     // Step 3: AST to IR
     const ir = astToIR(ast);
 
+    // Step 3.5: Optimize IR (constant propagation, algebraic simplification, DCE)
+    if (options.optimize !== false) {
+      const optimizer = new IROptimizer(ir);
+      optimizer.optimize();
+    }
+
     // Step 4: Generate C code
     const cCode = generateC(ir);
 
@@ -43,13 +50,39 @@ export function compile(source: string, options: CompileOptions): CompileResult 
       };
     }
 
-    // TODO: Compile C to binary using gcc/clang
-    errors.push('Binary compilation not yet implemented. Use target: "c" for now.');
+    // Compile C to native binary using gcc/clang
+    const { execSync } = require('child_process');
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
 
-    return {
-      success: false,
-      errors
-    };
+    const tmpDir = os.tmpdir();
+    const tmpCFile = path.join(tmpDir, `iozen_${Date.now()}.c`);
+    const outputPath = options.outputFile || path.join(process.cwd(), 'iozen_out');
+
+    fs.writeFileSync(tmpCFile, cCode);
+
+    // Ensure output directory exists
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    try {
+      const cc = process.env.CC || 'gcc';
+      execSync(`${cc} -O2 -o "${outputPath}" "${tmpCFile}" -lm`, { stdio: 'pipe' });
+      try { fs.unlinkSync(tmpCFile); } catch {}
+      return {
+        success: true,
+        output: cCode,
+        binaryPath: outputPath,
+        errors: []
+      };
+    } catch (compileError: any) {
+      try { fs.unlinkSync(tmpCFile); } catch {}
+      errors.push(`C compilation failed: ${compileError.message}`);
+      return { success: false, errors };
+    }
 
   } catch (e) {
     errors.push(e instanceof Error ? e.message : String(e));
@@ -60,10 +93,14 @@ export function compile(source: string, options: CompileOptions): CompileResult 
   }
 }
 
-export function compileToC(source: string): string {
+export function compileToC(source: string, optimize = true): string {
   const tokens = tokenize(source);
   const ast = parse(tokens);
   const ir = astToIR(ast);
+  if (optimize) {
+    const optimizer = new IROptimizer(ir);
+    optimizer.optimize();
+  }
   return generateC(ir);
 }
 
@@ -71,4 +108,5 @@ export function compileToC(source: string): string {
 export { astToIR, ASTToIR } from './ast-to-ir';
 export { CBackend, generateC } from './c-backend';
 export { createIRBuilder, IRBuilder } from './ir';
+export { IROptimizer, optimizeIR } from './ir-optimizer';
 export type { IRFunction, IRInstruction, IRProgram, IRValue } from './ir';

@@ -5,12 +5,12 @@ export type IROp =
   | 'const' | 'var' | 'param'
   | 'add' | 'sub' | 'mul' | 'div' | 'mod'
   | 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge'
-  | 'and' | 'or' | 'not'
+  | 'and' | 'or' | 'not' | 'neg' | 'concat'
   | 'load' | 'store'
   | 'call' | 'ret'
   | 'label' | 'goto' | 'if' | 'if_not'
-  | 'print' | 'array' | 'index' | 'field'
-  | 'phi'; // For SSA form
+  | 'print' | 'array' | 'array_push' | 'index' | 'field'
+  | 'phi';
 
 export interface IRValue {
   type: 'number' | 'string' | 'bool' | 'void' | 'ptr';
