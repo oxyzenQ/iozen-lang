@@ -747,9 +747,53 @@ export class MinimalInterpreter {
         }
         return `[field not found: ${expr.field}]`;
 
+      case 'MatchExpression':
+        return this.evaluateMatch(expr as any);
+
       default:
         return `[unknown expression]`;
     }
+  }
+
+  private evaluateMatch(expr: any): any {
+    const subject = this.evaluateExpression(expr.subject);
+    const arms: any[] = expr.arms;
+
+    for (const arm of arms) {
+      // Check pattern match
+      let matched = false;
+
+      if (arm.guard) {
+        // Guard clause: bind subject and evaluate guard
+        if (arm.binding) {
+          this.context.setVariable(arm.binding, subject);
+        }
+        const guardResult = this.evaluateExpression(arm.guard);
+        matched = this.isTruthy(guardResult);
+      } else if (arm.pattern) {
+        // Literal pattern: compare subject to pattern value
+        const patternValue = this.evaluateExpression(arm.pattern);
+        matched = subject === patternValue;
+        // For number comparison, also try numeric equality
+        if (!matched && typeof subject === 'number' && typeof patternValue === 'number') {
+          matched = subject === patternValue;
+        }
+      } else {
+        // Wildcard: always matches
+        matched = true;
+      }
+
+      if (matched) {
+        // Bind the subject value if there's a binding
+        if (arm.binding) {
+          this.context.setVariable(arm.binding, subject);
+        }
+        return this.evaluateExpression(arm.result);
+      }
+    }
+
+    // No arm matched (shouldn't happen with wildcard, but just in case)
+    return null;
   }
 
   private evaluateBinary(expr: BinaryExpression): any {

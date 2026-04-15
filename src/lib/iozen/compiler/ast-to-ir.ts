@@ -340,6 +340,9 @@ export class ASTToIR {
       case 'FieldAccess':
         return this.genFieldAccess(expr);
 
+      case 'MatchExpression':
+        return this.genMatchExpression(expr as any);
+
       default:
         return this.builder.newTemp('ptr');
     }
@@ -520,6 +523,101 @@ export class ASTToIR {
     const result = this.builder.newTemp('ptr');
     this.builder.emitFieldLoad(result, obj, expr.field);
     return result;
+  }
+
+  private genMatchExpression(expr: any): string {
+    // Lower match expression to nested if-else chain:
+    // match subject {
+    //   val1 => body1
+    //   val2 => body2
+    //   _ => default
+    // }
+    // becomes:
+    //   result = uninitialized
+    //   if (subject == val1) goto match_arm_0
+    //   if (subject == val2) goto match_arm_1
+    //   goto match_default
+    // match_arm_0:
+    //   result = body1
+    //   goto match_end
+    // match_arm_1:
+    //   result = body2
+    //   goto match_end
+    // match_default:
+    //   result = default
+    // match_end:
+
+    const subject = this.genExpression(expr.subject);
+    const resultTemp = this.builder.newTemp('ptr');
+    const endLabel = this.builder.newLabel('match_end');
+    const defaultLabel = this.builder.newLabel('match_default');
+
+    // Generate labels for each arm
+    const armLabels = expr.arms.map((_, i: number) => this.builder.newLabel(`match_arm_${i}`));
+
+    // Emit comparison jumps for each arm with a pattern
+    for (let i = 0; i < expr.arms.length; i++) {
+      const arm = expr.arms[i];
+
+      if (arm.guard) {
+        // Guard clause: if guard is true, goto this arm
+        // Also bind the subject if there's a binding name
+        if (arm.binding) {
+          this.builder.emitStore(arm.binding, subject);
+        }
+        const guardResult = this.genExpression(arm.guard);
+        this.builder.emit({ op: 'if', src1: guardResult, label: armLabels[i], comment: `if guard goto ${armLabels[i]}` });
+      } else if (arm.pattern) {
+        // Literal pattern: compare subject to pattern value
+        if (arm.binding) {
+          this.builder.emitStore(arm.binding, subject);
+        }
+        const patternValue = this.genExpression(arm.pattern);
+        const cmpTemp = this.builder.newTemp('bool');
+        this.builder.emit({ op: 'eq', dest: cmpTemp, src1: subject, src2: patternValue, comment: `${cmpTemp} = ${subject} == ${patternValue}` });
+        this.builder.emit({ op: 'if', src1: cmpTemp, label: armLabels[i], comment: `if ${cmpTemp} goto ${armLabels[i]}` });
+      } else {
+        // Wildcard (no pattern) — this arm is reached by fallthrough from goto default
+        // or is the first arm (acts like a default)
+        if (i === 0 && expr.arms.length === 1) {
+          // Only a single wildcard arm, just jump to it
+          this.builder.emitGoto(armLabels[i]);
+        }
+        // Otherwise, this is handled by the default fallthrough
+      }
+    }
+
+    // Jump to default
+    this.builder.emitGoto(defaultLabel);
+
+    // Emit arm bodies
+    for (let i = 0; i < expr.arms.length; i++) {
+      const arm = expr.arms[i];
+      this.builder.emitLabel(armLabels[i]);
+      const armResult = this.genExpression(arm.result);
+      this.builder.emitStore(resultTemp, armResult);
+      this.builder.emitGoto(endLabel);
+    }
+
+    // Default label: assign first wildcard arm's result, or error
+    this.builder.emitLabel(defaultLabel);
+    // Find a wildcard arm to use as default
+    const defaultArm = expr.arms.find((a: any) => !a.pattern && !a.guard);
+    if (defaultArm) {
+      if (defaultArm.binding) {
+        this.builder.emitStore(defaultArm.binding, subject);
+      }
+      const defaultResult = this.genExpression(defaultArm.result);
+      this.builder.emitStore(resultTemp, defaultResult);
+    } else {
+      // No default arm — emit a null value
+      this.builder.emitConst(resultTemp, { type: 'string', value: '' });
+    }
+
+    // End label
+    this.builder.emitLabel(endLabel);
+
+    return resultTemp;
   }
 
   private genFieldAssignment(stmt: AST.FieldAssignment): string {

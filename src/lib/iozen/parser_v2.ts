@@ -148,7 +148,8 @@ export type Expression =
   | ArrayLiteral
   | StructLiteral
   | ArrayAccess
-  | FieldAccess;
+  | FieldAccess
+  | MatchExpression;
 
 export interface BooleanLiteral {
   type: 'BooleanLiteral';
@@ -230,6 +231,19 @@ export interface StructDeclaration {
   type: 'StructDeclaration';
   name: string;
   fields: { name: string; typeName: string }[];
+}
+
+export interface MatchArm {
+  pattern: Expression | null;   // null for wildcard (_)
+  binding: string | null;       // optional binding name (e.g., n in `n when ...`)
+  guard: Expression | null;     // optional when guard clause
+  result: Expression;
+}
+
+export interface MatchExpression {
+  type: 'MatchExpression';
+  subject: Expression;
+  arms: MatchArm[];
 }
 
 export class MinimalParser {
@@ -952,6 +966,11 @@ export class MinimalParser {
       return expr;
     }
 
+    // Match expression: match expr { arm => result, ... }
+    if (this.check('MATCH')) {
+      return this.parseMatchExpression();
+    }
+
     // Function call, array access, field access, or identifier
     if (this.check('IDENT')) {
       let expr: Expression = { type: 'Identifier', name: this.advance().value };
@@ -976,7 +995,9 @@ export class MinimalParser {
             this.consume('RBRACE', 'Expected "}" after struct fields');
             expr = { type: 'StructLiteral', name: expr.name, fields };
           } else {
-            throw new ParseError('Expected field: value in struct literal', this.peek().line, this.peek().column);
+            // Not a struct literal (e.g., match x { ... }) — put back LBRACE and stop chaining
+            this.position--;
+            break;
           }
         } else if (this.match('DOT')) {
           // Field access: obj.field
@@ -1034,6 +1055,84 @@ export class MinimalParser {
     }
 
     throw new ParseError(`Unexpected token: ${this.peek().type}`, this.peek().line, this.peek().column);
+  }
+
+  private parseMatchExpression(): Expression {
+    this.consume('MATCH', 'Expected "match"');
+    const subject = this.parseExpression();
+    this.consume('LBRACE', 'Expected "{" after match subject');
+
+    const arms: MatchArm[] = [];
+
+    while (!this.check('RBRACE') && !this.isAtEnd()) {
+      // Skip optional newlines between arms
+      while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
+      if (this.check('RBRACE') || this.isAtEnd()) break;
+
+      // Parse pattern
+      let pattern: Expression | null = null;
+      let binding: string | null = null;
+
+      if (this.check('IDENT') && this.peek().value === '_') {
+        // Wildcard pattern: _
+        this.advance(); // consume _
+        pattern = null;
+      } else if (this.check('NUMBER')) {
+        pattern = { type: 'NumberLiteral', value: parseFloat(this.advance().value) };
+      } else if (this.check('STRING')) {
+        pattern = { type: 'StringLiteral', value: this.advance().value };
+      } else if (this.check('TRUE')) {
+        this.advance();
+        pattern = { type: 'BooleanLiteral', value: true };
+      } else if (this.check('FALSE')) {
+        this.advance();
+        pattern = { type: 'BooleanLiteral', value: false };
+      } else if (this.check('IDENT')) {
+        // Identifier binding: `n when n < 0 => ...`
+ // Check if it's a guard pattern (IDENT followed by IDENT("when"))
+        const nextPos = this.position + 1;
+        if (nextPos < this.tokens.length && 
+            this.tokens[nextPos].type === 'IDENT' && 
+            this.tokens[nextPos].value === 'when') {
+          // This is a binding with guard: `n when condition => ...`
+          binding = this.advance().value; // consume the binding name
+          pattern = null; // wildcard with binding
+        } else {
+          // Treat as wildcard with binding (matches anything)
+          binding = this.advance().value;
+          pattern = null;
+        }
+      } else {
+        throw new ParseError(
+          `Expected match pattern (literal, _, or identifier). Got ${this.peek().type}`,
+          this.peek().line,
+          this.peek().column
+        );
+      }
+
+      // Parse optional guard: when condition
+      let guard: Expression | null = null;
+      if (this.check('IDENT') && this.peek().value === 'when') {
+        this.advance(); // consume 'when'
+        guard = this.parseExpression();
+      }
+
+      // Consume =>
+      this.consume('ARROW', 'Expected "=>" in match arm');
+
+      // Parse result expression
+      const result = this.parseExpression();
+      arms.push({ pattern, binding, guard, result });
+
+      // Skip optional comma between arms
+      this.match('COMMA');
+      // Skip optional newlines
+      while (this.match('NEWLINE') || this.match('SEMICOLON')) {}
+    }
+
+    this.consume('RBRACE', 'Expected "}" to close match expression');
+
+    return { type: 'MatchExpression', subject, arms };
   }
 
   // Helper methods

@@ -175,6 +175,10 @@ export class MinimalTokenizer {
       this.advance(); this.advance();
       return { type: 'EQEQ', value: '==', line: startLine, column: startCol };
     }
+    if (char === '=' && this.peekNext() === '>') {
+      this.advance(); this.advance();
+      return { type: 'ARROW', value: '=>', line: startLine, column: startCol };
+    }
     if (char === '!' && this.peekNext() === '=') {
       this.advance(); this.advance();
       return { type: 'BANGEQ', value: '!=', line: startLine, column: startCol };
