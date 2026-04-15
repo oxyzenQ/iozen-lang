@@ -1,8 +1,8 @@
 # 🤖 AI Agent Guide: IOZEN Language Project
 
 > **For AI Agents:** Read this first before working on this codebase.
-> **Last Updated:** April 12, 2026
-> **Current Phase:** Week 3 Complete (Turing Complete Language)
+> **Last Updated:** April 15, 2026
+> **Current Phase:** Native Compiler v2 (Turing Complete, Compiles to C → Native Binary)
 
 ---
 
@@ -12,34 +12,55 @@
 - Safe parallelism (work-stealing scheduler implemented)
 - Type-driven memory safety model
 - Fast execution with minimal runtime
+- Natural language syntax
 
-**Current Status:** Working interpreter that can run real programs!
+**Current Status:** Working compiler that compiles IOZEN → C99 → Native Binary
 
 ---
 
 ## ✅ What's DONE (Current State)
 
-### Week 1: Basic Interpreter ✅
-- Tokenizer v2 (`tokenizer_v2.ts`)
-- Parser v2 (`parser_v2.ts`) 
-- Interpreter v2 (`interpreter_v2.ts`)
-- CLI that runs `.iozen` files
+### Core Language (Interpreter + Compiler)
+- Tokenizer v2, Parser v2, Interpreter v2 — all working
+- **Full compiler pipeline**: IOZEN → Tokenizer → Parser → AST → IR → IR Optimizer → C Backend → Native Binary
+- **73/73 compiler tests passing**
+- **374/375 interpreter tests passing**
 
-### Week 2: Variables & System Info ✅
-- Variables: `let x = 10`
+### Language Features (v2 Compiler)
+- Variables: `let x = 10`, `let x: number = 42`
 - Math operators: `+ - * / %`
 - Comparison: `== != < > <= >=`
-- Colors: `color("red", "text")`
-- System functions: `get_os()`, `get_cpu()`, `get_ram()`, `get_disk()`, `get_shell()`, `get_resolution()`
-- String functions: `length()`, `upper()`, `lower()`, `pad()`
+- Logical: `&& || !`
+- Unary: `-` (negation), `!` (not)
+- Boolean literals: `true`, `false`
+- String literals: `"hello world"`
+- **String+number coercion**: `"Count: " + x` auto-converts
+- String concatenation: `"hello" + " " + "world"`
+- If/else, else-if chains
+- While loops, for loops
+- Break and continue
+- Functions with typed parameters and return values
+- Recursive functions (fibonacci, etc.)
+- **Arrays**: `[1, 2, 3]`, `arr[0]`, array push
+- **Structs**: declaration, instantiation, field access, field mutation
+- **Match expressions**: pattern matching with guards and wildcards
+- Print function
+- Comments: `// single line`
 
-### Week 3: Control Flow ✅ **(JUST COMPLETED)**
-- `if/else` statements
-- `while` loops
-- `for` loops
-- `break` and `continue`
-- Return from functions
-- **IOZEN is now TURING COMPLETE!**
+### Compiler Optimizations
+- Constant propagation (loop-aware with back-edge detection)
+- Dead code elimination (transitive usage analysis)
+- Algebraic simplification (x+0→x, x*1→x, x*0→0, etc.)
+- Constant folding at IR level
+- Copy propagation through store/load chains
+- Type inference for untyped declarations
+
+### Compiler Infrastructure
+- C keyword name mangling (double→iz_double, etc.)
+- C99 compliant output with `_GNU_SOURCE`
+- Integer modulo fix for C backend
+- Dynamic struct types in C backend
+- String-to-number coercion via `to_string` IR op
 
 ---
 
@@ -47,7 +68,7 @@
 
 ### Pipeline
 ```
-.iozen file → tokenizer → parser → interpreter → output
+.iozen file → tokenizer → parser → AST → IR → IR Optimizer → C Backend → gcc → Native Binary
 ```
 
 ### Key Files
@@ -57,16 +78,22 @@
 | `src/lib/iozen/tokenizer_v2.ts` | Lexical analysis | ✅ Working |
 | `src/lib/iozen/parser_v2.ts` | Parse to AST | ✅ Working |
 | `src/lib/iozen/interpreter_v2.ts` | Execute AST | ✅ Working |
+| `src/lib/iozen/compiler/index.ts` | Compiler entry point | ✅ Working |
+| `src/lib/iozen/compiler/ir.ts` | IR definitions | ✅ Working |
+| `src/lib/iozen/compiler/ast-to-ir.ts` | AST to IR conversion | ✅ Working |
+| `src/lib/iozen/compiler/ir-optimizer.ts` | IR optimization passes | ✅ Working |
+| `src/lib/iozen/compiler/c-backend.ts` | IR to C99 codegen | ✅ Working |
 | `iozen-cli/src/cli.ts` | CLI entry | ✅ Working |
-| `src/lib/iozen/chase_lev.ts` | Work-stealing deque | ✅ Implemented (not used) |
-| `src/lib/iozen/atomic_types.ts` | Type-driven safety | ✅ Implemented (not used) |
+| `src/lib/iozen/chase_lev.ts` | Work-stealing deque | ✅ Experimental |
+| `src/lib/iozen/atomic_types.ts` | Type-driven safety | ✅ Experimental |
+| `tests/test_compiler.ts` | Compiler test suite (73 tests) | ✅ 73/73 |
 
-### Runtime Components (Advanced, Not Used in v0.3)
+### Runtime Components (Advanced, Not Used in v0.4)
 - **Chase-Lev deque:** Lock-free work-stealing queue
 - **Shared memory model:** Type-driven atomic safety
 - **Scheduler:** Work-stealing thread pool
 
-**Note:** These runtime components exist but are NOT used by the current interpreter. They were built first (unusual approach). The language is currently interpreted.
+**Note:** These runtime components exist but are NOT used by the current compiler pipeline. They were built first (unusual approach). The language is currently compiled via C backend.
 
 ---
 
@@ -74,96 +101,82 @@
 
 ### Prerequisites
 - Bun installed (`bun --version`)
-- Node.js for tsx fallback
+- gcc or clang (for native binary compilation)
 
 ### Running Programs
 
 ```bash
-# Using Bun (RECOMMENDED)
-cd /home/rezky/Desktop/iozen-lang
-bun iozen-cli/src/cli.ts run examples/fastfetch.iozen
+# Compile and run as native binary
+cd iozen-lang-dev
+bun iozen-cli/src/cli.ts compile examples/hello.iozen --run
 
-# Using tsx (fallback)
-npx tsx iozen-cli/src/cli.ts run examples/fastfetch.iozen
+# Or just interpret
+bun iozen-cli/src/cli.ts run examples/hello.iozen
 ```
 
-### Working Examples
+### Running Tests
 
 ```bash
-# Basic hello world
-bun iozen-cli/src/cli.ts run examples/hello.iozen
+# Compiler tests (73 tests, end-to-end binary compilation)
+bun tests/test_compiler.ts
 
-# System info display (colors!)
-bun iozen-cli/src/cli.ts run examples/fastfetch_v2.iozen
-
-# Control flow demo (if/else, loops)
-bun iozen-cli/src/cli.ts run examples/control_flow.iozen
+# Full test suite (375 tests including interpreter)
+bun tests/test_all.ts
 ```
 
 ---
 
-## 📝 IOZEN Language Syntax (v0.3)
+## 📝 IOZEN Language Syntax (v0.4)
 
 ```iozen
-// Comments start with //
+// Variables with type inference
+let x = 42
+let name = "IOZEN"
 
-fn main() {
-    // Variables
-    let name = "IOZEN"
-    let version = 0.3
-    
-    // Print
-    print("Hello, " + name)
-    
-    // If/else
-    if (version >= 1.0) {
-        print("Production ready!")
-    } else if (version >= 0.5) {
-        print("Getting there...")
-    } else {
-        print("Early development")
-    }
-    
-    // While loop
-    let count = 3
-    while (count > 0) {
-        print(count)
-        count = count - 1
-    }
-    
-    // For loop style (using while)
-    let i = 0
-    while (i < 5) {
-        if (i == 3) {
-            break  // exit loop
-        }
-        if (i % 2 == 0) {
-            i = i + 1
-            continue  // skip iteration
-        }
-        print("odd: " + i)
-        i = i + 1
-    }
-    
-    // System info
-    print("OS: " + get_os())
-    print("CPU: " + get_cpu())
-    print("RAM: " + get_ram())
-    
-    // Colors
-    print(color("green", "Success!"))
-    print(color("red", "Error!"))
-    
-    // String functions
-    print(upper("hello"))     // HELLO
-    print(lower("WORLD"))     // world
-    print(length("test"))     // 4
-    print(pad("hi", 6))       // "  hi  "
-    
-    // Math
-    let result = (10 + 5) * 2 / 3
-    print(round(result))      // 10
+// Functions with typed parameters
+fn add(a: number, b: number): number {
+    return a + b
 }
+
+// Structs
+struct Point {
+    x: number
+    y: number
+}
+
+let p = Point { x: 10, y: 20 }
+print(p.x)
+
+// Match expressions (like Rust)
+fn classify(n: number): string {
+    match n {
+        0 => "zero"
+        1 => "one"
+        _ => "many"
+    }
+}
+
+// String+number coercion
+print("Result: " + 42)
+
+// Arrays
+let arr = [1, 2, 3]
+print(arr[0])
+
+// Control flow
+if (x > 0) {
+    print("positive")
+} else {
+    print("non-positive")
+}
+
+// Loops
+for (let i = 0; i < 10; i = i + 1) {
+    if (i == 5) { break; }
+}
+
+// Boolean and logical ops
+let flag = true && !false
 ```
 
 ---
@@ -171,188 +184,65 @@ fn main() {
 ## 🔧 Built-in Functions
 
 ### System Info
-- `get_os()` - Returns "Linux", "macOS", or "Windows"
-- `get_cpu()` - CPU model name
-- `get_ram()` - "used / total" in GB
-- `get_uptime()` - "Xh Ym" format
-- `get_hostname()` - Computer name
-- `get_user()` - Current username
-- `get_shell()` - Shell name (zsh, bash, etc.)
-- `get_disk()` - Disk usage "used / total"
-- `get_resolution()` - Screen resolution "1920x1080"
-
-### Colors (ANSI)
-- `color(colorName, text)` - Wrap text with ANSI color
-- Colors: `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`
-- Bright variants: `brightRed`, `brightGreen`, `brightCyan`, etc.
+- `get_os()`, `get_cpu()`, `get_ram()`, `get_disk()`, `get_shell()`, `get_resolution()`
 
 ### String Functions
-- `length(str)` - String length
-- `upper(str)` - To uppercase
-- `lower(str)` - To lowercase
-- `pad(str, length, char?)` - Center pad with char (default space)
+- `length(str)`, `upper(str)`, `lower(str)`, `pad(str, len)`
+- `split(str, delim)`, `join(arr, delim)`, `substring(str, start, end)`
+- `indexOf(str, substr)`, `lastIndexOf(str, substr)`, `contains(str, substr)`
 
 ### Math Functions
-- `round(n)`, `floor(n)`, `ceil(n)`
-- `abs(n)` - Absolute value
+- `round(n)`, `floor(n)`, `ceil(n)`, `abs(n)`
 - `max(a, b)`, `min(a, b)`
+- `sin(x)`, `cos(x)`, `sqrt(x)`, `pow(base, exp)`
+- Constants: `pi`, `e`
 
----
-
-## 🧪 Testing
-
-### Quick Test
-```bash
-# Test all examples
-bun iozen-cli/src/cli.ts run examples/hello.iozen
-bun iozen-cli/src/cli.ts run examples/fastfetch.iozen
-bun iozen-cli/src/cli.ts run examples/fastfetch_v2.iozen
-bun iozen-cli/src/cli.ts run examples/control_flow.iozen
-```
-
-### Test Files Location
-- `tests/v0.1/test_tokenizer.ts`
-- `tests/v0.1/test_parser.ts`
-- `tests/v0.1/test_interpreter.ts`
-
----
-
-## 📁 Project Structure
-
-```
-iozen-lang/
-├── iozen-cli/
-│   └── src/
-│       └── cli.ts              # CLI entry point
-├── src/
-│   └── lib/
-│       └── iozen/
-│           ├── tokenizer_v2.ts   # Lexer (WORKING)
-│           ├── parser_v2.ts      # Parser (WORKING)
-│           ├── interpreter_v2.ts # Interpreter (WORKING)
-│           ├── chase_lev.ts     # Work-stealing deque (ADVANCED, unused)
-│           ├── atomic_types.ts  # Type safety (ADVANCED, unused)
-│           └── ...              # Other advanced runtime files
-├── examples/
-│   ├── hello.iozen              # Basic test
-│   ├── fastfetch.iozen          # System info v1
-│   ├── fastfetch_v2.iozen       # System info with colors
-│   └── control_flow.iozen       # Turing complete demo
-├── tests/
-│   └── v0.1/
-│       └── test_*.ts            # Unit tests
-├── ROADMAP_v0.1.md              # Original roadmap
-├── AI_AGENT_GUIDE.md           # This file!
-└── README.md                    # User-facing docs
-```
+### File I/O
+- `readFile(path)`, `writeFile(path, content)`, `exists(path)`
 
 ---
 
 ## ⚠️ Important Notes for AI Agents
 
-### 1. Runtime vs Language
-- **Language (interpreter):** Working and usable
-- **Runtime (scheduler/memory):** Advanced but NOT integrated
-- Current execution is purely interpreted, NOT using the work-stealing scheduler
-
-### 2. Two Codebases in One
-This repo contains TWO projects:
-1. **Working Interpreter** (Week 1-3) - `tokenizer_v2.ts`, `parser_v2.ts`, `interpreter_v2.ts`
-2. **Advanced Runtime** (Experimental) - `chase_lev.ts`, `atomic_types.ts`, `work_stealing_pool.ts`
+### 1. Two-Codebase Architecture
+1. **Working v2 Pipeline** (current): tokenizer_v2, parser_v2, interpreter_v2, compiler/
+2. **Advanced Runtime** (experimental): chase_lev, atomic_types, work_stealing_pool
 
 **Focus on the v2 files for language work.**
 
-### 3. Bun Compatibility
-- Use `bun` to run (faster)
-- If Bun fails, use `npx tsx` as fallback
-- Some exports use `export type` for Bun compatibility
+### 2. Compilation Target
+- Primary: C99 backend (current)
+- Future: LLVM backend (v2.0)
+- Runtime: Bun for development, gcc/clang for native binary
 
-### 4. Current Limitations
-- No arrays yet
-- No structs/objects yet
-- No modules/imports
-- Functions can't return values properly (return statement works but limited)
-- No compile-to-binary (interpreted only)
-
----
-
-## 🎯 Next Steps (What to Build Next)
-
-### Option 1: Week 4 - Arrays & Structs
-- Add array syntax: `let arr = [1, 2, 3]`
-- Add array indexing: `arr[0]`
-- Add struct/object syntax
-
-### Option 2: Polish & Release
-- Write comprehensive README
-- Create more examples
-- Add error handling improvements
-- Package for distribution
-
-### Option 3: Integrate Runtime (HARD)
-- Connect interpreter to work-stealing scheduler
-- Enable parallel execution
-- This is complex and not recommended yet
-
-### Option 4: Compiler (HARD)
-- Compile to JavaScript/Node.js
-- Or compile to native via LLVM
-- Major undertaking
-
-**Recommended:** Option 1 or 2. Get language feature-complete before optimizing.
+### 3. Current Limitations
+- No module/import system yet
+- Limited struct method dispatch (fields only)
+- Match only supports literal patterns (no destructuring)
+- No enums in compiler (only in interpreter)
+- No closures in compiler
+- No generic types
 
 ---
 
-## 🤝 Working with This Codebase
+## 🎯 Next Steps
 
-### DO:
-- ✅ Use the v2 pipeline (tokenizer_v2, parser_v2, interpreter_v2)
-- ✅ Test with Bun: `bun iozen-cli/src/cli.ts run examples/hello.iozen`
-- ✅ Look at examples in `examples/` folder for syntax reference
-- ✅ Check `src/lib/iozen/index.ts` for exports
+### High Priority
+- Module system (import/export)
+- Enums in compiler
+- Error handling (try/catch) in compiler
+- Closures
 
-### DON'T:
-- ❌ Touch the advanced runtime files (chase_lev, atomic_types) unless specifically asked
-- ❌ Try to integrate scheduler with interpreter (complex task)
-- ❌ Break existing examples
-- ❌ Add features without testing
+### Medium Priority
+- Generic types
+- SIMD vectorization
+- LLVM backend
+- Self-hosting compiler
 
----
-
-## 🆘 Need Help?
-
-### Check These First:
-1. `examples/` - Working code examples
-2. `src/lib/iozen/interpreter_v2.ts` - Built-in functions at top
-3. `src/lib/iozen/parser_v2.ts` - Grammar understanding
-4. `tests/v0.1/` - How features are tested
-
-### Common Issues:
-- **"Token not found"** → Add to `tokenizer_v2.ts` KEYWORDS
-- **"Expected )"** → Parser issue, check expression parsing
-- **"Unknown function"** → Add to `interpreter_v2.ts` BUILTINS
-
----
-
-## 📊 Project Metrics
-
-| Metric | Value |
-|--------|-------|
- Lines of Code | ~3000 (v2 pipeline) |
-| Working Examples | 4 |
-| Test Coverage | Basic |
-| Runtime Components | 10+ (advanced, unused) |
-| Current Phase | Week 3 Complete |
-| Status | **Turing Complete** ✅ |
-
----
-
-## 🔗 Quick Links
-
-- **Examples:** `/home/rezky/Desktop/iozen-lang/examples/`
-- **Core Language:** `/home/rezky/Desktop/iozen-lang/src/lib/iozen/*_v2.ts`
-- **CLI:** `/home/rezky/Desktop/iozen-lang/iozen-cli/src/cli.ts`
-- **Tests:** `/home/rezky/Desktop/iozen-lang/tests/v0.1/`
+### Low Priority
+- GUI/REPL improvements
+- Package manager improvements
+- Standard library expansion
 
 ---
 
@@ -364,6 +254,7 @@ Based on previous sessions:
 - Uses **Bun** as primary runtime
 - Appreciates **honest assessment** over sugar-coating
 - Focuses on **tangible progress** (fastfetch clone as milestone)
+- GitHub: `oxyzenQ` / `oxyzenQ/iozen-lang`
 
 **Approach:** Keep it practical, show working output, don't over-engineer.
 
@@ -371,4 +262,4 @@ Based on previous sessions:
 
 **End of AI Agent Guide**
 
-*This guide ensures continuity if the user switches AI agents. Current state: IOZEN v0.3 is a working, Turing-complete interpreted language.*
+*This guide ensures continuity if the user switches AI agents. Current state: IOZEN v0.4 is a working native compiler with structs, match, arrays, and 73/73 tests passing.*
