@@ -12,32 +12,15 @@
 
 ### New Language Features
 1. **`continue` keyword** — Skip to next loop iteration in while/repeat/for-each
-   - Added `Continue` token type, `ContinueNode` AST, `ContinueSignal` class
-   - Implemented in execWhile, execRepeat, execForEach
 2. **`with`-style function calls in expressions** — `func with arg1 and arg2`
-   - Added in parsePostfix() after parenthesized call handler
-   - Critical for self-hosting parser which uses this syntax heavily
 3. **`equals` comparison operator** — `x equals "hello"` as `==` synonym
-   - Was already mapped to TokenType.Equal, confirmed working in comparison parsing
 
 ### Bug Fixes
 - CLI: Fixed missing `async` keyword on `cmdRepl()` function
 - Bootstrap parser: Fixed `tok_expect` to check both `t[0]` and `t[1]`
-- Bootstrap parser: Replaced JS `null` with IOZEN `nothing` keyword
-
-### Bootstrap Parser Expansion
-Added 5 new statement parsers to bootstrap/parser.iozen:
-- `parse_match_stmt()` — Match expression with case/otherwise
-- `parse_try_catch()` — Try/catch with optional binding
-- `parse_throw_stmt()` — Throw expression
-- `parse_import_stmt()` — Import module
-- `parse_define_union()` — Union declaration
 
 ### Test Suite
 - **216/216 passing** (14 new tests)
-- 6 continue keyword tests
-- 4 with-call function tests
-- 4 equals comparison tests
 
 ## Session 6: Phase 3 — Self-Hosting Interpreter
 **Date**: 2026-04-09
@@ -45,123 +28,70 @@ Added 5 new statement parsers to bootstrap/parser.iozen:
 
 ### Achievements
 - **Phase 3 milestone reached**: Self-hosting interpreter in IOZEN is fully functional.
-- Implemented `bootstrap/interpreter.iozen` supporting core evaluation, control flow, functions, call stack, and environments.
-- README Roadmap updated to reflect Phase 3 completion.
-
-### Next Steps (Phase 4)
-- Type checking system / AST validation
-- Language engine stabilizations
-- Ownership/borrowing implementation
 
 ## Session 7: Phase 4 & 5 — Typechecker, Ownership & C Codegen
 **Date**: 2026-04-09
 **Status**: Completed
 
 ### Achievements
-- **Phase 4 milestone reached**: Semantic AST validation & Typechecker (`bootstrap/typechecker.iozen`).
-- **Phase 4 Part 2**: Built the IOZEN Borrow Checker.
-  - Implemented the `borrow` unary operator natively in the Lexer & Parser.
-  - Typechecker tracks variable ownership and safely prevents reads of `moved_vars`.
-- **Phase 5 milestone reached**: Native C Compiler Generation (`bootstrap/codegen_c.iozen`).
-  - Implemented an IOZEN-to-C99 transpiler parsing `Literal`, `FunctionDecl`, `While`, `When`, etc.
-  - Dynamically packages valid C code structures around an `int main()` block.
-
-### Next Steps (Phase 6)
-- Combine Lexer, Parser, Typechecker, and Codegen into a Single Compiler Pipeline `iozenc.iozen`.
+- **Phase 4 milestone**: Semantic AST validation & Typechecker
+- **Phase 4 Part 2**: Borrow Checker
+- **Phase 5 milestone**: Native C Compiler Generation
 
 ## Session 8: Phase 6 — IOZENC Self-Hosting Compiler
 **Date**: 2026-04-09
 **Status**: Completed
 
-### Achievements
-- **Phase 6 milestone reached**: Unified self-hosting compiler `bootstrap/iozenc.iozen`.
-- Full pipeline: Raw IOZEN source → Lexer (40 tokens) → Parser (4 statements) → C99 code generation.
-- Successfully compiles IOZEN functions, variables, function calls, and print to valid C99.
-- The IOZEN bootstrap journey is functionally complete.
-
-## Session 9: Phase 6 Final - Complete Language Coverage
+## Session 9: Phase 6 Final — Complete Language Coverage
 **Date**: 2026-04-09
 **Status**: Completed
-
-### Achievements
-- **Phase 6 Final milestone reached**: Full language feature coverage in `bootstrap/iozenc.iozen`.
-- Lexer expanded to 70+ keywords including: repeat, for each, match, try, catch, throw, structure, enum, union.
-- Parser now supports:
-  - Natural language comparisons: `is greater than`, `is less than or equal to`, `equals`
-  - String concatenation: `attach` operator
-  - Loops: `repeat N times`, `for each item in list`
-  - Pattern matching: `match` with `case`/`otherwise`
-  - Error handling: `try/catch/throw`
-  - Flow control: `exit` (break), `continue`
-- Codegen generates valid C99 for all new constructs:
-  - `iozen_strcat()` helper for string concatenation
-  - Type tracking for correct printf formats
-  - ForEach compiled as C for-loop with array iteration
-  - Match compiled as if-else chain
-- Compiler successfully compiles complex IOZEN programs with functions, recursion, loops, and conditionals.
 
 ## Session 10: Phase 7 — First Real Tools
 **Date**: 2026-04-09
 **Status**: Completed
 
-### Achievements
-- **Phase 7 milestone reached**: First practical tools written in IOZEN.
-- Created `tools/calculator.iozen` — A fully functional command-line calculator demonstrating:
-  - Arithmetic operations: add, subtract, multiply, divide
-  - Advanced functions: power, factorial (recursive)
-  - Iterative Fibonacci sequence (optimized for large N)
-  - Prime number checking with trial division
-  - Natural language syntax: `attach` for string concatenation
-  - Control flow: `repeat`, `while`, `when`
-- Created `tools/prime_sieve.iozen` — Sieve of Eratosthenes implementation:
-  - Efficient prime generation up to N using map-based tracking
-  - Demonstrates algorithmic capabilities of IOZEN
-  - Properly formatted output with grid layout
-- Both tools run successfully in the IOZEN interpreter.
-
-### Phase 7 Verification
-| Tool | Features | Status |
-|------|----------|--------|
-| calculator.iozen | Math operations, functions, loops | ✅ Working |
-| prime_sieve.iozen | Sieve algorithm, map operations | ✅ Working |
-
 ## Session 11: Phase 8 — Native Binary Compilation
 **Date**: 2026-04-09
 **Status**: Completed
 
+## Session 12: Compiler v2 — IR Optimizer & C Backend Fixes
+**Date**: 2026-04-15
+**Commits**: 76605e0, c5f578b
+
 ### Achievements
-- **Phase 8 milestone reached**: IOZEN → C99 → Native Binary pipeline complete.
-- Enhanced `bootstrap/iozenc.iozen` with file I/O and compilation stages:
-  - Stage 4: Save generated C code to `target/output.c` using `write_file`
-  - Stage 5: Compile to native binary using `system("gcc ...")`
-  - Binary output: `target/output` (runnable executable)
-- Created `examples/hello.iozen` - Simple test program for compiler validation.
-- Successfully compiled and ran native binary:
-  ```
-  IOZEN source → C99 code → Native binary → Execution
-  ```
-- Created `bootstrap/iozenc_selftest.iozen` - Self-contained compiler test:
-  - Demonstrates that IOZEN can compile itself (simplified version)
-  - Full pipeline: Source → Tokens → AST → C99 → Binary → Execution
-  - Verified working end-to-end
+- **73/73 compiler tests passing** (new comprehensive test suite)
+- **374/375 interpreter tests passing** (1 pre-existing failure)
+- Full end-to-end compilation: IOZEN → C99 → Native Binary → Execution
+- All example files compile and run as native binaries
 
-### Phase 8 Verification
-| Component | Feature | Status |
-|-----------|---------|--------|
-| iozenc.iozen | File input via `read_file` | ✅ Working |
-| iozenc.iozen | C output via `write_file` | ✅ Working |
-| iozenc.iozen | Binary compilation via `system()` | ✅ Working |
-| Native binary | Runnable executable produced | ✅ Working |
-| Self-test | Full pipeline validation | ✅ Passed |
+### New Files
+- `src/lib/iozen/compiler/ir-optimizer.ts` — IR-level optimizer with:
+  - Loop-aware constant propagation with back-edge detection
+  - Algebraic simplification (x+0→x, x*1→x, x*0→0, x-0→x, x/1→x, x%1→0, !!x→x, -(-x)→x)
+  - Constant folding at IR level (number, string, boolean operations)
+  - Dead code elimination with transitive usage tracking
+  - Copy propagation through store/load chains
+- `tests/test_compiler.ts` — 73 tests covering:
+  - Tokenizer & Parser (22), IR Generation (5), IR Optimizer (7)
+  - C Code Generation (13), End-to-End Compile & Run (18)
+  - Error Handling (2), Full Binary Pipeline (3), Real-World Examples (3)
 
-### Technical Notes
-- Generated C99 code requires `gcc` or `clang` for compilation
-- Integer-to-string concatenation requires type conversion (future enhancement)
-- String concatenation with `attach` operator works for string types
-- Binary compilation requires Linux/Unix environment with C compiler
+### Major Bug Fixes
+1. **C backend emitOperand()**: Added proper rendering of IRValue objects as C compound literals
+   - Previously `String(irValue)` produced `[object Object]` in C code
+2. **Loop-unsafe constant propagation**: Optimizer now detects loop back-edges and clears constant map
+   - Previously propagated initial values across loop iterations causing infinite loops
+3. **DCE missing array_push operands**: Track src1 and src2 of array_push instructions
+   - Previously array element values were eliminated as dead code
+4. **C keyword name mangling**: `double`, `float`, `int`, etc. → `iz_double`, `iz_float`, `iz_int`
+   - Previously `fn double()` produced invalid C
+5. **Integer modulo**: Cast to `(int)` for C's `%` operator (requires integer operands)
+6. **String+number coercion**: Auto-convert numbers to strings in concatenation via `to_string` IR op
+7. **Type inference**: Untyped variable declarations infer type from initializer expression
+8. **GCC C99 compliance**: Added `_GNU_SOURCE` define, `-std=c99` flag
+9. **DCE to_string tracking**: Mark `to_string` operands as used in dead code elimination
 
-### Next Steps (Phase 9)
-- Full self-hosting: iozenc compiles itself completely
-- Standard library expansion (collections, algorithms)
-- Package manager for IOZEN modules
-- Optimized C code generation
+### Pipeline Status
+```
+IOZEN Source → Tokenizer → Parser → AST → IR (SSA-like) → IR Optimizer → C99 → Native Binary
+```
