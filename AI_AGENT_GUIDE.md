@@ -23,8 +23,8 @@
 ### Core Language (Interpreter + Compiler)
 - Tokenizer v2, Parser v2, Interpreter v2 — all working
 - **Full compiler pipeline**: IOZEN → Tokenizer → Parser → AST → IR → IR Optimizer → C Backend → Native Binary
-- **73/73 compiler tests passing**
-- **374/375 interpreter tests passing**
+- **82/82 compiler tests passing**
+- **374/375 interpreter tests passing** (1 pre-existing edge case)
 
 ### Language Features (v2 Compiler)
 - Variables: `let x = 10`, `let x: number = 42`
@@ -44,6 +44,9 @@
 - **Arrays**: `[1, 2, 3]`, `arr[0]`, array push
 - **Structs**: declaration, instantiation, field access, field mutation
 - **Match expressions**: pattern matching with guards and wildcards
+- **Enums**: `enum Color { Red, Green, Blue }`, `Color.Red` → integer constants
+- **Lambdas/Closures**: `fn(x) { return x + 1 }`, captures variables from enclosing scope
+- **Try/catch/throw**: exception handling via setjmp/longjmp in C
 - Print function
 - Comments: `// single line`
 
@@ -86,7 +89,7 @@
 | `iozen-cli/src/cli.ts` | CLI entry | ✅ Working |
 | `src/lib/iozen/chase_lev.ts` | Work-stealing deque | ✅ Experimental |
 | `src/lib/iozen/atomic_types.ts` | Type-driven safety | ✅ Experimental |
-| `tests/test_compiler.ts` | Compiler test suite (73 tests) | ✅ 73/73 |
+| `tests/test_compiler.ts` | Compiler test suite (82 tests) | ✅ 82/82 |
 
 ### Runtime Components (Advanced, Not Used in v0.4)
 - **Chase-Lev deque:** Lock-free work-stealing queue
@@ -177,6 +180,23 @@ for (let i = 0; i < 10; i = i + 1) {
 
 // Boolean and logical ops
 let flag = true && !false
+
+// Enums
+enum Color { Red, Green, Blue }
+let c = Color.Red  // c = 0
+
+// Closures/Lambdas
+let adder = fn(x: number, y: number): number {
+    return x + y
+}
+print(adder(3, 4))  // 7
+
+// Try/catch
+try {
+    // risky code
+} catch (e) {
+    print("caught: " + e)
+}
 ```
 
 ---
@@ -219,9 +239,8 @@ let flag = true && !false
 - No module/import system yet
 - Limited struct method dispatch (fields only)
 - Match only supports literal patterns (no destructuring)
-- No enums in compiler (only in interpreter)
-- No closures in compiler
 - No generic types
+- Closures generated but not yet callable as first-class values (lambda_call not wired)
 
 ---
 
@@ -229,9 +248,8 @@ let flag = true && !false
 
 ### High Priority
 - Module system (import/export)
-- Enums in compiler
-- Error handling (try/catch) in compiler
-- Closures
+- Callable closures (lambda_call IR to C function pointer invocation)
+- For-in loops
 
 ### Medium Priority
 - Generic types
@@ -262,4 +280,4 @@ Based on previous sessions:
 
 **End of AI Agent Guide**
 
-*This guide ensures continuity if the user switches AI agents. Current state: IOZEN v0.4 is a working native compiler with structs, match, arrays, and 73/73 tests passing.*
+*This guide ensures continuity if the user switches AI agents. Current state: IOZEN v0.4 is a working native compiler with structs, enums, match, closures, try/catch, arrays, and 82/82 tests passing.*

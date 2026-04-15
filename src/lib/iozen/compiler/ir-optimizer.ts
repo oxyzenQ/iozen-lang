@@ -177,7 +177,7 @@ export class IROptimizer {
           break;
         }
 
-        case 'if': {
+        case 'if': case 'if_not': {
           // Only propagate into condition; do NOT convert to goto.
           if (typeof inst.src1 === 'string') {
             const c = constants.get(inst.src1);
@@ -212,6 +212,15 @@ export class IROptimizer {
             if (c) { inst.src2 = c; changed = true; }
           }
           if (inst.dest) constants.delete(inst.dest);
+          break;
+        }
+
+        case 'throw': {
+          // Propagate constant into throw operand
+          if (typeof inst.src1 === 'string') {
+            const c = constants.get(inst.src1);
+            if (c) { inst.src1 = c; changed = true; }
+          }
           break;
         }
 
@@ -494,6 +503,8 @@ export class IROptimizer {
           markUsed(inst.src1); break;
         case 'field_store':
           markUsed(inst.src1); markUsed(inst.src2); break;
+        case 'throw':
+          markUsed(inst.src1); break;
         default: break;
       }
     }
@@ -569,6 +580,8 @@ export class IROptimizer {
       case 'ret': case 'print': case 'call': case 'store':
       case 'array': case 'array_push':
       case 'struct_alloc': case 'field_store':
+      case 'throw': case 'try_start': case 'try_end':
+      case 'lambda_alloc':
         return true;
       default:
         return false;

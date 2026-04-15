@@ -9,6 +9,7 @@ export class ASTToIR {
   private builder: IRBuilder;
   private variableTypes: Map<string, IRValue['type']> = new Map();
   private structDefs: Map<string, { fields: { name: string; typeName: string }[] }> = new Map();
+  private enumDefs: Map<string, Map<string, number>> = new Map();
   private loopLabels: { start: string; end: string }[] = [];
 
   constructor() {
@@ -19,6 +20,7 @@ export class ASTToIR {
     this.builder.reset();
     this.variableTypes.clear();
     this.structDefs.clear();
+    this.enumDefs.clear();
 
     // Process all statements at program level
     for (const stmt of program.body) {
@@ -51,6 +53,17 @@ export class ASTToIR {
       case 'StructDeclaration':
         // Register struct definition for type tracking
         this.structDefs.set(stmt.name, { fields: stmt.fields });
+        break;
+      case 'EnumDeclaration':
+        // Register enum definition - variants map to integer constants
+        {
+          const variantMap = new Map<string, number>();
+          for (let i = 0; i < stmt.variants.length; i++) {
+            variantMap.set(stmt.variants[i], i);
+            this.variableTypes.set(`${stmt.name}.${stmt.variants[i]}`, 'number');
+          }
+          this.enumDefs.set(stmt.name, variantMap);
+        }
         break;
       default:
         // Other global statements go into main function
@@ -108,9 +121,9 @@ export class ASTToIR {
       case 'ExpressionStatement':
         return this.genExpression(stmt.expression);
       case 'TryStatement':
+        return this.genTry(stmt as AST.TryStatement);
       case 'ThrowStatement':
-        // TODO: Exception handling
-        return undefined;
+        return this.genThrow(stmt as AST.ThrowStatement);
       case 'ImportStatement':
       case 'ExportStatement':
         // TODO: Module system
@@ -294,6 +307,111 @@ export class ASTToIR {
     return undefined;
   }
 
+  private genTry(stmt: AST.TryStatement): string | undefined {
+    // Generate IR for try/catch/finally:
+    //
+    // Without finally:
+    //   try_start catch_label:
+    //     ... tryBody ...
+    //   goto try_end_label
+    //   catch_label:
+    //     e = caught_exception  (if catchParam)
+    //     ... catchBody ...
+    //   try_end_label:
+    //
+    // With finally:
+    //   try_start catch_label:
+    //     ... tryBody ...
+    //   goto finally_label
+    //   catch_label:
+    //     e = caught_exception  (if catchParam)
+    //     ... catchBody ...
+    //   finally_label:
+    //     ... finallyBody ...
+    //   try_end_label:
+
+    const catchLabel = this.builder.newLabel('catch');
+    const tryEndLabel = this.builder.newLabel('try_end');
+
+    // try_start: marks beginning of try block, with catch handler label
+    this.builder.emit({ op: 'try_start', label: catchLabel, comment: `try_start -> ${catchLabel}` });
+
+    // Generate try body
+    for (const s of stmt.tryBody) {
+      this.generateStatement(s);
+    }
+
+    // Skip catch if no exception was thrown
+    if (stmt.finallyBody && stmt.finallyBody.length > 0) {
+      // If finally exists, goto finally_label (finally runs after try success)
+      const finallyLabel = this.builder.newLabel('finally');
+      this.builder.emitGoto(finallyLabel);
+
+      // catch_label:
+      this.builder.emitLabel(catchLabel);
+
+      if (stmt.catchBody && stmt.catchParam) {
+        // Bind the caught exception to catchParam
+        this.builder.addLocal(stmt.catchParam, 'ptr');
+        this.variableTypes.set(stmt.catchParam, 'ptr');
+        // Load the caught exception value from the global exception variable
+        this.builder.emitLoad(stmt.catchParam, '__iz_exception_value');
+        // Generate catch body
+        for (const s of stmt.catchBody) {
+          this.generateStatement(s);
+        }
+      } else if (stmt.catchBody) {
+        // catch without parameter
+        for (const s of stmt.catchBody) {
+          this.generateStatement(s);
+        }
+      }
+
+      // finally_label:
+      this.builder.emitLabel(finallyLabel);
+      for (const s of stmt.finallyBody) {
+        this.generateStatement(s);
+      }
+
+      // try_end_label:
+      this.builder.emitLabel(tryEndLabel);
+    } else {
+      // No finally — try body falls through to try_end
+      this.builder.emitGoto(tryEndLabel);
+
+      // catch_label:
+      this.builder.emitLabel(catchLabel);
+
+      if (stmt.catchBody && stmt.catchParam) {
+        // Bind the caught exception to catchParam
+        this.builder.addLocal(stmt.catchParam, 'ptr');
+        this.variableTypes.set(stmt.catchParam, 'ptr');
+        // Load the caught exception value from the global exception variable
+        this.builder.emitLoad(stmt.catchParam, '__iz_exception_value');
+        // Generate catch body
+        for (const s of stmt.catchBody) {
+          this.generateStatement(s);
+        }
+      } else if (stmt.catchBody) {
+        // catch without parameter
+        for (const s of stmt.catchBody) {
+          this.generateStatement(s);
+        }
+      }
+
+      // try_end_label:
+      this.builder.emitLabel(tryEndLabel);
+    }
+
+    return undefined;
+  }
+
+  private genThrow(stmt: AST.ThrowStatement): string | undefined {
+    const value = this.genExpression(stmt.value);
+    this.builder.emit({ op: 'throw', src1: value, comment: `throw ${value}` });
+    return undefined;
+  }
+
   private genExpression(expr: AST.Expression): string {
     switch (expr.type) {
       case 'NumberLiteral':
@@ -342,6 +460,9 @@ export class ASTToIR {
 
       case 'MatchExpression':
         return this.genMatchExpression(expr as any);
+
+      case 'LambdaExpression':
+        return this.genLambda(expr as any);
 
       default:
         return this.builder.newTemp('ptr');
@@ -519,9 +640,86 @@ export class ASTToIR {
   }
 
   private genFieldAccess(expr: AST.FieldAccess): string {
+    // Check for enum variant access: EnumType.Variant -> integer constant
+    if (expr.object.type === 'Identifier') {
+      const enumName = expr.object.name;
+      const variantName = expr.field;
+      const enumDef = this.enumDefs.get(enumName);
+      if (enumDef && enumDef.has(variantName)) {
+        const value = enumDef.get(variantName)!;
+        const result = this.builder.newTemp('number');
+        this.builder.emitConst(result, { type: 'number', value });
+        return result;
+      }
+    }
+
+    // Regular struct field access
     const obj = this.genExpression(expr.object);
     const result = this.builder.newTemp('ptr');
     this.builder.emitFieldLoad(result, obj, expr.field);
+    return result;
+  }
+
+  private lambdaCounter = 0;
+
+  private genLambda(expr: any): string {
+    // Closures are compiled as:
+    // 1. A closure struct: { captured vars }
+    // 2. A static function: fn_lambda_N(iz_closure_env_t* env, params...)
+    // 3. The lambda value is represented as an index into a lambda table
+
+    const lambdaId = this.lambdaCounter++;
+    const funcName = `__lambda_${lambdaId}`;
+    const captures = expr.captures || [];
+    const params = expr.params || [];
+
+    // Generate the lambda function
+    this.builder.newFunction(funcName, 'void');
+
+    // First parameter is always the closure environment (iz_value_t)
+    const envParam = '__env';
+    this.builder.addParam(envParam, 'ptr');
+
+    // Add user parameters
+    for (let i = 0; i < params.length; i++) {
+      const paramName = params[i];
+      const paramType = expr.paramTypes && expr.paramTypes[i]
+        ? this.mapType(expr.paramTypes[i])
+        : 'ptr';
+      this.builder.addParam(paramName, paramType);
+    }
+
+    // Unpack captured variables from the environment
+    // The environment is an iz_value_t array where each captured var is at its index
+    for (let i = 0; i < captures.length; i++) {
+      const captureName = captures[i];
+      const captureType = this.variableTypes.get(captureName) || 'ptr';
+      this.builder.addLocal(captureName, captureType);
+      // Emit: captureName = iz_array_get(env, i)
+      const tempIdx = this.builder.newTemp('number');
+      this.builder.emitConst(tempIdx, { type: 'number', value: i });
+      this.builder.emit({ op: 'index', dest: captureName, src1: envParam, src2: tempIdx,
+        comment: `${captureName} = env[${i}]` });
+    }
+
+    // Generate body
+    for (const stmt of expr.body) {
+      this.generateStatement(stmt);
+    }
+
+    // Generate return if needed
+    const funcData = this.builder.getProgram().functions.find(f => f.name === funcName);
+    if (funcData && !funcData.instructions.some(i => i.op === 'ret')) {
+      this.builder.emitRet();
+    }
+
+    // Now generate code in the caller to create the closure
+    // For now, we represent a lambda as its function name (string constant)
+    // The C backend will handle creating the closure struct
+    const result = this.builder.newTemp('ptr');
+    this.builder.emit({ op: 'lambda_alloc', dest: result, src1: funcName,
+      label: captures.join(','), comment: `${result} = lambda ${funcName} captures=[${captures.join(',')}]` });
+
     return result;
   }
 

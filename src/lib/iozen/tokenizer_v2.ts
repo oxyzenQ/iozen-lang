@@ -64,7 +64,8 @@ export type TokenType =
   | 'TRUE'         // true
   | 'FALSE'        // false
   | 'BANG'         // !
-  | 'STRUCT';      // struct
+  | 'STRUCT'       // struct
+  | 'ENUM';        // enum
 
 export interface Token {
   type: TokenType;
@@ -104,6 +105,7 @@ const KEYWORDS: Record<string, TokenType> = {
   'true': 'TRUE',
   'false': 'FALSE',
   'struct': 'STRUCT',
+  'enum': 'ENUM',
 };
 
 export class MinimalTokenizer {

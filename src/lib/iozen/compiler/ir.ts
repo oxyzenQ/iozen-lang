@@ -12,6 +12,8 @@ export type IROp =
   | 'label' | 'goto' | 'if' | 'if_not'
   | 'print' | 'array' | 'array_push' | 'index' | 'field'
   | 'struct_alloc' | 'field_store'
+  | 'throw' | 'try_start' | 'try_end'
+  | 'lambda_alloc' | 'lambda_call'
   | 'phi';
 
 export interface IRValue {

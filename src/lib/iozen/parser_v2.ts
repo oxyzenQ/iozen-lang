@@ -125,6 +125,7 @@ export type Statement =
   | AssignmentStatement
   | FieldAssignment
   | StructDeclaration
+  | EnumDeclaration
   | IfStatement
   | WhileStatement
   | ForStatement
@@ -149,7 +150,8 @@ export type Expression =
   | StructLiteral
   | ArrayAccess
   | FieldAccess
-  | MatchExpression;
+  | MatchExpression
+  | LambdaExpression;
 
 export interface BooleanLiteral {
   type: 'BooleanLiteral';
@@ -233,6 +235,12 @@ export interface StructDeclaration {
   fields: { name: string; typeName: string }[];
 }
 
+export interface EnumDeclaration {
+  type: 'EnumDeclaration';
+  name: string;
+  variants: string[];
+}
+
 export interface MatchArm {
   pattern: Expression | null;   // null for wildcard (_)
   binding: string | null;       // optional binding name (e.g., n in `n when ...`)
@@ -244,6 +252,14 @@ export interface MatchExpression {
   type: 'MatchExpression';
   subject: Expression;
   arms: MatchArm[];
+}
+
+export interface LambdaExpression {
+  type: 'LambdaExpression';
+  params: string[];
+  paramTypes?: TypeAnnotation[];
+  body: Statement[];
+  captures: string[]; // variables captured from enclosing scope
 }
 
 export class MinimalParser {
@@ -368,6 +384,11 @@ export class MinimalParser {
     // Struct declaration
     if (this.check('STRUCT')) {
       return this.parseStructDeclaration();
+    }
+
+    // Enum declaration
+    if (this.check('ENUM')) {
+      return this.parseEnumDeclaration();
     }
 
     // Function declaration
@@ -628,6 +649,34 @@ export class MinimalParser {
       type: 'StructDeclaration',
       name,
       fields
+    };
+  }
+
+  private parseEnumDeclaration(): EnumDeclaration {
+    this.consume('ENUM', 'Expected "enum"');
+    const name = this.consume('IDENT', 'Expected enum name').value;
+    this.consume('LBRACE', 'Expected "{" after enum name');
+
+    const variants: string[] = [];
+    while (!this.check('RBRACE') && !this.isAtEnd()) {
+      // Skip optional comma or newline
+      while (this.match('COMMA') || this.match('NEWLINE') || this.match('SEMICOLON')) {}
+      if (this.check('RBRACE') || this.isAtEnd()) break;
+
+      const variant = this.consume('IDENT', 'Expected enum variant name');
+      variants.push(variant.value);
+
+      // Skip optional comma or newline after variant
+      this.match('COMMA');
+      this.match('NEWLINE');
+      this.match('SEMICOLON');
+    }
+
+    this.consume('RBRACE', 'Expected "}" after enum variants');
+    return {
+      type: 'EnumDeclaration',
+      name,
+      variants
     };
   }
 
@@ -971,6 +1020,11 @@ export class MinimalParser {
       return this.parseMatchExpression();
     }
 
+    // Lambda expression: fn(x, y) { body }
+    if (this.check('FN') && !this.isAtStartOfStatement()) {
+      return this.parseLambdaExpression();
+    }
+
     // Function call, array access, field access, or identifier
     if (this.check('IDENT')) {
       let expr: Expression = { type: 'Identifier', name: this.advance().value };
@@ -1055,6 +1109,148 @@ export class MinimalParser {
     }
 
     throw new ParseError(`Unexpected token: ${this.peek().type}`, this.peek().line, this.peek().column);
+  }
+
+  /** Check if current position looks like the start of a statement (not an expression) */
+  private isAtStartOfStatement(): boolean {
+    if (this.position === 0) return true;
+    // If the previous token is a statement terminator, we're at start of statement
+    const prev = this.tokens[this.position - 1];
+    return prev.type === 'NEWLINE' || prev.type === 'SEMICOLON' ||
+           prev.type === 'LBRACE' || prev.type === 'EOF';
+  }
+
+  private parseLambdaExpression(): LambdaExpression {
+    this.consume('FN', 'Expected "fn"');
+    this.consume('LPAREN', 'Expected "(" after fn');
+
+    const params: string[] = [];
+    const paramTypes: TypeAnnotation[] = [];
+
+    if (!this.check('RPAREN')) {
+      do {
+        const paramName = this.consume('IDENT', 'Expected parameter name').value;
+        params.push(paramName);
+        // Optional type annotation
+        if (this.match('COLON')) {
+          paramTypes.push(this.parseTypeAnnotation());
+        } else {
+          paramTypes.push(null);
+        }
+      } while (this.match('COMMA'));
+    }
+
+    this.consume('RPAREN', 'Expected ")" after lambda parameters');
+
+    // Optional return type
+    if (this.match('COLON')) {
+      this.parseTypeAnnotation(); // consume but don't store for now
+    }
+
+    const body = this.parseBlock();
+
+    // Analyze captures: find identifiers in body that aren't params
+    // Simple analysis - collect all identifiers that aren't params
+    const captures = this.analyzeLambdaCaptures(body, params);
+
+    return {
+      type: 'LambdaExpression',
+      params,
+      paramTypes,
+      body,
+      captures
+    };
+  }
+
+  /** Simple capture analysis - find free variables in lambda body */
+  private analyzeLambdaCaptures(body: Statement[], params: string[]): string[] {
+    const captures = new Set<string>();
+    const paramSet = new Set(params);
+
+    const collectFromExpr = (expr: Expression): void => {
+      if (!expr) return;
+      switch (expr.type) {
+        case 'Identifier':
+          if (!paramSet.has(expr.name)) captures.add(expr.name);
+          break;
+        case 'BinaryExpression':
+          collectFromExpr(expr.left);
+          collectFromExpr(expr.right);
+          break;
+        case 'LogicalExpression':
+          collectFromExpr(expr.left);
+          collectFromExpr(expr.right);
+          break;
+        case 'UnaryExpression':
+          collectFromExpr(expr.operand);
+          break;
+        case 'CallExpression':
+          expr.arguments.forEach(collectFromExpr);
+          break;
+        case 'ArrayLiteral':
+          expr.elements.forEach(collectFromExpr);
+          break;
+        case 'ArrayAccess':
+          collectFromExpr(expr.array);
+          collectFromExpr(expr.index);
+          break;
+        case 'FieldAccess':
+          collectFromExpr(expr.object);
+          break;
+        case 'MatchExpression':
+          collectFromExpr(expr.subject);
+          expr.arms.forEach(arm => {
+            if (arm.pattern) collectFromExpr(arm.pattern);
+            if (arm.guard) collectFromExpr(arm.guard);
+            collectFromExpr(arm.result);
+          });
+          break;
+      }
+    };
+
+    const collectFromStmt = (stmt: Statement): void => {
+      if (!stmt) return;
+      switch (stmt.type) {
+        case 'VariableDeclaration':
+          collectFromExpr(stmt.initializer);
+          break;
+        case 'AssignmentStatement':
+          collectFromExpr(stmt.value);
+          break;
+        case 'PrintStatement':
+          collectFromExpr(stmt.argument);
+          break;
+        case 'IfStatement':
+          collectFromExpr(stmt.condition);
+          stmt.thenBranch.forEach(collectFromStmt);
+          if (stmt.elseBranch) stmt.elseBranch.forEach(collectFromStmt);
+          break;
+        case 'WhileStatement':
+          collectFromExpr(stmt.condition);
+          stmt.body.forEach(collectFromStmt);
+          break;
+        case 'ForStatement':
+          if (stmt.condition) collectFromExpr(stmt.condition);
+          stmt.body.forEach(collectFromStmt);
+          break;
+        case 'ReturnStatement':
+          if (stmt.value) collectFromExpr(stmt.value);
+          break;
+        case 'ExpressionStatement':
+          collectFromExpr(stmt.expression);
+          break;
+        case 'ThrowStatement':
+          collectFromExpr(stmt.value);
+          break;
+        case 'FieldAssignment':
+          collectFromExpr(stmt.object);
+          collectFromExpr(stmt.value);
+          break;
+      }
+    };
+
+    body.forEach(collectFromStmt);
+    return Array.from(captures);
   }
 
   private parseMatchExpression(): Expression {

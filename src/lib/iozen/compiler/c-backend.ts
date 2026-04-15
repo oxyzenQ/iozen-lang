@@ -59,6 +59,7 @@ export class CBackend {
     this.emitLine('#include <string.h>');
     this.emitLine('#include <math.h>');
     this.emitLine('#include <stdbool.h>');
+    this.emitLine('#include <setjmp.h>');
     this.emitLine('#include <sys/stat.h>');
     this.emitLine('');
 
@@ -70,6 +71,7 @@ export class CBackend {
     this.emitLine('  IZ_BOOL,');
     this.emitLine('  IZ_ARRAY,');
     this.emitLine('  IZ_STRUCT,');
+    this.emitLine('  IZ_CLOSURE,');
     this.emitLine('  IZ_NULL');
     this.emitLine('} iz_type_t;');
     this.emitLine('');
@@ -82,6 +84,7 @@ export class CBackend {
     this.emitLine('    bool boolean;');
     this.emitLine('    struct iz_array* array;');
     this.emitLine('    struct iz_struct* structure;');
+    this.emitLine('    struct iz_closure* closure;');
     this.emitLine('  } data;');
     this.emitLine('} iz_value_t;');
     this.emitLine('');
@@ -107,6 +110,13 @@ export class CBackend {
     this.emitLine('} iz_struct_t;');
     this.emitLine('');
 
+    // Closure type (function pointer + captured environment)
+    this.emitLine('typedef struct iz_closure {');
+    this.emitLine('  void (*func)(iz_value_t, ...);  // function pointer');
+    this.emitLine('  struct iz_array* env;           // captured variables');
+    this.emitLine('} iz_closure_t;');
+    this.emitLine('');
+
     // Named struct C typedefs
     if (program.structs.size > 0) {
       this.emitLine('// Named struct type forward declarations');
@@ -115,6 +125,13 @@ export class CBackend {
       }
       this.emitLine('');
     }
+
+    // Exception handling globals (setjmp/longjmp)
+    this.emitLine('// Exception handling (setjmp/longjmp)');
+    this.emitLine('static jmp_buf iz_exception_buf;');
+    this.emitLine('static iz_value_t iz_exception_value = { .type = IZ_NULL };');
+    this.emitLine('static volatile int iz_has_exception = 0;');
+    this.emitLine('');
 
     // String literals (collected in Phase 1)
     if (this.stringLiterals.size > 0) {
@@ -423,6 +440,16 @@ export class CBackend {
         break;
       }
 
+      case 'if_not':
+        if (inst.src1 && inst.label) {
+          const cond = this.emitOperand(inst.src1);
+          const condExpr = typeof inst.src1 === 'object' && inst.src1.type === 'bool'
+            ? `!${cond}.data.boolean`
+            : `!${cond}.data.boolean`;
+          this.output.push(`${indent}if (${condExpr}) goto ${inst.label};`);
+        }
+        break;
+
       case 'goto':
         if (inst.label) {
           this.output.push(`${indent}goto ${inst.label};`);
@@ -497,6 +524,58 @@ export class CBackend {
       case 'phi':
         // SSA phi nodes - handled differently
         break;
+
+      case 'try_start':
+        // setjmp/longjmp based try-catch entry point
+        if (inst.label) {
+          this.output.push(`${indent}if (setjmp(iz_exception_buf) != 0) {`);
+          this.output.push(`${indent}  iz_has_exception = 0;`);
+          this.output.push(`${indent}  goto ${inst.label};`);
+          this.output.push(`${indent}}`);
+        }
+        break;
+
+      case 'throw':
+        // Set exception value and longjmp back to try_start
+        if (inst.src1) {
+          const throwVal = this.emitOperand(inst.src1);
+          this.output.push(`${indent}{`);
+          this.output.push(`${indent}  iz_value_t __throw_val = ${throwVal};`);
+          this.output.push(`${indent}  iz_exception_value = __throw_val;`);
+          this.output.push(`${indent}  iz_has_exception = 1;`);
+          this.output.push(`${indent}  longjmp(iz_exception_buf, 1);`);
+          this.output.push(`${indent}}`);
+        }
+        break;
+
+      case 'try_end':
+        // try_end is a no-op marker; the actual label is emitted separately
+        break;
+
+      case 'lambda_alloc': {
+        // Create a closure: { func_ptr, env_array }
+        // src1 = function name, label = comma-separated capture list
+        if (inst.dest && inst.src1) {
+          const funcName = String(inst.src1);
+          const captureList = inst.label ? inst.label.split(',').filter(s => s.length > 0) : [];
+          const captureCount = captureList.length;
+
+          // Allocate the closure struct
+          this.output.push(`${indent}{`);
+          this.output.push(`${indent}  iz_closure_t* __cl = malloc(sizeof(iz_closure_t));`);
+          this.output.push(`${indent}  __cl->func = ${mangleName(funcName)};`);
+          this.output.push(`${indent}  __cl->env = iz_array_new();`);
+
+          // Push captured variable values into the environment
+          for (const cap of captureList) {
+            this.output.push(`${indent}  { iz_value_t __cv; if (${cap}.type != IZ_NULL) __cv = ${cap}; else __cv = (iz_value_t){.type=IZ_NULL}; iz_array_push(__cl->env, __cv); }`);
+          }
+
+          this.output.push(`${indent}  ${inst.dest} = (iz_value_t){ .type = IZ_CLOSURE, .data.closure = __cl };`);
+          this.output.push(`${indent}}`);
+        }
+        break;
+      }
     }
   }
 
