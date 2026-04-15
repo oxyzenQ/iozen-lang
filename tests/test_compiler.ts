@@ -66,7 +66,7 @@ function compileAndRun(source: string, optimize = true): { stdout: string; exitC
   const tmpBin = path.join(os.tmpdir(), `iozen_ct_${Date.now()}`);
   fs.writeFileSync(tmpC, cCode);
   try {
-    execSync(`gcc -O2 -o "${tmpBin}" "${tmpC}" -lm`, { stdio: 'pipe' });
+    execSync(`gcc -std=c99 -O2 -o "${tmpBin}" "${tmpC}" -lm`, { stdio: 'pipe' });
     const stdout = execSync(`"${tmpBin}"`, { stdio: 'pipe', timeout: 5000 }).toString();
     return { stdout, exitCode: 0, cCode };
   } catch (e: any) {
@@ -637,24 +637,22 @@ test('example: test_constant_fold.iozen compiles and runs', () => {
   const src = fs.readFileSync('examples/test_constant_fold.iozen', 'utf-8');
   const { stdout, exitCode } = compileAndRun(src);
   assert(exitCode === 0, `test_constant_fold.iozen compilation failed`);
-  // Note: string+number concatenation is not yet supported by v2 compiler,
-  // so the "a = 2 + 3 = " prefix won't appear. Values are still correct.
-  assertIncludes(stdout, '5');
-  assertIncludes(stdout, '50');
-  assertIncludes(stdout, '25');
-  assertIncludes(stdout, '2');
-  assertIncludes(stdout, '20');
-  assertIncludes(stdout, '60');
-  assertIncludes(stdout, 'Hello, World!');
+  // String+number coercion now works in the compiler
+  assertIncludes(stdout, 'a = 2 + 3 = 5');
+  assertIncludes(stdout, 'b = 10 * 5 = 50');
+  assertIncludes(stdout, 'c = 100 / 4 = 25');
+  assertIncludes(stdout, 'd = 17 % 5 = 2');
+  assertIncludes(stdout, 'e = (2 + 3) * 4 = 20');
+  assertIncludes(stdout, 'f = 10 + 20 + 30 = 60');
+  assertIncludes(stdout, 'greeting = Hello, World!');
 });
 
 test('example: test_for_loop.iozen compiles and runs', () => {
   const src = fs.readFileSync('examples/test_for_loop.iozen', 'utf-8');
   const { stdout, exitCode } = compileAndRun(src);
   assert(exitCode === 0, `test_for_loop.iozen compilation failed`);
-  // Note: string+number coercion not yet in v2 compiler,
-  // so "Sum = " prefix won't appear. Just check the numeric value.
-  assertIncludes(stdout, '55');
+  // String+number coercion now works
+  assertIncludes(stdout, 'Sum = 55');
 });
 
 // ============================================================

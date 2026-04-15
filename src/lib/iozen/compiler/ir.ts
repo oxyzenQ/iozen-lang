@@ -6,6 +6,7 @@ export type IROp =
   | 'add' | 'sub' | 'mul' | 'div' | 'mod'
   | 'eq' | 'ne' | 'lt' | 'le' | 'gt' | 'ge'
   | 'and' | 'or' | 'not' | 'neg' | 'concat'
+  | 'to_string'  // Convert number/bool to string for concatenation
   | 'load' | 'store'
   | 'call' | 'ret'
   | 'label' | 'goto' | 'if' | 'if_not'

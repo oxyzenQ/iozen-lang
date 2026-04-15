@@ -482,7 +482,7 @@ export class IROptimizer {
         case 'eq': case 'ne': case 'lt': case 'le': case 'gt': case 'ge':
         case 'and': case 'or': case 'concat':
           markUsed(inst.src1); markUsed(inst.src2); break;
-        case 'neg': case 'not': case 'load': case 'index':
+        case 'neg': case 'not': case 'load': case 'index': case 'to_string':
           markUsed(inst.src1); break;
         case 'call':
           if (inst.args) inst.args.forEach(markUsed); break;
@@ -511,7 +511,7 @@ export class IROptimizer {
             if (typeof inst.src1 === 'string' && !used.has(inst.src1)) { used.add(inst.src1); added = true; }
             if (typeof inst.src2 === 'string' && !used.has(inst.src2)) { used.add(inst.src2); added = true; }
             break;
-          case 'neg': case 'not':
+          case 'neg': case 'not': case 'to_string':
             if (typeof inst.src1 === 'string' && !used.has(inst.src1)) { used.add(inst.src1); added = true; }
             break;
           case 'call':

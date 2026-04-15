@@ -53,6 +53,7 @@ export class CBackend {
     // Phase 2: Emit in correct order
 
     // Header
+    this.emitLine('#define _GNU_SOURCE 1');
     this.emitLine('#include <stdio.h>');
     this.emitLine('#include <stdlib.h>');
     this.emitLine('#include <string.h>');
@@ -323,11 +324,19 @@ export class CBackend {
         }
         break;
 
-      case 'concat':
+      case 'concat': {
         if (inst.dest && inst.src1 && inst.src2) {
-          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_STRING, .data.string = iz_string_concat(${this.emitOperand(inst.src1)}.data.type == IZ_STRING ? ${this.emitOperand(inst.src1)}.data.string : "", ${this.emitOperand(inst.src2)}.data.type == IZ_STRING ? ${this.emitOperand(inst.src2)}.data.string : "") };`);
+          // Need temporaries because emitOperand may return compound literals
+          // which can't have .data.type accessed inline in C
+          const tmpLeft = `${inst.dest}_cl`;
+          const tmpRight = `${inst.dest}_cr`;
+          this.output.push(`${indent}iz_value_t ${tmpLeft} = ${this.emitOperand(inst.src1)};`);
+          this.output.push(`${indent}iz_value_t ${tmpRight} = ${this.emitOperand(inst.src2)};`);
+          this.output.push(`${indent}${inst.dest}.type = IZ_STRING;`);
+          this.output.push(`${indent}${inst.dest}.data.string = iz_string_concat(${tmpLeft}.type == IZ_STRING ? ${tmpLeft}.data.string : "", ${tmpRight}.type == IZ_STRING ? ${tmpRight}.data.string : "");`);
         }
         break;
+      }
 
       case 'call': {
         const args = inst.args?.map(a => this.emitOperand(a)).join(', ') || '';
@@ -401,6 +410,22 @@ export class CBackend {
       case 'print':
         if (inst.src1) {
           this.output.push(`${indent}iz_print(${this.emitOperand(inst.src1)});`);
+        }
+        break;
+
+      case 'to_string':
+        if (inst.dest && inst.src1) {
+          // Convert number to string using snprintf
+          this.output.push(`${indent}{`);
+          this.indent++;
+          this.output.push(`${indent}char* __buf = malloc(64);`);
+          this.output.push(`${indent}iz_value_t __v = ${this.emitOperand(inst.src1)};`);
+          this.output.push(`${indent}if (__v.type == IZ_NUMBER) snprintf(__buf, 64, "%g", __v.data.number);`);
+          this.output.push(`${indent}else if (__v.type == IZ_BOOL) snprintf(__buf, 64, "%s", __v.data.boolean ? "true" : "false");`);
+          this.output.push(`${indent}else snprintf(__buf, 64, "null");`);
+          this.output.push(`${indent}${inst.dest} = (iz_value_t){ .type = IZ_STRING, .data.string = __buf };`);
+          this.indent--;
+          this.output.push(`${indent}}`);
         }
         break;
 

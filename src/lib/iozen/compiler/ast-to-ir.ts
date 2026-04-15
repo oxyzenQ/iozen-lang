@@ -106,7 +106,13 @@ export class ASTToIR {
   }
 
   private genVariableDeclaration(stmt: AST.VariableDeclaration): string {
-    const type = this.mapType(stmt.typeAnnotation);
+    let type = this.mapType(stmt.typeAnnotation);
+    
+    // If no explicit type annotation, infer from initializer
+    if (type === 'ptr' && stmt.typeAnnotation === null && stmt.initializer) {
+      type = this.inferType(stmt.initializer);
+    }
+    
     const value = this.genExpression(stmt.initializer);
 
     this.builder.addLocal(stmt.name, type);
@@ -331,8 +337,32 @@ export class ASTToIR {
       return result;
     }
 
-    const left = this.genExpression(expr.left);
-    const right = this.genExpression(expr.right);
+    let left = this.genExpression(expr.left);
+    let right = this.genExpression(expr.right);
+
+    // String concatenation with type coercion: "str" + number or number + "str"
+    if (expr.operator === '+') {
+      const leftType = this.inferType(expr.left);
+      const rightType = this.inferType(expr.right);
+
+      if (leftType === 'string' || rightType === 'string') {
+        // At least one operand is a string — use concat with auto-conversion
+        if (leftType === 'number') {
+          const converted = this.builder.newTemp('string');
+          this.builder.emit({ op: 'to_string', dest: converted, src1: left, comment: `${converted} = to_string(${left})` });
+          left = converted;
+        }
+        if (rightType === 'number') {
+          const converted = this.builder.newTemp('string');
+          this.builder.emit({ op: 'to_string', dest: converted, src1: right, comment: `${converted} = to_string(${right})` });
+          right = converted;
+        }
+        const result = this.builder.newTemp('string');
+        this.builder.emit({ op: 'concat', dest: result, src1: left, src2: right, comment: `${result} = ${left} concat ${right}` });
+        return result;
+      }
+    }
+
     const isComparison = ['==', '!=', '<', '<=', '>', '>='].includes(expr.operator);
     const result = this.builder.newTemp(isComparison ? 'bool' : 'number');
 
@@ -478,6 +508,48 @@ export class ASTToIR {
       case 'array': return 'ptr';
       case 'function': return 'ptr';
       case 'any': return 'ptr';
+      default: return 'ptr';
+    }
+  }
+
+  /** Infer the type of an expression at compile time (best effort) */
+  private inferType(expr: AST.Expression): IRValue['type'] {
+    switch (expr.type) {
+      case 'NumberLiteral': return 'number';
+      case 'StringLiteral': return 'string';
+      case 'BooleanLiteral': return 'bool';
+      case 'Identifier': {
+        // Check variable types map
+        const vtype = this.variableTypes.get(expr.name);
+        if (vtype) return vtype;
+        // Check if it's a known string variable
+        return 'ptr'; // unknown
+      }
+      case 'BinaryExpression': {
+        // If + has a string operand, result is string
+        if (expr.operator === '+') {
+          if (this.inferType(expr.left) === 'string' || this.inferType(expr.right) === 'string') {
+            return 'string';
+          }
+        }
+        if (['==', '!=', '<', '<=', '>', '>='].includes(expr.operator)) return 'bool';
+        return 'number';
+      }
+      case 'UnaryExpression': return expr.operator === '!' ? 'bool' : 'number';
+      case 'LogicalExpression': return 'bool';
+      case 'CallExpression': {
+        // Check if function has a known return type
+        const callee = expr.callee;
+        if (typeof callee === 'string') {
+          // Some builtins return known types
+          if (['get_os', 'get_cpu', 'get_ram', 'get_disk', 'get_shell',
+               'get_resolution', 'upper', 'lower', 'pad', 'substring',
+               'join', 'readFile'].includes(callee)) return 'string';
+          if (['length', 'arrayLen'].includes(callee)) return 'number';
+        }
+        return 'ptr';
+      }
+      case 'ArrayLiteral': return 'ptr';
       default: return 'ptr';
     }
   }

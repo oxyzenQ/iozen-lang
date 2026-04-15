@@ -70,7 +70,7 @@ export function compile(source: string, options: CompileOptions): CompileResult 
 
     try {
       const cc = process.env.CC || 'gcc';
-      execSync(`${cc} -O2 -o "${outputPath}" "${tmpCFile}" -lm`, { stdio: 'pipe' });
+      execSync(`${cc} -std=c99 -O2 -o "${outputPath}" "${tmpCFile}" -lm`, { stdio: 'pipe' });
       try { fs.unlinkSync(tmpCFile); } catch {}
       return {
         success: true,
