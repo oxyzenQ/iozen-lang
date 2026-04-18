@@ -6,9 +6,11 @@ import { tokenize } from '../tokenizer_v2';
 import { astToIR } from './ast-to-ir';
 import { generateC } from './c-backend';
 import { IROptimizer } from './ir-optimizer';
+import { generateLLVM } from './llvm/llvm-generator';
 
 export interface CompileOptions {
-  target: 'c' | 'binary';
+  target: 'c' | 'binary' | 'llvm' | 'llvm-bc';
+  backend?: 'c' | 'llvm';
   outputFile?: string;
   optimize?: boolean;
 }
@@ -39,7 +41,31 @@ export function compile(source: string, options: CompileOptions): CompileResult 
       optimizer.optimize();
     }
 
-    // Step 4: Generate C code
+    // Determine backend
+    const useLLVM = options.backend === 'llvm' || options.target === 'llvm' || options.target === 'llvm-bc';
+
+    if (useLLVM) {
+      // Generate LLVM IR
+      const llvmIR = generateLLVM(ir);
+
+      if (options.target === 'llvm' || options.target === 'llvm-bc') {
+        return {
+          success: true,
+          output: llvmIR,
+          errors: []
+        };
+      }
+
+      // For llvm-bc, we would use llc/clang to generate bitcode
+      // For now, return the LLVM IR text
+      return {
+        success: true,
+        output: llvmIR,
+        errors: []
+      };
+    }
+
+    // Step 4: Generate C code (default backend)
     const cCode = generateC(ir);
 
     if (options.target === 'c') {

@@ -199,19 +199,29 @@ async function cmdCompile(args: string[]) {
   filePath = foundPath;
 
   let outputName = basename(filePath, ".iozen");
-  let target: 'c' | 'binary' = 'c';
+  let target: 'c' | 'binary' | 'llvm' | 'llvm-bc' = 'c';
+  let backend: 'c' | 'llvm' = 'c';
 
   // Parse optional arguments
   for (let i = 1; i < args.length; i++) {
     if (args[i] === '--output' || args[i] === '-o') {
       outputName = args[++i];
     } else if (args[i] === '--target' || args[i] === '-t') {
-      target = args[++i] as 'c' | 'binary';
+      const t = args[++i] as string;
+      if (t === 'llvm' || t === 'llvm-bc') {
+        target = t as 'llvm' | 'llvm-bc';
+        backend = 'llvm';
+      } else {
+        target = t as 'c' | 'binary';
+      }
+    } else if (args[i] === '--backend' || args[i] === '-b') {
+      backend = args[++i] as 'c' | 'llvm';
     }
   }
 
+  const ext = target === 'c' ? 'c' : target === 'llvm' || target === 'llvm-bc' ? 'll' : 'out';
   const outDir = dirname(filePath);
-  const outputPath = join(outDir, `${outputName}.${target === 'c' ? 'c' : 'out'}`);
+  const outputPath = join(outDir, `${outputName}.${ext}`);
 
   try {
     const source = readFileSync(filePath, 'utf-8');
@@ -224,7 +234,7 @@ async function cmdCompile(args: string[]) {
     if (target === 'binary') {
       // Full pipeline: IOZEN → C → Binary
       const binPath = isAbsolute(outputName) ? outputName : join(outDir, outputName);
-      const result = compile(source, { target: 'binary', outputFile: binPath });
+      const result = compile(source, { target: 'binary', outputFile: binPath, backend });
 
       if (!result.success) {
         for (const err of result.errors) {
@@ -241,9 +251,26 @@ async function cmdCompile(args: string[]) {
       }
 
       log(`${C.green}  ✔ Binary: ${result.binaryPath}${C.reset}`);
+    } else if (target === 'llvm' || target === 'llvm-bc') {
+      // LLVM backend: IOZEN → LLVM IR
+      const result = compile(source, { target, backend, outputFile: outputPath });
+
+      if (!result.success) {
+        for (const err of result.errors) {
+          error(err);
+        }
+        process.exit(1);
+      }
+
+      writeFileSync(outputPath, result.output || '');
+      log(`${C.green}  ✔ Generated LLVM IR: ${outputPath}${C.reset}`);
+      
+      if (target === 'llvm-bc') {
+        log(`${C.yellow}  ℹ To generate bitcode: clang -c ${outputPath} -o ${outputName}.bc${C.reset}`);
+      }
     } else {
       // C output only
-      const result = compile(source, { target: 'c' });
+      const result = compile(source, { target: 'c', backend });
 
       if (!result.success) {
         for (const err of result.errors) {

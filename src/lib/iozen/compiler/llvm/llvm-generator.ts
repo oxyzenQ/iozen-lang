@@ -257,3 +257,8 @@ export class LLVMGenerator {
 export function createLLVMGenerator(): LLVMGenerator {
   return new LLVMGenerator();
 }
+
+export function generateLLVM(ir: IRProgram): string {
+  const generator = createLLVMGenerator();
+  return generator.generate(ir);
+}
