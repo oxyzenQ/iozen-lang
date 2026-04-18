@@ -1,28 +1,47 @@
+```
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Environment
+.env
+.env.local
+*.env.*
 
-# Logs
+# Logs and temp files
 *.log
-npm-debug.log*
+*.tmp
 
-# OS files
+# Editors
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+.coverage
+coverage/
+htmlcov/
+.nyc_output/
+istanbul/
+.mypy_cache/
+.pytest_cache/
+.tox/
+.cover/
+
+# System files
 .DS_Store
 Thumbs.db
-
-# Generated temp files
-.iozen-runner-*.ts
-
-# Compiled example binaries
-iozen-cli/examples/hello_iozen
-iozen-cli/examples/fibonacci
-iozen-cli/examples/prime
-iozen-cli/examples/fizzbuzz
-
-# Lock files
-bun.lock
-package-lock.json
-yarn.lock
-target/
+```

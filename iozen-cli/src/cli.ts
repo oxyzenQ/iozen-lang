@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // ============================================================
 // IOZEN Language — CLI (Command Line Interface)
 // Usage:
@@ -14,6 +14,7 @@ import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, resolve, isAbsolute } from "node:path";
 import { Interpreter, Lexer, ParseError, Parser } from "../../src/lib/iozen";
+import type { ProgramNode } from "../../src/lib/iozen/ast";
 
 // ---- ANSI Colors (no external dependency) ----
 const C = {
@@ -464,7 +465,7 @@ async function cmdAst(args: string[]) {
   const lexer = new Lexer(source);
   const tokens = lexer.tokenize();
   const parser = new Parser(tokens);
-  const ast = parser.parse();
+  const ast = parser.parse() as ProgramNode;
 
   log(`${C.cyan}AST (${ast.statements.length} top-level nodes):${C.reset}\n`);
 

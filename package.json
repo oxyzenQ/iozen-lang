@@ -14,8 +14,9 @@
     "test": "bun run tests/test_all.ts"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^20.19.39",
     "bun-types": "^1.1.0",
+    "tsx": "^4.21.0",
     "typescript": "^5"
   },
   "engines": {
