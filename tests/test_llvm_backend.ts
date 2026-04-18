@@ -221,6 +221,132 @@ test('llvm: includes external function declarations', () => {
   }
 });
 
+// Test 11: Comparison operations
+test('llvm: generates comparison operations', () => {
+  const gen = createLLVMGenerator();
+  const builder = createIRBuilder();
+  
+  builder.newFunction('compare', 'bool');
+  builder.addParam('a', 'number');
+  builder.addParam('b', 'number');
+  
+  const result = builder.newTemp('bool');
+  builder.emitBinary('eq', result, 'a', 'b');
+  builder.emitRet(result);
+  
+  const program = builder.getProgram();
+  const llvm = gen.generate(program);
+  
+  if (!llvm.includes('call i1 @iozen_eq(%value* a, %value* b)')) {
+    throw new Error('Comparison operation not generated correctly');
+  }
+});
+
+// Test 12: Logical operations
+test('llvm: generates logical operations', () => {
+  const gen = createLLVMGenerator();
+  const builder = createIRBuilder();
+  
+  builder.newFunction('logic', 'bool');
+  builder.addParam('a', 'bool');
+  builder.addParam('b', 'bool');
+  
+  const result = builder.newTemp('bool');
+  builder.emitBinary('and', result, 'a', 'b');
+  builder.emitRet(result);
+  
+  const program = builder.getProgram();
+  const llvm = gen.generate(program);
+  
+  if (!llvm.includes('call i1 @iozen_and(i1 a, i1 b)')) {
+    throw new Error('Logical operation not generated correctly');
+  }
+});
+
+// Test 13: Conditional branch with condition
+test('llvm: generates conditional branch with condition', () => {
+  const gen = createLLVMGenerator();
+  const builder = createIRBuilder();
+  
+  builder.newFunction('test_if', 'void');
+  const cond = builder.newTemp('bool');
+  const L1 = builder.newLabel('L');
+  const L2 = builder.newLabel('L');
+  
+  builder.emitIf(cond, L1, L2);
+  builder.emitLabel(L1);
+  builder.emitRet();
+  builder.emitLabel(L2);
+  builder.emitRet();
+  
+  const program = builder.getProgram();
+  const llvm = gen.generate(program);
+  
+  if (!llvm.includes('br i1') || !llvm.includes('label %L0')) {
+    throw new Error('Conditional branch not generated correctly');
+  }
+});
+
+// Test 14: Struct field access
+test('llvm: generates struct field access', () => {
+  const gen = createLLVMGenerator();
+  const builder = createIRBuilder();
+  
+  builder.newFunction('get_field', 'number');
+  builder.addParam('s', 'ptr');
+  
+  const result = builder.newTemp('ptr');
+  builder.emitStructGet(result, 's', 0);
+  builder.emitRet(result);
+  
+  const program = builder.getProgram();
+  const llvm = gen.generate(program);
+  
+  if (!llvm.includes('call %value* @iozen_struct_get(%value* s, i32 0)')) {
+    throw new Error('Struct field access not generated correctly');
+  }
+});
+
+// Test 15: Closure operations
+test('llvm: generates closure operations', () => {
+  const gen = createLLVMGenerator();
+  const builder = createIRBuilder();
+  
+  builder.newFunction('make_closure', 'ptr');
+  builder.addParam('func', 'ptr');
+  builder.addParam('env', 'ptr');
+  
+  const result = builder.newTemp('ptr');
+  builder.emitClosureNew(result, 'func', 'env');
+  builder.emitRet(result);
+  
+  const program = builder.getProgram();
+  const llvm = gen.generate(program);
+  
+  if (!llvm.includes('call %value* @iozen_closure_new(%value* func, %value* env)')) {
+    throw new Error('Closure creation not generated correctly');
+  }
+});
+
+// Test 16: Exception handling
+test('llvm: generates exception handling instructions', () => {
+  const gen = createLLVMGenerator();
+  const builder = createIRBuilder();
+  
+  builder.newFunction('try_example', 'void');
+  builder.addParam('exc', 'ptr');
+  
+  builder.emitThrow('exc');
+  builder.emitRet();
+  
+  const program = builder.getProgram();
+  const llvm = gen.generate(program);
+  
+  if (!llvm.includes('call void @iozen_throw(%value* exc)')) {
+    throw new Error('Exception throw not generated correctly');
+  }
+});
+
 console.log('\n' + '='.repeat(60));
 console.log(`LLVM Backend Test Results: ${passed} passed / ${failed} failed / ${passed + failed} total`);
 console.log('='.repeat(60));

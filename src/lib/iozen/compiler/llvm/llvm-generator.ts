@@ -86,6 +86,34 @@ export class LLVMGenerator {
     output += 'declare %value* @iozen_mul(%value*, %value*)\n';
     output += 'declare %value* @iozen_div(%value*, %value*)\n';
     output += 'declare %value* @iozen_concat(%value*, %value*)\n';
+    
+    // Comparison operations
+    output += 'declare i1 @iozen_eq(%value*, %value*)\n';
+    output += 'declare i1 @iozen_ne(%value*, %value*)\n';
+    output += 'declare i1 @iozen_lt(%value*, %value*)\n';
+    output += 'declare i1 @iozen_le(%value*, %value*)\n';
+    output += 'declare i1 @iozen_gt(%value*, %value*)\n';
+    output += 'declare i1 @iozen_ge(%value*, %value*)\n';
+    
+    // Logical operations
+    output += 'declare i1 @iozen_and(i1, i1)\n';
+    output += 'declare i1 @iozen_or(i1, i1)\n';
+    output += 'declare i1 @iozen_not(i1)\n';
+    
+    // Struct operations
+    output += 'declare %value* @iozen_struct_get(%value*, i32)\n';
+    output += 'declare void @iozen_struct_set(%value*, i32, %value*)\n';
+    
+    // Closure operations
+    output += 'declare %value* @iozen_closure_new(%value*, %value*)\n';
+    output += 'declare %value* @iozen_closure_get_func(%value*)\n';
+    output += 'declare %value* @iozen_closure_get_env(%value*)\n';
+    
+    // Exception handling
+    output += 'declare void @iozen_throw(%value*)\n';
+    output += 'declare %value* @iozen_try_enter()\n';
+    output += 'declare void @iozen_try_exit()\n';
+    
     output += '\n';
     return output;
   }
@@ -196,26 +224,99 @@ export class LLVMGenerator {
         return `${dest} = call %value* @iozen_concat(%value* ${inst.src1}, %value* ${inst.src2})`;
       }
       
-      case 'call': {
-        const dest = inst.dest ? `${inst.dest} = ` : '';
-        const args = (inst.args || []).map(a => `%value* ${a}`).join(', ');
-        return `${dest}call %value* @${inst.src1}(${args})`;
+      // Comparison operations
+      case 'eq': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_eq(%value* ${inst.src1}, %value* ${inst.src2})`;
       }
       
-      case 'ret': {
-        if (inst.src1) {
-          return `ret %value* ${inst.src1}`;
-        }
-        return 'ret void';
+      case 'ne': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_ne(%value* ${inst.src1}, %value* ${inst.src2})`;
       }
       
-      case 'goto': {
-        return `br label %${inst.label}`;
+      case 'lt': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_lt(%value* ${inst.src1}, %value* ${inst.src2})`;
+      }
+      
+      case 'le': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_le(%value* ${inst.src1}, %value* ${inst.src2})`;
+      }
+      
+      case 'gt': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_gt(%value* ${inst.src1}, %value* ${inst.src2})`;
+      }
+      
+      case 'ge': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_ge(%value* ${inst.src1}, %value* ${inst.src2})`;
+      }
+      
+      // Logical operations
+      case 'and': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_and(i1 ${inst.src1}, i1 ${inst.src2})`;
+      }
+      
+      case 'or': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_or(i1 ${inst.src1}, i1 ${inst.src2})`;
+      }
+      
+      case 'not': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call i1 @iozen_not(i1 ${inst.src1})`;
+      }
+      
+      // Struct field access
+      case 'struct_get': {
+        const dest = inst.dest || this.newTemp();
+        const fieldIndex = inst.fieldIndex || 0;
+        return `${dest} = call %value* @iozen_struct_get(%value* ${inst.src1}, i32 ${fieldIndex})`;
+      }
+      
+      case 'struct_set': {
+        const fieldIndex = inst.fieldIndex || 0;
+        return `call void @iozen_struct_set(%value* ${inst.src1}, i32 ${fieldIndex}, %value* ${inst.src2})`;
+      }
+      
+      // Closure operations
+      case 'closure_new': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call %value* @iozen_closure_new(%value* ${inst.src1}, %value* ${inst.src2})`;
+      }
+      
+      case 'closure_get_func': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call %value* @iozen_closure_get_func(%value* ${inst.src1})`;
+      }
+      
+      case 'closure_get_env': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call %value* @iozen_closure_get_env(%value* ${inst.src1})`;
+      }
+      
+      // Exception handling
+      case 'throw': {
+        return `call void @iozen_throw(%value* ${inst.src1})`;
+      }
+      
+      case 'try_start': {
+        const dest = inst.dest || this.newTemp();
+        return `${dest} = call %value* @iozen_try_enter()`;
+      }
+      
+      case 'try_end': {
+        return `call void @iozen_try_exit()`;
       }
       
       case 'if': {
-        // Conditional branch - will need fixup in a more complete implementation
-        return `br i1 true, label %${inst.label}, label %fallback`;
+        // Conditional branch with proper condition
+        const cond = inst.cond || inst.src1;
+        return `br i1 ${cond}, label %${inst.label}, label %${inst.elseLabel || 'fallback'}`;
       }
       
       case 'print': {
@@ -234,6 +335,23 @@ export class LLVMGenerator {
       case 'var': {
         const dest = inst.dest || this.newTemp();
         return `${dest} = call %value* @iozen_alloc()`;
+      }
+      
+      case 'call': {
+        const dest = inst.dest ? `${inst.dest} = ` : '';
+        const args = (inst.args || []).map(a => `%value* ${a}`).join(', ');
+        return `${dest}call %value* @${inst.src1}(${args})`;
+      }
+      
+      case 'ret': {
+        if (inst.src1) {
+          return `ret %value* ${inst.src1}`;
+        }
+        return 'ret void';
+      }
+      
+      case 'goto': {
+        return `br label %${inst.label}`;
       }
       
       default: {

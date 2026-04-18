@@ -167,6 +167,43 @@ export class IRBuilder {
     this.emit({ op: 'struct_alloc', dest, src1: structName, comment: `${dest} = alloc ${structName}` });
   }
 
+  // Advanced IR helpers for LLVM backend
+  emitIf(cond: string, trueLabel: string, falseLabel: string) {
+    this.emit({ op: 'if', src1: cond, label: trueLabel, elseLabel: falseLabel, comment: `if ${cond} goto ${trueLabel} else ${falseLabel}` });
+  }
+
+  emitStructGet(dest: string, obj: string, fieldIndex: number) {
+    this.emit({ op: 'struct_get', dest, src1: obj, fieldIndex, comment: `${dest} = ${obj}.${fieldIndex}` });
+  }
+
+  emitStructSet(obj: string, fieldIndex: number, value: string) {
+    this.emit({ op: 'struct_set', src1: obj, fieldIndex, src2: value, comment: `${obj}.${fieldIndex} = ${value}` });
+  }
+
+  emitClosureNew(dest: string, func: string, env: string) {
+    this.emit({ op: 'closure_new', dest, src1: func, src2: env, comment: `${dest} = closure(${func}, ${env})` });
+  }
+
+  emitClosureGetFunc(dest: string, closure: string) {
+    this.emit({ op: 'closure_get_func', dest, src1: closure, comment: `${dest} = ${closure}.func` });
+  }
+
+  emitClosureGetEnv(dest: string, closure: string) {
+    this.emit({ op: 'closure_get_env', dest, src1: closure, comment: `${dest} = ${closure}.env` });
+  }
+
+  emitThrow(exc: string) {
+    this.emit({ op: 'throw', src1: exc, comment: `throw ${exc}` });
+  }
+
+  emitTryStart(dest: string) {
+    this.emit({ op: 'try_start', dest, comment: `${dest} = try_enter()` });
+  }
+
+  emitTryEnd() {
+    this.emit({ op: 'try_end', comment: 'try_end()' });
+  }
+
   getProgram(): IRProgram {
     return this.program;
   }
